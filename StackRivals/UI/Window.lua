@@ -983,7 +983,7 @@ end
 function UI:ShowOver(info)
   local s = info.state
   -- a callout from the last line clear must not sit behind the result
-  self.calloutAnim:Stop(); self.calloutBox:SetAlpha(0)
+  self.calloutAnim:Stop(); self.calloutSoft:Stop(); self.calloutBox:SetAlpha(0)
   self.scorePopAnim:Stop(); self.scorePopBox:SetAlpha(0)
   self.overBadge:SetTextColor(C.gold[1], C.gold[2], C.gold[3])
   self.overTitle:SetTextColor(C.paper[1], C.paper[2], C.paper[3])
