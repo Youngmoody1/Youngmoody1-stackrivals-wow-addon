@@ -39,6 +39,22 @@
   - Comm: prefix registration result checked; the server's "No player named ..." line is hidden
     for players we just whispered and treats them as offline (API from memory, guarded).
 
+### 0.4.0 round 2 (multiplayer hardening + web integration)
+
+- WoW API: result codes read from the last return value (warcraft.wiki.gg); prefix registration
+  result checked and repeated on every login/reload; Trial/Veteran accounts detected.
+- Delivery: an accepted send is never treated as delivered. FIN acknowledges results; closed
+  matches keep answering with DEC (a lost DEC re-opened the invite popup); other protocol versions
+  get a decline in their own version.
+- UX: duel starts paused while typing in chat; "Forfeit duel" asks for a second click.
+- Diagnostics: last 5 duels in SavedVariables (`duelDiag`), `/sr duel debug`.
+- SR1 cross-platform codes (challenge/result), shared test vectors, TypeScript reference checked
+  against the web's real `verifyLog` (57/57). Verify.lua: engine_mismatch, faster_than_clock, level claim.
+- Fixtures re-based on web commit 29afe52 (no gameplay change); match rules in the fingerprint.
+- Docs: MULTIPLAYER_TEST.md (Danish two-client test guide), rewritten CROSS_PLATFORM_MULTIPLAYER.md
+  and WEB_INTEGRATION_PROMPT.md.
+- Tests: 215 Lua tests (55 duel/codes) + 57 cross-implementation vector checks.
+
 ## Unreleased (main)
 
 - Web sync: fixtures now record the web commit they came from (5d2a9fd) and a full rules

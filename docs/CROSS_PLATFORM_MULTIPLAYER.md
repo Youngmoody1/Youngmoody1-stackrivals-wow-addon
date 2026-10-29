@@ -1,66 +1,76 @@
 # StackRivals cross-platform multiplayer (shared spec, v1)
 
 This file is shared between the WoW addon project and the stackrivals.io project. It says what
-is possible, what is built, what is not possible, and which formats both sides use.
+is possible, what is built, what is not possible, and which formats both sides use. There is
+**one** multiplayer architecture: the same engine (parity-tested), the same seeds, the same input
+log, the same verification and the same result vocabulary on every platform.
 
-Status words used here: **BUILT** (code exists and has automated tests), **SIMULATED** (tested
-only in a simulated WoW), **PLANNED**, **NOT POSSIBLE** (with the reason).
+Status words: **BUILT** (code + automated tests), **SIMULATED** (tested only in a simulated WoW),
+**CLIENT TESTED** (ran in real WoW clients), **PLANNED**, **NOT POSSIBLE** (with the reason).
 
 ## 1. Conclusions first
 
 | Connection | Real-time 1v1? | Status | Why |
 |---|---|---|---|
-| WoW Forever ↔ WoW Forever (same/connected realms) | **Yes** | BUILT, SIMULATED (needs a two-client test) | Blizzard addon messages (whisper/guild/party) |
-| WoW Retail ↔ Retail, Classic ↔ Classic (same client) | **Yes** | BUILT (same code), SIMULATED | Same API; each client is its own game world |
+| WoW Forever ↔ WoW Forever (same/connected realms) | **Yes** | BUILT, SIMULATED (needs a two-client test: docs/MULTIPLAYER_TEST.md) | Blizzard addon messages (whisper/guild/party) |
+| WoW Retail ↔ Retail, Classic ↔ Classic | **Yes** | BUILT (same code), SIMULATED | Same API; each client is its own game world |
 | WoW Forever ↔ WoW Retail / Classic | **No** | NOT POSSIBLE in real time | Separate game services; addon messages never cross game versions |
 | Web ↔ Web | **Yes** | Exists on stackrivals.io (Quick Match, challenges, server-verified) | Supabase Realtime + server replay |
-| WoW ↔ Web (or apps) live | **No** | NOT POSSIBLE with allowed methods | See §4 |
-| WoW ↔ Web/apps **asynchronous** (same seed, result codes) | Yes, not live | PLANNED, spec in §6 | Copy/paste codes; server replays the log |
+| WoW ↔ Web (or apps) live | **No** | NOT POSSIBLE with allowed methods | §4 |
+| WoW ↔ Web/apps **asynchronous** (same seed, copy/paste codes) | Yes, not live | Format + Lua codec + shared vectors + TS reference **BUILT**; addon UI and web import PLANNED | §6 |
+| Shared Daily (same pieces for everyone each UTC day) | Yes, not live | WoW Daily Blitz BUILT; web side PLANNED | §6.7 |
 | Web ↔ Windows/Chrome/mobile apps | Yes | PLANNED (web stack) | Same web backend and engine |
 
-**Recommendation:** ship WoW↔WoW duels (A) first. Make **asynchronous cross-platform
-challenges (C)** the bridge to the web, because the web server can verify them by replay. Do not
-build or promise a live WoW↔web bridge (B).
+**Order of work:** (1) native WoW guild duels, (2) asynchronous WoW↔web challenges,
+(3) shared Daily + server replay, (4) shared account/statistics where technically possible,
+(5) real-time only if a safe, allowed, documented method appears (none exists today).
 
 ## 2. What is built in the addon (branch `multiplayer`, v0.4.0 preview)
 
-A 1v1 **score race on a shared seed**: both players get the same pieces and play for a fixed time,
-and the higher score wins. Nothing is sent about the board. Each player plays locally, and the
-addons exchange a few small messages.
+A 1v1 **score race on a shared seed**: both players get the same pieces and play for a fixed time;
+the higher score wins. Nothing about the board is sent. Each player plays locally, and the addons
+exchange a few small messages.
 
-- **Rulesets:** `b120` is Blitz 2:00 (3 s countdown). `r180` is 3:00 with a 4 s countdown, which
-  is the web 1v1 time cap and countdown (fingerprinted against `src/lib/match/rules.ts`).
-- **Seed (commit-reveal):** `srduel-<matchId>-<nonceA><nonceB>`. The challenger sends only a hash
-  of nonceA in the invite; the accepter picks nonceB without knowing nonceA; the challenger reveals
-  nonceA at GO, and the accepter checks it against the hash. Neither player can choose or grind the
-  pieces, and the accepter only learns the seed when the countdown starts.
-- **Flow:** find players (one broadcast to guild/group, answers by whisper) → INV → ACC → both
-  press Ready (RDY) → GO → score heartbeat every 2 s (SC) → END + input log (LOG chunks) → each side
-  replays the rival's log → result → Rematch.
-- **Robustness:** every state re-sends what the rival needs; re-sent messages replace each other in
-  the send queue instead of piling up. Handlers are idempotent, log chunks that arrive before their
-  END are kept, stalled chunks are re-requested (RQ, also while still playing), and after the result
-  each side keeps serving its END and log for 60 s, even after going back to the menu. Timeouts: no
-  answer (30 s), lobby (60 s host, 75 s guest, so the host always decides first), silence (warn at
-  20 s, gone at 35 s, cleared as soon as the rival is heard again), the log (60 s after both runs
-  ended) and the hard deadline (limit + 5 min). Players who challenge each other at the same moment
-  get one duel (the lower match id wins).
+- **Rulesets:** `b120` = 2:00, 3 s countdown. `r180` = 3:00, 4 s countdown = the web 1v1 time cap
+  and countdown (fingerprinted against `src/lib/match/rules.ts`).
+- **Seed (commit-reveal):** `srduel-<mid>-<nonceA><nonceB>`. The challenger sends only
+  `commitA = FNV-1a("srcommit-<mid>-<nonceA>")` in the invite; the accepter picks nonceB without
+  knowing nonceA; the challenger reveals nonceA in GO and the accepter checks it against commitA.
+  Neither player can choose or grind the pieces; the accepter learns the seed only at GO.
+- **Flow:** find players (one guild/group broadcast, answers by whisper) → INV → ACC → both press
+  Ready (RDY) → GO → score every 2 s (SC) → END + input log (LOG chunks) → each side replays the
+  rival's log → FIN ("I have your result") → result → Rematch.
+- **Delivery:** a successful `SendAddonMessage` only means *accepted into the client's queue*,
+  never *delivered* (warcraft.wiki.gg). So nothing trusts a send: state messages repeat until the
+  rival's next state shows they arrived; results repeat until the rival's FIN; a declined or
+  cancelled match keeps answering late messages with DEC (a lost DEC can never re-open a popup);
+  log chunks that arrive early are kept; chunks are re-requested (RQ) only when the stream stalls.
+  Re-sent messages replace each other in the send queue instead of piling up.
+- **Timeouts:** invite 30 s; lobby 60 s host / 75 s guest (the host always decides first);
+  silence: warning at 20 s, "gone" at 35 s (cleared as soon as the rival is heard again); rival log
+  60 s after both runs ended; hard deadline = limit + 5 min. Simultaneous challenges between the
+  same two players become one duel (the lower match id wins).
 - **Results:**
+
   | Outcome | When |
   |---|---|
-  | win / loss / draw by score | the rival's log replayed to exactly their claimed score and hash (`peer_checked`) |
-  | win | the rival's log fails the replay check (their result is rejected), or it arrived faster than the game can be played (web `faster_than_clock`, 10 s margin) |
+  | win / loss / draw by score | the rival's log replayed to exactly their claimed score, lines and hash (`peer_checked`) |
+  | win | the rival's log fails the replay check, or their result arrived faster than the game can be played (10 s margin) |
   | win | the rival forfeited, disconnected or went offline during play, or didn't finish by the deadline |
   | no result | the rival's log never fully arrived: a claimed score alone never decides a winner |
-  | loss | you forfeited during play (both forfeited: draw) |
+  | loss | you forfeited during play (both forfeited: draw, web rule) |
   | no result (you) | you left after your own run ended; your result still reaches the rival |
-  | cancelled | declined, busy, offline, version mismatch, timeout, or a seed that doesn't match the invite's commitment |
-- **Safety:** messages are whisper-only during a match. Combat pauses only your own run (also when
-  GO arrives during combat). Nothing protected is called, so nothing is blocked in combat. Quitting
-  a running duel is always a labelled forfeit. Unsolicited replies (hellos, "busy") are rate-limited
-  per player and low-priority, so spam can't starve a running duel. Whispering an offline rival
-  stops at once; the server's "No player named ..." line is hidden for players we just whispered
-  (chat-filter API from memory, guarded, not yet client-verified).
+  | cancelled | declined, busy, offline, other version, timeout, Trial account, or a GO nonce that doesn't match the commitment |
+
+- **Safety and UX:** whispers only during a match. Combat pauses only your own run (also when GO
+  arrives in combat); a duel that starts while you type in chat starts paused. Nothing protected
+  is called. "Forfeit duel" needs a second click within 3 s. Unsolicited replies (hello, busy) are
+  rate-limited per player and low priority, so spam can't starve a duel. Whispering an offline
+  rival stops at once; the server's "No player named ..." line is hidden for players we just
+  whispered.
+- **Diagnostics:** the last 5 duels are kept in SavedVariables (`duelDiag`): counters per message
+  kind, send result codes, drops, longest silence, queue peak and a compact event log;
+  `/sr duel debug` shows the live state. See docs/MULTIPLAYER_TEST.md.
 
 ### Wire protocol v1 (addon prefix `StackRivals`)
 
@@ -68,97 +78,111 @@ Plain printable ASCII, `:`-separated, at most 255 bytes, base-36 numbers.
 
 | Message | Fields | Sent |
 |---|---|---|
-| `1:HEL` | addonVersion, engineVersion | guild/party broadcast when you press *Find players* (max once per 20 s) |
-| `1:HI` | addonVersion, engineVersion, busy(0/1) | whisper reply |
-| `1:INV` | mid, ruleset, engineVersion, commitA (8 hex, FNV-1a of `srcommit-<mid>-<nonceA>`) | challenge (re-sent every 4 s while waiting) |
+| `1:HEL` | addonVersion, engineVersion | guild/party broadcast on *Find players* (max once per 20 s) |
+| `1:HI` | addonVersion, engineVersion, busy(0/1) | whisper reply (max once per 10 s per player) |
+| `1:INV` | mid, ruleset, engineVersion, commitA (8 hex) | challenge (re-sent every 4 s while waiting) |
 | `1:ACC` | mid, nonceB | accept (re-sent in the lobby) |
-| `1:DEC` | mid, reason (`no busy combat version timeout cancel ruleset`) | decline/cancel (also right after GO, if the guest never started) |
+| `1:DEC` | mid, reason (`no busy combat version timeout cancel ruleset`) | decline / cancel; repeated for late messages about a closed match |
 | `1:RDY` / `1:PNG` | mid | ready / keep-alive |
-| `1:GO` | mid, nonceA | start (host); reveals nonceA; re-sent until the guest's first score arrives |
+| `1:GO` | mid, nonceA | start (host); reveals nonceA; re-sent until the guest's first score |
 | `1:SC` | mid, tick, score, lines, over | every 2 s while playing |
-| `1:END` | mid, ticks, score, lines, level, hash, chunkCount | when your run ends (re-sent) |
+| `1:END` | mid, ticks, score, lines, level, hash, chunkCount | when your run ends; re-sent until FIN |
 | `1:LOG` | mid, i, n, payload | input-log chunk (≤ 200 chars) |
-| `1:RQ` | mid, i | ask again for chunk i |
+| `1:RQ` | mid, i | ask again for chunk i (only when the stream stalled) |
+| `1:FIN` | mid | "I have your END and complete log": stop re-sending |
 | `1:BYE` | mid, reason (`forfeit` during play, `left` after your own run ended; also `quit timeout combat`) | leave |
 
-**Log payload:** for each input, the tick delta in base 36 (`0-9a-z`) followed by the action letter
-`A`–`G` (index into `left,right,rotateCW,rotateCCW,softDrop,hardDrop,hold`). That is about 3 bytes
-per input, so a full 2:00 duel is roughly 1–3 KB in 5–15 chunks.
+**Version rule:** `<v>:DEC:<mid>:<reason>` keeps this exact shape in every protocol version. A
+client that receives an invite with another protocol version answers `<their v>:DEC:<mid>:version`,
+so the inviter learns "different version" at once.
 
-### Traffic
+**Log payload:** per input, the tick delta from the previous input in base 36 (no leading zeros)
+followed by the action letter `A`–`G` (index into `left,right,rotateCW,rotateCCW,softDrop,hardDrop,hold`).
+About 3 bytes per input; a 2:00 duel is roughly 1–3 KB in 5–15 chunks. The same codec is used in
+the SR1 result code (§6).
 
-A measured simulated 2:00 duel used **147 messages in total** (both players). That is about
-0.7 messages per second per player, under Blizzard's per-prefix limit of 10 messages plus
-1 per second. Our own pacing: broadcasts get a burst of 4 and then 1 every 2 s. Whispers get a
-burst of 8 and then 2 per second, or 0.8 per second inside instances, where whispers count against
-the limit. `SendAddonMessageResult` codes are handled: throttle, lockdown and general error are
-retried with back-off. Offline, not-in-guild and not-in-group make the duel give up.
+### Traffic (simulated, measured by the tests)
 
-### WoW facts this relies on (warcraft.wiki.gg)
+A 2:00 duel: about **60 messages per player** (149 for both), peak **6 per second**. Our pacing:
+broadcasts burst 4 then 1 per 2 s; whispers burst 8 then 2 per second, 0.8 per second inside
+instances (where whispers count against the per-prefix limit). Tests assert ≤ 110 messages per
+player per duel and ≤ 8 in any second, and zero throttles inside instances.
 
-- `C_ChatInfo.SendAddonMessage(prefix, msg, chatType, target)`: prefix ≤ 16 characters, message ≤ 255
-  characters. Chat types are `PARTY RAID INSTANCE_CHAT GUILD OFFICER WHISPER`, plus `CHANNEL`
-  on Retail and `SAY`/`YELL` on Classic.
-- Receivers must call `C_ChatInfo.RegisterAddonMessagePrefix`. Messages arrive in `CHAT_MSG_ADDON`
-  as prefix, text, channel, sender, and so on.
-- The throttle is per prefix: 10 messages, then +1 per second. Whispers are exempt outside
-  instances. The server can change these limits at any time.
-- Whispers only work between characters on the same or connected realms.
-- Since 12.0.0 the result can be `AddOnMessageLockdown` (11) or `TargetOffline` (12).
-- **Trial and Veteran accounts cannot send addon messages on Forever** (and on Retail from 12.1.7).
-  Those players can't duel. The addon shows "Addon messages are not available".
-- **Still to verify in real clients:** the sender name format, whether your own guild/party
-  messages echo back to you (we filter them either way), the exact lockdown situations, and
-  behaviour across connected realms. This needs **two real WoW clients**. Until then, the duel status is SIMULATED.
+### WoW facts this relies on (warcraft.wiki.gg, checked 29 Oct 2026)
+
+- `C_ChatInfo.SendAddonMessage(prefix, msg, chatType, target)`: prefix ≤ 16 characters, message ≤
+  255. Returns `Enum.SendAddonMessageResult` (since 10.2.7 Retail / 4.4.0 Classic): 0 Success,
+  1 InvalidPrefix, 2 InvalidMessage, 3 AddonMessageThrottle, 4 InvalidChatType, 5 NotInGroup,
+  6 TargetRequired, 7 InvalidChannel, 8 ChannelThrottle, 9 GeneralError, 10 NotInGuild (11.1.0),
+  11 AddOnMessageLockdown (12.0.0), 12 TargetOffline (12.0.0). **The code is the last return value**
+  (a deprecation wrapper put a boolean first on some clients); older clients return a boolean. The
+  addon reads the last numeric value and treats booleans and Lua errors safely.
+- **Success = queued, not delivered** (see Delivery above).
+- Per-prefix throttle: 10 messages, +1 per second; whispers outside instances are exempt. The
+  server can change this at any time.
+- `RegisterAddonMessagePrefix` returns 0 Success, 1 DuplicatePrefix, 2 InvalidPrefix,
+  3 MaxPrefixes. **Registrations are lost on `/reload`**: the addon registers on every
+  `PLAYER_LOGIN` (which also fires after a reload).
+- Whispers work on the same realm and connected realms. Cross-faction is not documented.
+- Offline target: the server prints `ERR_CHAT_PLAYER_NOT_FOUND_S` ("No player named '%s' is
+  currently playing."); addons hide it with a `CHAT_MSG_SYSTEM` message filter, as other addons do.
+- **Trial and Veteran accounts can't send addon messages** (Forever 1.60.1 beta, Retail 12.1.7).
+  The addon detects `IsTrialAccount()`/`IsVeteranTrialAccount()` and says so instead of failing silently.
+- **To verify in real clients:** sender name format, own guild echo, when code 12 is returned,
+  whether the chat-filter API exists under that name in Forever/12.x, cross-faction and
+  connected-realm behaviour, lockdown situations. Until then the duel status is SIMULATED.
 
 ## 3. Result trust levels (shared vocabulary)
 
-| Level | Meaning | Where |
+| `verification` | Meaning | Where |
 |---|---|---|
-| `local` | Score from one client, not checked by anyone | WoW solo records |
-| `peer_checked` | The opponent's addon replayed the log with the shared seed and got the same score/hash, and found no impossible input | WoW duels |
-| `server_verified` | stackrivals.io replayed the log on the server (`verifyLog`/`replayLog`) | Web matches; WoW results imported as in §6 |
+| `local` | One client's score, checked by nobody | WoW solo records |
+| `peer_checked` | The opponent's addon replayed the log with the shared seed and got the same score and hash, and found no impossible input | WoW duels |
+| `server_verified` | stackrivals.io replayed the log on the server (`verifyLog`) and every claim matched | Web matches; WoW results imported via §6 |
+| `rejected` | A replay found a problem (reasons attached); stored for audit, never ranked | Any platform |
 
 A peer check catches a tampered score or log. It cannot prove that the opponent's addon wasn't
-modified, because both clients are under their players' control. So **ranked rewards and global
+modified, because both clients are controlled by players. So **ranked rewards and global
 leaderboards use only `server_verified` results.**
 
-## 4. Why there is no live WoW ↔ web bridge (option B evaluated)
+## 4. Crossplay: what is possible without bending Blizzard's rules
 
-WoW addons run in a sandboxed Lua environment with **no sockets, HTTP, files or processes**. The
-only ways data leaves or enters the game:
+WoW addons run in a sandbox with **no sockets, HTTP, files or processes**. Ways data can move:
 
-1. **SavedVariables** (a Lua file written when you log out or `/reload`). A desktop companion can
-   read it afterwards and send results to the server. That is useful for import, but it only
-   happens at logout or reload, so it is **not real-time**.
-2. **Files from a desktop app read at load.** WeakAuras Companion and the Raider.IO client work
-   this way. They can bring data *in*, but only at login or `/reload`.
-3. **Screen reading** (a companion OCRs a code drawn by the addon). This is technically one-way and
-   near-real-time, but it is a program watching the game client. Blizzard's rules on third-party
-   tools are strict, and the way back into the game would need simulated input, which is
-   **forbidden**. We do not do this.
-4. Reading game memory, injecting input or intercepting network traffic: **forbidden**, never.
+| Option | Direction / latency | Allowed? | Verdict |
+|---|---|---|---|
+| **Copy/paste codes** (SR1, §6): the addon shows a code in a text box, the player copies it to the website (and pastes challenge codes into the addon) | both ways, manual, seconds | Yes: only the player's own keyboard | **Build this (P2).** The only verified-at-server bridge that needs nothing installed |
+| **Battle.net OAuth on the website** (`wow.profile` scope, `/profile/user/wow` lists the account's characters) | web ↔ Blizzard, not the game | Yes: official Blizzard API | **Best account linking** (§6.8). Retail confirmed; Classic namespaces exist but have reported 403 issues; Forever's namespace is unknown until launch |
+| **Desktop companion reading SavedVariables** after logout or `/reload` (like the WeakAuras Companion or the Raider.IO client) | WoW → web, only at reload/logout | Widely used pattern, read-only | Later (P3) as a convenience: uploads finished results with consent. Same trust as codes; not live |
+| Companion writing a data file the addon reads at login | web → WoW, only at login/reload | Same pattern | Could deliver challenges or leaderboards; not live |
+| Tailing the chat log file (`/chatlog`) or screen reading | WoW → web, near-live, one way | Grey zone; a program watching the game client | **Not recommended.** Fragile, one-way, and the way back would need simulated input, which is forbidden |
+| Reading game memory, injecting input, intercepting traffic, automating play | — | **Forbidden** | Never |
 
-**Result:** a two-way real-time WoW↔web match cannot be built with allowed methods. A companion
-app (option B-lite) is only worth it later as a convenience that uploads finished results from
-SavedVariables after `/reload`, with the player's consent. That is the same trust level as §6.
+**Result:** a two-way real-time match between WoW and the web cannot be built with allowed,
+documented methods. We do not claim or advertise live crossplay. Real time stays inside each WoW
+game world (WoW↔WoW duels) and inside the web (web↔web). The platforms meet asynchronously: the
+same seeds, the same engine, the server replay, and one shared result record.
 
 ## 5. Shared match record (JSON, both platforms) — `stackrivals.match.v1`
+
+What the website stores for every match or challenge result, whatever the platform:
 
 ```json
 {
   "schema": "stackrivals.match.v1",
-  "matchId": "wow:k3x9qa or web:<uuid>",
+  "matchId": "wow:k3x9qa | web:<uuid> | chal:<challenge id>",
   "platform": "wow-forever | wow-retail | wow-classic | web | windows | android | ios | chrome",
   "mode": "duel | challenge | daily | solo",
-  "ruleset": "b120 | r180 | daily120 | classic",
+  "ruleset": "b120 | r180 | daily120",
   "engineVersion": 1,
-  "seed": "srduel-k3x9qa-ab12cd34ef56gh78",
+  "seed": "srduel-k3x9qa-ab12cd34ef56gh78 | srchal-7f3k2p9d01 | srwow-daily-2026-11-05",
   "startedAt": "2026-11-05T00:12:00Z",
   "endedAt": "2026-11-05T00:14:05Z",
   "players": [
     {
       "playerRef": "wow:Alice-Realm | web:<user id>",
+      "account": "<web user id> | null",
+      "accountLink": "battlenet | code | none",
       "score": 68046, "lines": 140, "level": 15, "ticks": 7200,
       "hash": "8f2a91c0",
       "log": { "v": 1, "seed": "...", "startLevel": 1, "ticks": 7200, "inputs": [[0, 5], [12, 0]] },
@@ -166,51 +190,148 @@ SavedVariables after `/reload`, with the player's consent. That is the same trus
     }
   ],
   "outcome": ["win", "loss"],
-  "verification": "local | peer_checked | server_verified",
-  "reasons": []
+  "verification": "local | peer_checked | server_verified | rejected",
+  "reasons": [],
+  "source": "sr1-import | web-match | wow-duel"
 }
 ```
 
-`log` is exactly the web's `SerializedInputLog`, so `replayLog` can run it unchanged. The WoW
-compact log (§2) converts to it losslessly.
+- `log` is exactly the web's `SerializedInputLog`, so `replayLog`/`verifyLog` run it unchanged. The
+  WoW compact log converts to it losslessly (`tools/sr1/sr1.ts` `unpackInputs`).
+- Rulesets are identified by id **and** `engineVersion`; a record is only comparable with records
+  of the same ruleset and engine version. When the engine version changes, old records are kept and
+  shown separately (the addon already archives its records this way).
+- WoW duels are stored locally in the addon (history of 20 with `rival, me, them, res, how, rs, d`);
+  they reach the website only through a future SR1 import or companion, as `peer_checked`
+  or after server replay as `server_verified`.
 
-## 6. Asynchronous cross-platform challenges (option C, PLANNED)
+## 6. Asynchronous cross-platform challenges — format SR1
 
-The same seed and rules on both platforms, with results moved by **copy/paste codes**. That uses
-no network from WoW and is fully allowed. The web server replays the result, so it is
-`server_verified`.
+The same seed and rules on both platforms; results move as **copy/paste codes**. No network use
+from WoW, fully allowed. The website replays every result itself, so imports are `server_verified`.
 
-**Challenge code** (made on the web, or by the addon):
-`SR1C.<ruleset>.<seed>.<check>`. Example: `SR1C.b120.srchal-7f3k2p9d.1a2b3c4d`, where
-`check` = FNV-1a of the preceding text, in hex.
+**Implementations:** Lua `StackRivals/Net/Codes.lua` (BUILT), TypeScript reference
+`tools/sr1/sr1.ts` (BUILT, no imports: the web project may copy it), shared vectors
+`docs/vectors/sr1.json`, checker `tools/sr1/check_vectors.ts` (runs the TS reference with the
+web's real `verifyLog`; **57/57 pass at web commit 29afe52**). The addon UI (paste a challenge,
+copy a result) is PLANNED for after the real client test.
 
-**Result code** (made by the addon after playing the challenge; the player copies it with Ctrl+C
-from a text box):
-`SR1R.<ruleset>.<seed>.<ticks36>.<score36>.<lines36>.<playerHex>.<packedLog>.<check>`.
-`playerHex` is the hex-encoded UTF-8 of `Name-Realm`. `packedLog` uses the codec from §2. A 2:00
-result is roughly 2–4 KB, which is fine to paste into a web form.
+### 6.1 Rulesets (ruleset id + engine version = the rules)
 
-**Web side:** decode → `replayLog` → `verifyLog` (same limits) → store as
-`platform: wow-*`, `verification: server_verified` → show on the challenge page and leaderboard.
+| id | timeCapMs | capTicks | countdownMs | startLevel | seed rule |
+|---|---|---|---|---|---|
+| `b120` | 120000 | 7200 | 3000 | 1 | `[a-z0-9-]{1,64}` |
+| `r180` | 180000 | 10800 | 4000 | 1 | `[a-z0-9-]{1,64}` (= web 1v1) |
+| `daily120` | 120000 | 7200 | 3000 | 1 | exactly `srwow-daily-YYYY-MM-DD` (UTC date) |
 
-**Identity:** a WoW character is linked to a stackrivals.io account by a one-time **link code**.
-The website shows a code, the player types `/sr link CODE` in game, and the addon includes it in
-the next result code. This shows that the person who has the account also controls a WoW client
-that produced that result. It is **not** proof of who owns the character. Call it "linked", never
-"verified identity". No passwords, tokens or account data ever go through the addon.
+`capTicks = ceil(timeCapMs / 1000 × 60)`, exactly as `verifyLog`. Seeds are ASCII by definition:
+the web's `hashString` hashes UTF-16 code units and Lua hashes bytes; they agree on ASCII only.
+Web-created challenge seeds: `srchal-` + 10 random `[a-z0-9]`.
 
-**Daily:** a cross-platform Daily uses seed `srwow-daily-<UTC date>` (the WoW Daily Blitz) on both
-platforms, so web and WoW players get the same pieces each day.
+### 6.2 Challenge code
 
-## 7. Fairness rules (both platforms)
+`SR1C.<ruleset>.e<engine>.<seed>.<check>` — e.g. `SR1C.b120.e1.srchal-7f3k2p9d.xxxxxxxx`
+
+### 6.3 Result code
+
+`SR1R.<platform>.<ruleset>.e<engine>.<seed>.<ticks36>.<score36>.<lines36>.<level36>.<hash>.<playerHex>.<link>.<log>.<check>`
+
+| Field | Rule |
+|---|---|
+| platform | `wow-forever` \| `wow-retail` \| `wow-classic` |
+| engine | `e` + decimal, no leading zeros, 1–4 digits |
+| ticks36, score36, lines36, level36 | lowercase base 36, canonical (no leading zeros, `0` for zero), ≤ 9 chars |
+| hash | 8 lowercase hex: claimed `hashState` of the final state |
+| playerHex | lowercase hex of the UTF-8 bytes of `Name-Realm`; 1–64 bytes; must be valid UTF-8 |
+| link | `-` or a one-time link code `[A-Z0-9]{6,12}` (§6.8) |
+| log | compact log (§2), canonical (re-encoding gives the same text); every input tick ≤ ticks; may be empty |
+| check | 8 lowercase hex = FNV-1a 32 (`hashString`) of everything before `.<check>` |
+
+Decoding: remove all whitespace first (pasted codes get wrapped); max 32768 characters; split on
+`.`; exact field count (5 / 14). Decode errors: `size format fields check engine ruleset_or_seed
+platform numbers hash player link log`. **The check only catches typos** — anyone can recompute it.
+Trust comes from the server replay, never from the code.
+
+A 2:00 result is about 1.5–2.5 KB, a 3:00 result about 2.5–3.5 KB: fine for a paste box.
+
+### 6.4 Server import algorithm (both implementations must give identical output)
+
+Input: the pasted code, the server's own record of the challenge being answered (ruleset, seed,
+createdAt — **never taken from the code**), and the server clock.
+
+1. Decode (§6.3). On error: reject with the decode error.
+2. If the code's ruleset ≠ the challenge's ruleset: reject `ruleset_mismatch`.
+3. `log = { v: engine, seed: codeSeed, startLevel: 1, ticks, inputs }`.
+4. `v = verifyLog({ log, seed: challenge.seed, timeCapMs: RULESETS[ruleset].timeCapMs,
+   elapsedMs: now − challenge.createdAt })` — for a Daily, `createdAt` = 00:00 UTC of that date.
+   This yields `engine_mismatch`, `seed_mismatch`, `malformed_log`, `over_time_cap`,
+   `faster_than_clock` (log longer than elapsed + 3 s), `inhuman_input_rate`, `inputs_after_topout`.
+5. If `v.final` exists: append `claim_mismatch` if score, lines or level differ from the claim, then
+   `hash_mismatch` if the hash differs.
+6. No reasons → store `server_verified`; otherwise store `rejected` with the reasons (audit), never ranked.
+
+`importResult` in `tools/sr1/sr1.ts` is this algorithm. The vectors pin its output, including the
+order of reasons.
+
+### 6.5 Duplicates and manipulation
+
+- **One player, one challenge:** unique `(challengeId, playerRef)` for the *ranked* entry. A WoW
+  player can retry a seed offline as often as they like, so async challenges are **best-attempt
+  boards** for everybody (web players may retry too). Every import is kept for audit; the board
+  shows the best `server_verified` score per player.
+- **Re-using a code:** the seed binds a result to one challenge (`seed_mismatch` otherwise); the
+  same code imported twice is a no-op (store a hash of the normalized code, unique).
+- **Forged or edited codes:** replay → `claim_mismatch`, `hash_mismatch`, `over_time_cap`,
+  `inhuman_input_rate`, `inputs_after_topout`.
+- **Pre-computed or bot runs:** `faster_than_clock` stops results that appear before the game could
+  be played. A bot playing in real time can't be told apart by replay alone, on any platform.
+  Ranked rewards therefore also need account trust (linked accounts) and the web's existing fraud
+  checks.
+- **Someone else's code:** without a link, the result is shown as `WoW: Name-Realm (unlinked)`
+  and gives the importing web account nothing. With a link code, only the account that issued the
+  code gets the result.
+- Rate-limit imports per account and IP.
+
+### 6.6 Verification status shown to players
+
+`server_verified` = "Verified by StackRivals" · `peer_checked` = "Checked by your opponent's
+addon" · `local` = "Not verified" · `rejected` = not shown on boards. Never say "verified" for a
+WoW duel.
+
+### 6.7 Shared Daily
+
+Seed `srwow-daily-<UTC date>`, ruleset `daily120`, available 00:00–24:00 UTC. The addon already
+plays it as Daily Blitz. The web generates the same seed for the same date (the engine is
+parity-tested), so web and WoW players get identical pieces. WoW scores join the web Daily board via
+an SR1 result code (`elapsedMs` counted from 00:00 UTC). There is no challenge code for a Daily: the
+seed is implied by the date.
+
+### 6.8 Account linking (later)
+
+1. **Preferred: Battle.net OAuth on the website** (scope `wow.profile`, endpoint
+   `/profile/user/wow`). Blizzard returns the account's characters, so ownership of `Name-Realm` is
+   proven by Blizzard. Free Blizzard developer client needed (owner's decision). Classic/Forever
+   availability must be checked at launch.
+2. **Fallback: one-time link code.** The website shows `[A-Z0-9]{8}`; the player types
+   `/sr link CODE` in WoW; the next result codes carry it. This proves the person with the web
+   account also controls a WoW client that produced that result. Label it "linked", never
+   "verified identity".
+3. Never passwords, tokens or Battle.net credentials through the addon or in codes.
+
+### 6.9 Changing the format
+
+Additions need a new format id (`SR2C`/`SR2R`). Both sides update the vectors together; the vectors
+file is generated by the addon (`lua5.1 tests/sr1_vectors.lua > docs/vectors/sr1.json`) and must
+pass `tools/sr1/check_vectors.ts` against the web engine before either side ships.
+
+## 7. Fairness rules (all platforms)
 
 - The same engine (`ENGINE_VERSION` must match; parity tests keep the TS and Lua engines identical).
 - The same seed for both players, and the same time cap. Inputs are limited to 4 per tick and 80
   per second, inputs after top-out are rejected, and logs over the time cap are flagged.
 - A forfeit always loses; both forfeiting is a draw. Equal scores are a draw (web `decideOutcome`).
-- A result needs the full input log. A claimed score without a log never wins (WoW: "no result").
-- A log that fails the replay, or arrives faster than the game can be played, loses.
-- A replayed match result can't be replayed twice: the web stores `(matchId, playerRef)` as unique.
+- A result needs the full input log. A claimed score without a log never wins.
+- A log that fails the replay, or arrives faster than the game can be played, loses / is rejected.
 - Free and equal on every platform: no paid advantage, and web premium never gates WoW play
   (Blizzard add-on policy).
 
@@ -219,9 +340,10 @@ platforms, so web and WoW players get the same pieces each day.
 | Phase | Content | Depends on |
 |---|---|---|
 | P0 | Solo addon 0.3.x released for Forever | Owner's client test |
-| P1 | Duels 0.4.0: two-client real test → merge to main → release | Two WoW accounts in the same guild/realm |
-| P2 | Async challenges: `/sr code` (import a challenge), result code export, web import page + server replay | Web work (§6), EditBox UI in the addon |
-| P2 | WoW character ↔ web account linking (link codes) | Web account system |
-| P3 | Guild leaderboard inside WoW (guild broadcast of personal bests, throttled) | P1 |
-| P3 | Optional desktop companion: upload results after `/reload` (consent, read-only) | P2 |
+| P1 | Duels 0.4.0: two-client test (docs/MULTIPLAYER_TEST.md) → fixes → merge → release | Two paid WoW accounts, same realm/guild |
+| P2 | Web: SR1 import page + challenge pages + shared Daily board (`server_verified`) | Web work; spec §6, vectors |
+| P2 | Addon: paste a challenge code (`/sr code`), play it, copy the result code | After P1; codec already built |
+| P2 | Account linking: Battle.net OAuth (preferred) or link codes | Web account system; Blizzard developer client |
+| P3 | Guild leaderboard inside WoW (throttled guild broadcast of personal bests) | P1 |
+| P3 | Optional desktop companion: upload finished results after `/reload` (consent, read-only) | P2 |
 | — | Live WoW↔web, live Forever↔Retail | Not possible (§1, §4) |

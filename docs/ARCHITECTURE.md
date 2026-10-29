@@ -4,9 +4,15 @@
 
 ```
 Engine/   pure Lua 5.1, no WoW API   ← shared by every WoW client; parity-tested against the web engine
-Core/     Session (modes, countdown, pause, events) and DB (pure) + Sound/Main (WoW glue)
+          (Verify.lua = port of the web verifyLog)
+Net/      Protocol + Codes (pure: duel messages, SR1 cross-platform codes) and Comm (addon-message
+          transport: queue, throttling, result codes)
+Core/     Session (modes, countdown, pause, events) and DB (pure) + Sound/Main (WoW glue);
+          Duel (1v1 state machine) and DuelDiag (duel diagnostics in SavedVariables)
 UI/       textures and font strings only (no XML, no templates, no libraries)
 ```
+
+Multiplayer and cross-platform formats: docs/CROSS_PLATFORM_MULTIPLAYER.md (shared with the web).
 
 ## Decisions
 
