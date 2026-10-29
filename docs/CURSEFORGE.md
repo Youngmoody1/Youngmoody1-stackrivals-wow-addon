@@ -1,7 +1,8 @@
 # CurseForge listing (draft — not submitted)
 
 **Project name:** StackRivals
-**Game / flavor:** World of Warcraft — WoW Forever
+**Game / flavor:** World of Warcraft — flavor "Forever", game version 1.60.1 (interface 16001), as
+other Forever addons list it today. Re-check the game version on launch day before uploading.
 **Category:** Minigames (secondary: Miscellaneous)
 **License:** All Rights Reserved (source visible in the download, as Blizzard's policy requires)
 **Summary (short description, ≤ 120 chars):**
