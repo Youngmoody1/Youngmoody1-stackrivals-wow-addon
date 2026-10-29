@@ -60,21 +60,26 @@ Range: <old commit>..<new commit>   ENGINE_VERSION: <old> -> <new>
    - `importResult(code, challenge, elapsedMs, { hashString, verifyLog })` deep-equals `expect`;
    - valid codes re-encode to the same text (whitespace removed).
 
-   This is exactly what the addon's `tools/sr1/check_vectors.ts` runs against this repo: **57/57
-   pass at `29afe52`**. Your test keeps it green from your side.
+   - `runKey(a) === runKey(b)` matches `same` for every entry in `runKeys`.
+
+   This is exactly what the addon's `tools/sr1/check_vectors.ts` runs against this repo: **77/77
+   pass at `29afe52`** (plus a 4,000-code differential fuzz with identical Lua/TS verdicts). Your
+   test keeps it green from your side.
 3. Rulesets (id + engine version = the rules):
 
    | id | timeCapMs | countdownMs | startLevel | seed |
    |---|---|---|---|---|
    | `b120` | 120000 | 3000 | 1 | `[a-z0-9-]{1,64}` |
    | `r180` | 180000 | 4000 | 1 | `[a-z0-9-]{1,64}` (= current 1v1) |
-   | `daily120` | 120000 | 3000 | 1 | exactly `srwow-daily-YYYY-MM-DD` (UTC) |
+   | `daily120` | 120000 | 3000 | 1 | exactly `srwow-daily-YYYY-MM-DD`, a real date (UTC) |
 
    Seeds must be ASCII (`hashString` hashes UTF-16 units, Lua hashes bytes; equal only for ASCII).
 4. Code formats (details and error names in the spec §6.2–6.3):
    - Challenge: `SR1C.<ruleset>.e<engine>.<seed>.<check>`
    - Result: `SR1R.<platform>.<ruleset>.e<engine>.<seed>.<ticks36>.<score36>.<lines36>.<level36>.<hash>.<playerHex>.<link>.<log>.<check>`
    - `check` = 8-hex FNV-1a (`hashString`) of everything before it; **typo detection only**.
+   - Only ASCII whitespace is stripped; any other non-printable-ASCII character → `chars`.
+   - The player name follows WoW rules (`nameOk`): no control, zero-width or bidi characters.
 
 ### 3. Server import (the only place a WoW score becomes `server_verified`)
 
@@ -82,18 +87,28 @@ Implement a server function (edge function / RPC; results are server-written, ke
 RLS style) that does exactly `importResult` (spec §6.4):
 
 1. decode (reject on decode error);
-2. load the challenge **from the database** (ruleset, seed, createdAt); never trust the code's seed;
-   reject `ruleset_mismatch` if the rulesets differ;
-3. `verifyLog({ log: { v: engine, seed, startLevel: 1, ticks, inputs }, seed: challenge.seed,
-   timeCapMs, elapsedMs: now − challenge.createdAt })` (for a Daily: since 00:00 UTC of that date);
-4. append `claim_mismatch` (score/lines/level differ) then `hash_mismatch`, if `final` exists;
-5. no reasons → store as `server_verified`, else store as `rejected` with the reasons (audit only).
+2. load the challenge **from the database** (`ruleset`, `seed`, `createdAtMs`, `closesAtMs`; a Daily:
+   00:00 UTC of its date and 24 h later); never trust the code's seed; reject `ruleset_mismatch`;
+3. reject `expired` if `nowMs > closesAtMs`;
+4. `verifyLog({ log: { v: engine, seed, startLevel: 1, ticks, inputs }, seed: challenge.seed,
+   timeCapMs, elapsedMs: nowMs − createdAtMs })`;
+5. append `claim_mismatch` (score/lines/level differ) then `hash_mismatch`, if `final` exists;
+6. reasons → store as `rejected` (audit only). No reasons → check the run key (below), then store
+   as `server_verified`.
 
-**Duplicates and abuse:** a unique hash of the normalized code (re-import = no-op); a best-entry per
-`(challenge_id, player_ref)`; rate limiting per account and IP. Async challenges are
-**best-attempt boards** for everyone, because a WoW player can retry a seed offline. A result
-without an account link shows as "WoW: Name-Realm (unlinked)" and gives the importing account
-nothing.
+`importResult(code, challenge, nowMs, deps)` in `sr1.ts` implements steps 1–5.
+
+**Duplicates and abuse (must have):**
+- **Run key:** `SHA-256(runKey(decoded))` UNIQUE. The first successful import owns the run; the same
+  run under another name/platform/link → reject `duplicate_run` and flag it. Name, platform and link
+  are not protected by the check, so without this anyone can re-wrap someone else's run.
+- A best entry per `(challenge_id, player_ref)`; rate limits per account and IP.
+- Async challenges are **best-attempt boards** for everyone (a WoW player can retry a seed offline).
+- Daily seeds are predictable by design, so a run can be prepared in advance: **Daily boards are
+  fun boards, never ranked rewards.** Anything ranked uses web challenges with unpredictable
+  server-random seeds and closing times.
+- A result without an account link shows as "WoW: Name-Realm (unlinked)", is clearly marked as an
+  unverified name, and gives the importing account nothing.
 
 ### 4. Data: one shared match record
 
@@ -123,7 +138,9 @@ ruleset **and** engine version. Rankings use `server_verified` only.
    characters → proven ownership of `Name-Realm`). Needs a free Blizzard developer client; the
    owner must approve creating it. Check Classic/Forever namespace support at launch.
 2. Fallback: a one-time link code `[A-Z0-9]{8}` on the profile; the player types `/sr link CODE`
-   in WoW, and result codes then carry it. Label "linked", never "verified identity".
+   in WoW, and the next result code carries it. **Consume it on its first successful import** (it
+   is visible in the code). It proves only who pasted the result, not who owns the character or
+   who played: label "linked", never "verified identity".
 
 ### 7. What the WoW side needs back from you
 
@@ -137,6 +154,7 @@ ruleset **and** engine version. Rankings use `server_verified` only.
 
 - All vectors pass in your test suite; existing web tests stay green.
 - An imported valid code becomes `server_verified` with the replayed score; every invalid vector
-  is rejected with exactly the expected reasons.
+  is rejected with exactly the expected reasons; the re-wrapped vector is rejected as `duplicate_run`
+  when the original was imported first; an expired challenge rejects imports.
 - No gameplay change without `ENGINE_VERSION` + change report; no live-crossplay claims; nothing
   about WoW requires payment.

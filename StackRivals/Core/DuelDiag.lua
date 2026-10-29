@@ -77,6 +77,7 @@ function D.trace(event, text, who, info)
   local r = m and find(m.mid)
   if not r then return end
   if m.mid ~= mid and event ~= "reject" then return end -- other players' messages (hello, spam)
+  if event == "reject" and not ns.Comm.same(who, m.rival) then return end -- junk from strangers
   if event == "send" then
     bump(r.codes, tostring(info))
     if info == 0 then bump(r.sent, kind) end

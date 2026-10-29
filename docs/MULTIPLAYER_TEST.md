@@ -43,7 +43,7 @@ Spiller **A** udfordrer, spiller **B** svarer, medmindre andet står. Tag screen
 | 8 | Duel med **3:00 web rules** | Tidsgrænse 3:00 og 4 s nedtælling | |
 | 9 | Under kampen: B angriber en træningsdukke (combat) | Bs spil pauser med det samme, mens A spiller videre. Efter kampen: B trykker Resume. Duellen afsluttes normalt | |
 | 10 | Under kampen: B skriver `/reload` | A spiller videre og vinder efter sin tid ("Your rival left the duel"). Efter reload: `/sr duel debug` hos B viser ingen duel. Bs nederlag er gemt | |
-| 11 | I lobbyen: B logger helt ud | A ser "is offline" eller "Lost contact" inden for ca. 35 s. Ingen sejr eller tab registreres. **Chatten må ikke fyldes med "No player named ..."** | |
+| 11 | I lobbyen: B logger helt ud | A ser "is offline" eller "Lost contact" inden for ca. 35 s. Ingen sejr eller tab registreres. **Notér præcis hvilken systemlinje A får** ("No player named ..." eller "Player is offline."), og om den gentages | |
 | 12 | Under kampen: B trykker Esc, så **Forfeit duel** | Første klik: "Click again to forfeit". Andet klik: B taber, og A vinder efter sin tid | |
 | 13 | Valgfri: A og B af **forskellig faction** på samme realm | Notér om Find players/Challenge virker. Det er udokumenteret, så alt er et nyttigt resultat | |
 | 14 | A og B trykker **Challenge** på hinanden samtidig | Begge havner i **samme** lobby (ikke "busy") | |

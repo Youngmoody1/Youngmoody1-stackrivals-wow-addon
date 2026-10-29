@@ -376,7 +376,7 @@ describe("review findings (regression tests, simulated clients)", function()
     b.online = false
     a.ns.App:Start("classic"); net.step(120)
     ok(a.ns.Duel.challenge("Bob"))
-    net.step(60)
+    net.step(60 * 8) -- 6 s grace before an offline report ends anything
     local m = a.ns.Duel.current
     eq(m.state, "cancelled"); eq(m.endReason, "rival_offline")
     eq(a.ns.db.duels.wins, 0); eq(#a.ns.db.duels.history, 0)
@@ -689,6 +689,124 @@ describe("delivery, API results and budget (simulated clients)", function()
     local st = a.ns.DuelDiag.status()
     ok(#st >= 4 and st[3]:find("Bob"), table.concat(st, " | "))
     print("    diag sample: " .. table.concat({ r.lines[1], r.lines[2], r.lines[3], r.lines[#r.lines] }, " | "))
+  end)
+end)
+
+------------------------------------------------------------------------------------------------
+-- Regression tests for the second independent review (round 3)
+------------------------------------------------------------------------------------------------
+describe("second review findings (simulated clients)", function()
+  local function dropSends(c, pred)
+    local real = c.env.C_ChatInfo.SendAddonMessage
+    c.env.C_ChatInfo.SendAddonMessage = function(prefix, text, ch, tgt)
+      if pred(text) then return 0 end -- accepted, never delivered
+      return real(prefix, text, ch, tgt)
+    end
+  end
+  local function toLobby(net, a, b)
+    ok(a.ns.Duel.challenge("Bob", "b120"))
+    for _ = 1, 40 do net.step(15); local m = b.ns.Duel.current; if m and m.state == "invited" then break end end
+    b.ns.UI.invite.acc:Click()
+    for _ = 1, 40 do net.step(15); if a.ns.Duel.current.state == "lobby" then break end end
+  end
+  local function runUntil(net, fns, cond, max)
+    for _ = 1, max or 60 * 60 * 10 do
+      if cond() then return true end
+      for _, f in ipairs(fns) do f() end
+      net.step(1)
+    end
+    return cond()
+  end
+  local function dropper(net, c, period)
+    return function()
+      local s = c.ns.App.session
+      if s and s.duel and s.phase == "playing" and (math.floor(net.time * 60) % period) == 0 then s:press("hardDrop"); s:release("hardDrop") end
+    end
+  end
+
+  it("H1 a GO that arrives 13 s late doesn't make the host's honest result look too fast", function()
+    local net, a, b = pair({ seed = 101 })
+    toLobby(net, a, b)
+    local until_t
+    dropSends(a, function(text)
+      if text:match("^1:GO:") then until_t = until_t or (net.time + 13); return net.time < until_t end
+      return false
+    end)
+    b.ns.UI.lobby.ready:Click(); net.step(30); a.ns.UI.lobby.ready:Click()
+    runUntil(net, { NS.autoplay(a, "fast"), NS.autoplay(b, "slow") }, function()
+      return a.ns.Duel.current.state == "done" and b.ns.Duel.current.state == "done" end)
+    local ma, mb = a.ns.Duel.current, b.ns.Duel.current
+    ok(mb.goAt - ma.goAt > 12, "the guest really started late")
+    eq(ma.endReason, "checked"); eq(mb.endReason, "checked"); complementary(ma, mb)
+  end)
+
+  it("M1 a BYE 'left' that overtakes a lost END never gives the waiting player a win", function()
+    local net, a, b = pair({ seed = 102 })
+    toLobby(net, a, b)
+    a.ns.UI.lobby.ready:Click(); b.ns.UI.lobby.ready:Click(); net.step(120)
+    local lost = false
+    dropSends(a, function(text) if text:match("^1:END:") and not lost then lost = true; return true end return false end)
+    dropSends(b, function(text) return text:match("^1:LOG:") ~= nil end)
+    runUntil(net, { dropper(net, b, 6) }, function() return b.ns.Duel.current.state == "waiting" end)
+    runUntil(net, { NS.autoplay(a, "fast") }, function() return false end, 60 * 30)
+    runUntil(net, { dropper(net, a, 6) }, function() return a.ns.Duel.current.state == "waiting" end)
+    a.ns.Duel.leave()
+    runUntil(net, {}, function() return b.ns.Duel.current.state == "done" end, 60 * 120)
+    local mb = b.ns.Duel.current
+    ok(mb.outcome ~= "win", "Bob (lower score) must not win: " .. tostring(mb.endReason))
+    ok(mb.endReason == "checked" or mb.endReason == "unchecked", mb.endReason)
+  end)
+
+  it("L1 a guest that never played can't hand the host a timeout win through late DEC replies", function()
+    local net, a, b = pair({ seed = 103 })
+    toLobby(net, a, b)
+    dropSends(a, function(text) return text:match("^1:GO:") ~= nil end)
+    local first
+    dropSends(b, function(text)
+      if text:match("^1:DEC:") then first = first or net.time; return net.time < first + 6 end
+      return false
+    end)
+    b.ns.UI.lobby.ready:Click(); net.step(30)
+    local tg = b.ns.Duel.current.lobbyAt
+    while net.time - tg < 57 do net.step(30) end
+    a.ns.UI.lobby.ready:Click()
+    runUntil(net, { NS.autoplay(a, "fast") }, function() local m = a.ns.Duel.current; return m.state == "done" or m.state == "cancelled" end, 60 * 60 * 3)
+    eq(a.ns.Duel.current.state, "cancelled"); eq(a.ns.db.duels.wins, 0)
+  end)
+
+  it("L2 offline line: only the rival's full name counts, and one stray line doesn't end a duel", function()
+    local net = NS.new({ seed = 104 })
+    local filt
+    local a = net.add({ name = "Alice", guild = "G", beforeLogin = function(env)
+      env.ERR_CHAT_PLAYER_NOT_FOUND_S = "No player named '%s' is currently playing."
+      env.ChatFrame_AddMessageEventFilter = function(ev, fn) filt = fn end
+    end })
+    local b = net.add({ name = "Bob-Other", guild = "G" })
+    ok(filt, "chat filter installed")
+    ok(a.ns.Duel.challenge("Bob-Other", "b120"))
+    for _ = 1, 40 do net.step(15); local m = b.ns.Duel.current; if m and m.state == "invited" then break end end
+    b.ns.UI.invite.acc:Click(); for _ = 1, 40 do net.step(15); if a.ns.Duel.current.state == "lobby" then break end end
+    a.ns.UI.lobby.ready:Click(); b.ns.UI.lobby.ready:Click(); net.step(600)
+    -- a different, offline "Bob" on Alice's own realm
+    eq(filt(nil, "CHAT_MSG_SYSTEM", "No player named 'Bob' is currently playing."), false, "not ours: shown, ignored")
+    -- the real rival's line, but Bob is still sending scores: grace keeps the duel alive
+    eq(filt(nil, "CHAT_MSG_SYSTEM", "No player named 'Bob-Other' is currently playing."), true, "ours: hidden")
+    net.step(60 * 10)
+    eq(a.ns.Duel.current.state, "playing", "Bob is still heard, so the duel goes on")
+    -- now Bob really goes offline
+    b.online = false
+    for _ = 1, 20 do net.step(60); if a.ns.Duel.current.state == "done" then break end; filt(nil, "CHAT_MSG_SYSTEM", "No player named 'Bob-Other' is currently playing.") end
+    eq(a.ns.Duel.current.state, "done"); ok(a.ns.Duel.current.endReason == "rival_offline" or a.ns.Duel.current.endReason == "rival_disconnected")
+  end)
+
+  it("L9 a stranger's invites don't push real duels out of the saved diagnostics", function()
+    local net, a, b = pair({ seed = 105 })
+    local ma = runDuel(net, a, b)
+    for i = 1, 8 do
+      net.inject(a, "Mallory-Realm", "1:INV:mal" .. P.b36(100 + i) .. ":b120:1:abcdef12"); net.step(60)
+      a.ns.Duel.decline("no"); net.step(30)
+    end
+    eq(a.ns.db.duelDiag[1].mid, ma.mid, "the real duel is still the newest record")
   end)
 end)
 

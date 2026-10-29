@@ -52,7 +52,7 @@ Duel.FIND_COOLDOWN = 20       -- s between "find players" broadcasts
 Duel.LOG_SEND_GAP = 0.25      -- s between LOG chunks (Comm throttles too)
 Duel.RESEND = 4               -- s between re-sends of state messages before/after play
 Duel.LINGER = 60              -- s after the result we still serve the rival (END, log chunks)
-Duel.EARLY_CANCEL = 20        -- s after GO a rival's cancel still counts if they never played
+Duel.OFFLINE_GRACE = 6        -- s of silence needed before an "offline" report ends a match
 Duel.CLOCK_MARGIN = 10        -- s: a final result can't arrive faster than the game takes to play
 Duel.REPLY_GAP = 10           -- s between unsolicited replies (HI, "busy") to the same player
 Duel.CLOSED_KEEP = 300        -- s we remember a declined/cancelled match to answer late messages
@@ -110,6 +110,7 @@ end
 --- A message for a match we already declined or cancelled: our DEC may have been lost, say it again.
 local function answerClosed(msg, sender)
   local c = msg.mid and Duel.closed[msg.mid]
+  if c and now() - c.at > Duel.CLOSED_KEEP then Duel.closed[msg.mid] = nil; c = nil end
   if not c or not ns.Comm.same(c.rival, sender) then return false end
   if msg.kind ~= "DEC" and msg.kind ~= "BYE" and msg.kind ~= "FIN" then
     reply(sender, P.encode("DEC", msg.mid, c.reason))
@@ -127,6 +128,7 @@ end
 ------------------------------------------------------------------------------------------------
 function Duel.findPlayers()
   local t = now()
+  if ns.Comm.trial then return false, "trial" end -- our messages would never leave the client
   if Duel.lastFind and t - Duel.lastFind < Duel.FIND_COOLDOWN then return false, "cooldown" end
   Duel.lastFind = t
   local msg = P.encode("HEL", ns.VERSION, E.ENGINE_VERSION)
@@ -141,6 +143,7 @@ function Duel.findPlayers()
 end
 
 local function onHello(m, sender)
+  if ns.Comm.trial then return end
   reply(sender, P.encode("HI", ns.VERSION, E.ENGINE_VERSION, Duel.busy() and 1 or 0))
 end
 
@@ -159,9 +162,12 @@ local function newMatch(role, rival, ruleset, mid)
     state = "new", createdAt = now(), lastHeard = now(), lastSent = 0, lastRQ = 0,
     myReady = false, rivalReady = false, rival_ = {}, chunks = {},
   }
-  if ns.DuelDiag then ns.DuelDiag.begin(m) end
   return m
 end
+
+-- Diagnostics records start when a match becomes real (sent challenge / accepted invite), so a
+-- stranger's invites can't push real duels out of the 5 saved records.
+local function diagBegin(m) if ns.DuelDiag then ns.DuelDiag.begin(m) end end
 
 local function pauseSolo()
   local s = session()
@@ -184,6 +190,7 @@ function Duel.challenge(name, rulesetId)
   m.commitA = P.commit(m.mid, m.nonceA)
   m.state = "inviting"
   Duel.current = m
+  diagBegin(m)
   pauseSolo()
   send(m, "INV", m.mid, rulesetId, E.ENGINE_VERSION, m.commitA)
   emit("changed", m)
@@ -231,6 +238,7 @@ function Duel.accept()
   m.nonceB = P.token(8, rnd)
   m.state = "lobby"
   m.lobbyAt = now()
+  diagBegin(m)
   pauseSolo()
   send(m, "ACC", m.mid, m.nonceB)
   emit("changed", m)
@@ -261,6 +269,7 @@ function Duel.ready()
   local m = Duel.current
   if not m or m.state ~= "lobby" or m.myReady then return false end
   m.myReady = true
+  m.myReadyAt = now() -- the host can't start before this (it needs our RDY): safe clock reference
   send(m, "RDY", m.mid)
   if m.role == "host" and m.rivalReady then Duel.go(m) end
   emit("changed", m)
@@ -361,12 +370,15 @@ HANDLERS.ACC = function(msg, sender)
 end
 
 HANDLERS.DEC = function(msg, sender)
-  local m = matchFor(msg, sender)
-  if not m then return end
+  local m = Duel.current
+  if not m or m.mid ~= msg.mid or not ns.Comm.same(m.rival, sender) then return end
   local s = session()
-  -- lobby race: the guest gave up just as we started; they never played, so nobody wins
-  local earlyStart = m.state == "playing" and m.rival_.tick == nil and now() - (m.goAt or 0) < Duel.EARLY_CANCEL
+  -- lobby race / lost GO: the guest gave up before it ever played (we never got a score from it),
+  -- so nobody wins
+  local earlyStart = m.state == "playing" and m.role == "host" and m.rival_.tick == nil
+  -- an ignored DEC is not a sign of life: it must not keep a dead duel open
   if not (m.state == "inviting" or m.state == "lobby" or m.state == "invited" or earlyStart) then return end
+  heard(m)
   m.state = "cancelled"
   m.endReason = "rival_" .. msg.reason
   if earlyStart and s and s.duel == m then ns.App.session = nil end
@@ -422,7 +434,11 @@ HANDLERS.END = function(msg, sender)
   local t = now()
   m.rivalEnd = { ticks = msg.ticks, score = msg.score, lines = msg.lines, level = msg.level, hash = msg.hash, chunks = msg.chunks, at = t }
   -- a result can't arrive before the game could have been played (web: faster_than_clock)
-  local earliest = (m.goAt or t) + (m.ruleset.countdownTicks + msg.ticks) / 60 - Duel.CLOCK_MARGIN
+  -- Reference = the earliest moment the rival can have started: for the host, when it sent GO
+  -- (the guest starts after receiving it); for the guest, when it sent RDY (the host needs that RDY
+  -- before it can start). Never GO's arrival: a late GO would make an honest host look too fast.
+  local ref = (m.role == "guest") and (m.myReadyAt or m.goAt) or m.goAt
+  local earliest = (ref or t) + (m.ruleset.countdownTicks + msg.ticks) / 60 - Duel.CLOCK_MARGIN
   if t < earliest then m.tooFast = true end
   -- chunks that arrived before this END but for a different log length are useless
   if m.chunksN and m.chunksN ~= msg.chunks then m.chunks = {} end
@@ -455,8 +471,7 @@ end
 HANDLERS.FIN = function(msg, sender)
   local m = servedMatch(msg, sender)
   if not m then return end
-  m.rivalHasMine = true -- stop re-sending END and log chunks
-  if Duel.past == m then Duel.past = nil end
+  m.rivalHasMine = true -- stop re-sending END and log chunks (Duel.past stays to re-ack their END)
 end
 
 HANDLERS.BYE = function(msg, sender)
@@ -472,7 +487,7 @@ end
 
 local function onOffline(lname)
   for _, m in ipairs({ Duel.current or false, Duel.past or false }) do
-    if m and m.rival:lower() == lname or (m and m.rival:lower():match("^[^%-]+") == lname) then m.rivalOffline = true end
+    if m and m.rival:lower() == lname then m.rivalOffline = true end
   end
 end
 
@@ -527,6 +542,9 @@ function Duel.tryDecide(m)
     return Duel.finish(m, m.check.ok and "checked" or "check_failed")
   end
   if m.rivalForfeit == "forfeit" or m.rivalForfeit == "quit" then return Duel.finish(m, "rival_forfeited") end
+  -- "left" means their run had ended: their END/log may still be on its way (it can be overtaken
+  -- by the BYE). update() waits LOG_WAIT for it and then gives "no result", never a win.
+  if m.rivalForfeit == "left" and not m.rivalEnd then m.leftAt = m.leftAt or now(); return end
   local gone = m.rivalGone or m.rivalForfeit
   if gone and not m.rivalEnd then return Duel.finish(m, m.rivalOffline and "rival_offline" or "rival_disconnected") end
   -- gone after their END: their log may still be on its way; update() decides after LOG_WAIT
@@ -585,7 +603,8 @@ end
 
 -- After the result: keep sending our END and log until the rival has had time to get them.
 local function serveAfter(m, t)
-  if not m.my or m.myForfeit or m.rivalHasMine or t - m.doneAt >= Duel.LINGER then return false end
+  if not m.my or m.myForfeit or t - m.doneAt >= Duel.LINGER then return false end
+  if m.rivalHasMine then return true end -- they have everything; stay around only to re-ack (FIN)
   streamLog(m, t)
   if t - m.lastSent >= Duel.RESEND then m.lastSent = t; sendEnd(m) end
   return true
@@ -600,7 +619,8 @@ function Duel.update()
   if m.state == "done" then serveAfter(m, t); return end
 
   -- the rival is offline (server said so): stop before the match, or decide during it
-  if m.rivalOffline and not m.offlineSeen then
+  -- (a short grace: one stray "player not found" line must not end a duel if the rival is still talking)
+  if m.rivalOffline and not m.offlineSeen and t - m.lastHeard > Duel.OFFLINE_GRACE then
     m.offlineSeen = true
     if m.state == "inviting" or m.state == "lobby" or m.state == "invited" then
       m.state = "cancelled"; m.endReason = "rival_offline"; emit("changed", m); return
@@ -668,6 +688,9 @@ function Duel.update()
   -- rival's log never fully arrived: no result (a missing log must never decide a winner)
   if m.rivalEnd and not haveAllChunks(m) and t - math.max(m.rivalEnd.at, m.myEndAt or 0) > Duel.LOG_WAIT then
     return Duel.finish(m, "unchecked")
+  end
+  if m.leftAt and not m.rivalEnd and t - math.max(m.leftAt, m.myEndAt or 0) > Duel.LOG_WAIT then
+    return Duel.finish(m, "unchecked") -- they finished and left, but their result never arrived
   end
   -- hard deadline: an unfinished rival loses
   if m.deadline and t > m.deadline and not m.rivalEnd then

@@ -60,14 +60,20 @@ exchange a few small messages.
   | no result | the rival's log never fully arrived: a claimed score alone never decides a winner |
   | loss | you forfeited during play (both forfeited: draw, web rule) |
   | no result (you) | you left after your own run ended; your result still reaches the rival |
-  | cancelled | declined, busy, offline, other version, timeout, Trial account, or a GO nonce that doesn't match the commitment |
+  | no result | the rival left after their run ended, but their result never arrived (60 s) |
+  | cancelled | declined, busy, offline, other version, timeout, or a GO nonce that doesn't match the commitment; a guest that cancels before it ever played (lost GO) cancels for both |
+
+  A challenged Trial/Veteran account can't send anything, so the challenger sees "didn't answer".
+  The "too fast" check measures from the earliest moment the rival can have started (host: when it
+  sent GO; guest: when it sent Ready), so a late GO never makes an honest result look too fast.
 
 - **Safety and UX:** whispers only during a match. Combat pauses only your own run (also when GO
   arrives in combat); a duel that starts while you type in chat starts paused. Nothing protected
   is called. "Forfeit duel" needs a second click within 3 s. Unsolicited replies (hello, busy) are
   rate-limited per player and low priority, so spam can't starve a duel. Whispering an offline
-  rival stops at once; the server's "No player named ..." line is hidden for players we just
-  whispered.
+  rival stops at once; the server's "No player named ..." line is hidden for the exact player we
+  just whispered (bare name only on our own realm), and an offline report only ends a match after
+  6 s without any message from the rival.
 - **Diagnostics:** the last 5 duels are kept in SavedVariables (`duelDiag`): counters per message
   kind, send result codes, drops, longest silence, queue peak and a compact event log;
   `/sr duel debug` shows the live state. See docs/MULTIPLAYER_TEST.md.
@@ -124,8 +130,11 @@ player per duel and ≤ 8 in any second, and zero throttles inside instances.
   3 MaxPrefixes. **Registrations are lost on `/reload`**: the addon registers on every
   `PLAYER_LOGIN` (which also fires after a reload).
 - Whispers work on the same realm and connected realms. Cross-faction is not documented.
-- Offline target: the server prints `ERR_CHAT_PLAYER_NOT_FOUND_S` ("No player named '%s' is
-  currently playing."); addons hide it with a `CHAT_MSG_SYSTEM` message filter, as other addons do.
+- Offline target: chat whispers print `ERR_CHAT_PLAYER_NOT_FOUND_S` ("No player named '%s' is
+  currently playing."); addons hide it with a `CHAT_MSG_SYSTEM` message filter. The wiki's
+  SendAddonMessage page says an **addon** whisper prints "Player is offline." instead. Which text
+  appears is checked in the two-client test; offline detection also works without it (code 12 on
+  12.x, and silence after 35 s everywhere).
 - **Trial and Veteran accounts can't send addon messages** (Forever 1.60.1 beta, Retail 12.1.7).
   The addon detects `IsTrialAccount()`/`IsVeteranTrialAccount()` and says so instead of failing silently.
 - **To verify in real clients:** sender name format, own guild echo, when code 12 is returned,
@@ -212,8 +221,9 @@ from WoW, fully allowed. The website replays every result itself, so imports are
 
 **Implementations:** Lua `StackRivals/Net/Codes.lua` (BUILT), TypeScript reference
 `tools/sr1/sr1.ts` (BUILT, no imports: the web project may copy it), shared vectors
-`docs/vectors/sr1.json`, checker `tools/sr1/check_vectors.ts` (runs the TS reference with the
-web's real `verifyLog`; **57/57 pass at web commit 29afe52**). The addon UI (paste a challenge,
+`docs/vectors/sr1.json` (12 challenge, 32 result vectors, 3 run-key pairs), checker
+`tools/sr1/check_vectors.ts` (runs the TS reference with the web's real `verifyLog`; **77/77 pass at
+web commit 29afe52**). A differential fuzz of 4,000 mutated codes gave identical Lua and TS verdicts. The addon UI (paste a challenge,
 copy a result) is PLANNED for after the real client test.
 
 ### 6.1 Rulesets (ruleset id + engine version = the rules)
@@ -222,7 +232,7 @@ copy a result) is PLANNED for after the real client test.
 |---|---|---|---|---|---|
 | `b120` | 120000 | 7200 | 3000 | 1 | `[a-z0-9-]{1,64}` |
 | `r180` | 180000 | 10800 | 4000 | 1 | `[a-z0-9-]{1,64}` (= web 1v1) |
-| `daily120` | 120000 | 7200 | 3000 | 1 | exactly `srwow-daily-YYYY-MM-DD` (UTC date) |
+| `daily120` | 120000 | 7200 | 3000 | 1 | exactly `srwow-daily-YYYY-MM-DD`, a real calendar date (UTC) |
 
 `capTicks = ceil(timeCapMs / 1000 × 60)`, exactly as `verifyLog`. Seeds are ASCII by definition:
 the web's `hashString` hashes UTF-16 code units and Lua hashes bytes; they agree on ASCII only.
@@ -242,54 +252,69 @@ Web-created challenge seeds: `srchal-` + 10 random `[a-z0-9]`.
 | engine | `e` + decimal, no leading zeros, 1–4 digits |
 | ticks36, score36, lines36, level36 | lowercase base 36, canonical (no leading zeros, `0` for zero), ≤ 9 chars |
 | hash | 8 lowercase hex: claimed `hashState` of the final state |
-| playerHex | lowercase hex of the UTF-8 bytes of `Name-Realm`; 1–64 bytes; must be valid UTF-8 |
+| playerHex | lowercase hex of the UTF-8 bytes of `Name-Realm` as the addon reports it; 1–64 bytes, valid UTF-8 (a BOM is not removed). Name 2–12 letters; realm 1–40 letters, digits or `'` (spaces and hyphens removed, like `GetNormalizedRealmName`); exactly one `-`. Letters = A–Z, a–z, U+00C0–U+024F (not ×÷), Greek, Cyrillic, Hangul, CJK. This blocks control, zero-width, bidi and other invisible characters |
 | link | `-` or a one-time link code `[A-Z0-9]{6,12}` (§6.8) |
 | log | compact log (§2), canonical (re-encoding gives the same text); every input tick ≤ ticks; may be empty |
 | check | 8 lowercase hex = FNV-1a 32 (`hashString`) of everything before `.<check>` |
 
-Decoding: remove all whitespace first (pasted codes get wrapped); max 32768 characters; split on
-`.`; exact field count (5 / 14). Decode errors: `size format fields check engine ruleset_or_seed
-platform numbers hash player link log`. **The check only catches typos** — anyone can recompute it.
+Decoding: remove ASCII whitespace `[ \t\r\n\f\v]` (pasted codes get wrapped); anything else outside
+printable ASCII `0x21–0x7E` → `chars` (e.g. a non-breaking space); then more than 32768 characters →
+`size`; split on `.`; exact field count (5 / 14). Decode errors, in this order: `size chars format
+fields check` then field errors `engine ruleset_or_seed platform numbers hash player link log`. **The check only catches typos** — anyone can recompute it.
 Trust comes from the server replay, never from the code.
 
 A 2:00 result is about 1.5–2.5 KB, a 3:00 result about 2.5–3.5 KB: fine for a paste box.
 
 ### 6.4 Server import algorithm (both implementations must give identical output)
 
-Input: the pasted code, the server's own record of the challenge being answered (ruleset, seed,
-createdAt — **never taken from the code**), and the server clock.
+Input: the pasted code, the server's own record of the challenge being answered (`ruleset`, `seed`,
+`createdAtMs`, `closesAtMs` — **never taken from the code**; a Daily: 00:00 UTC of its date and 24 h
+later; a web challenge: creation time and creation + `CHALLENGE_TTL_MS`), and the server clock `nowMs`.
 
 1. Decode (§6.3). On error: reject with the decode error.
 2. If the code's ruleset ≠ the challenge's ruleset: reject `ruleset_mismatch`.
-3. `log = { v: engine, seed: codeSeed, startLevel: 1, ticks, inputs }`.
-4. `v = verifyLog({ log, seed: challenge.seed, timeCapMs: RULESETS[ruleset].timeCapMs,
-   elapsedMs: now − challenge.createdAt })` — for a Daily, `createdAt` = 00:00 UTC of that date.
+3. If `nowMs > closesAtMs`: reject `expired` (boards close; old Daily seeds can't be farmed later).
+4. `log = { v: engine, seed: codeSeed, startLevel: 1, ticks, inputs }`.
+5. `v = verifyLog({ log, seed: challenge.seed, timeCapMs: RULESETS[ruleset].timeCapMs,
+   elapsedMs: nowMs − createdAtMs })`.
    This yields `engine_mismatch`, `seed_mismatch`, `malformed_log`, `over_time_cap`,
    `faster_than_clock` (log longer than elapsed + 3 s), `inhuman_input_rate`, `inputs_after_topout`.
-5. If `v.final` exists: append `claim_mismatch` if score, lines or level differ from the claim, then
+6. If `v.final` exists: append `claim_mismatch` if score, lines or level differ from the claim, then
    `hash_mismatch` if the hash differs.
-6. No reasons → store `server_verified`; otherwise store `rejected` with the reasons (audit), never ranked.
+7. No reasons → continue with §6.5 (run key, link); otherwise store `rejected` with the reasons
+   (audit), never ranked.
 
 `importResult` in `tools/sr1/sr1.ts` is this algorithm. The vectors pin its output, including the
 order of reasons.
 
 ### 6.5 Duplicates and manipulation
 
+- **One run, one owner:** `runKey = <seed>.<ticks36>.<log>` (`runKey()` in both implementations)
+  identifies the run itself, whoever claims it. Store `SHA-256(runKey)` as UNIQUE: the first
+  successful import owns the run; the same run under another name, platform or link is rejected
+  (`duplicate_run`) and flagged for review. Player, platform and link are **not** protected by the
+  check, so this is the only thing that stops someone re-wrapping another player's run.
 - **One player, one challenge:** unique `(challengeId, playerRef)` for the *ranked* entry. A WoW
   player can retry a seed offline as often as they like, so async challenges are **best-attempt
   boards** for everybody (web players may retry too). Every import is kept for audit; the board
   shows the best `server_verified` score per player.
 - **Re-using a code:** the seed binds a result to one challenge (`seed_mismatch` otherwise); the
-  same code imported twice is a no-op (store a hash of the normalized code, unique).
+  same run imported twice is caught by the run key.
 - **Forged or edited codes:** replay → `claim_mismatch`, `hash_mismatch`, `over_time_cap`,
   `inhuman_input_rate`, `inputs_after_topout`.
-- **Pre-computed or bot runs:** `faster_than_clock` stops results that appear before the game could
-  be played. A bot playing in real time can't be told apart by replay alone, on any platform.
-  Ranked rewards therefore also need account trust (linked accounts) and the web's existing fraud
-  checks.
+- **Pre-computed or bot runs:** `faster_than_clock` only stops results that appear before the game
+  could be played *after the challenge existed*. It does **not** stop runs prepared in advance when
+  the seed is predictable: Daily seeds (`srwow-daily-<date>`) are public by design so WoW can play
+  them offline, so a tool-assisted Daily run can be prepared days ahead and imported right after
+  midnight. Daily boards are therefore fun boards, not ranked rewards. For anything ranked, use web
+  challenges with an unpredictable seed (`srchal-` + server randomness, never derived from the
+  date), closing times, linked accounts and the web's fraud checks. A bot playing in real time can't
+  be told apart by replay alone on any platform.
 - **Someone else's code:** without a link, the result is shown as `WoW: Name-Realm (unlinked)`
-  and gives the importing web account nothing. With a link code, only the account that issued the
-  code gets the result.
+  and gives the importing web account nothing. A link code is **consumed by its first successful
+  import** (it travels in plain text inside a result code, so it must not be reusable).
+- **Names are claims:** `Name-Realm` in a code is whatever the code says. Only Battle.net OAuth
+  (§6.8) proves character ownership; show unlinked names as unverified.
 - Rate-limit imports per account and IP.
 
 ### 6.6 Verification status shown to players
@@ -313,9 +338,9 @@ seed is implied by the date.
    proven by Blizzard. Free Blizzard developer client needed (owner's decision). Classic/Forever
    availability must be checked at launch.
 2. **Fallback: one-time link code.** The website shows `[A-Z0-9]{8}`; the player types
-   `/sr link CODE` in WoW; the next result codes carry it. This proves the person with the web
-   account also controls a WoW client that produced that result. Label it "linked", never
-   "verified identity".
+   `/sr link CODE` in WoW; the next result code carries it, and the first successful import consumes
+   it. It shows that the person with the web account pasted that result; it proves nothing about who
+   owns the character or who played. Label it "linked", never "verified identity".
 3. Never passwords, tokens or Battle.net credentials through the addon or in codes.
 
 ### 6.9 Changing the format

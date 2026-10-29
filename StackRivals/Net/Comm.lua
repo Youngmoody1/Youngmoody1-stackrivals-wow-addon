@@ -93,6 +93,13 @@ function Comm.init()
   Comm.hookOffline()
 end
 
+-- The server may print a same-realm player without the realm; only then is the bare name ours.
+local function sameRealm(lname)
+  local me = Comm.me()
+  local r1, r2 = lname:match("%-(.+)$"), me and me:lower():match("%-(.+)$")
+  return r1 ~= nil and r1 == r2
+end
+
 --- Hide and report the server's "player not found" line for players we just whispered.
 function Comm.hookOffline()
   local add = (ChatFrameUtil and ChatFrameUtil.AddMessageEventFilter) or ChatFrame_AddMessageEventFilter
@@ -104,7 +111,7 @@ function Comm.hookOffline()
     for lname, at in pairs(recentTargets) do
       if t - at > 30 then
         recentTargets[lname] = nil
-      elseif msg:lower() == fmt:format(lname):lower() or msg:lower() == fmt:format((lname:match("^[^%-]+"))):lower() then
+      elseif msg:lower() == fmt:format(lname):lower() or (sameRealm(lname) and msg:lower() == fmt:format((lname:match("^[^%-]+"))):lower()) then
         local h = Comm.handlers["@offline"]
         if h then h(lname) end
         return true -- hide it
@@ -237,7 +244,7 @@ end
 
 --- Drop queued messages for a match that no longer needs them (old invites, scores, pings).
 --- Final messages (decline, bye, end, log chunks) are kept so the rival still learns the outcome.
-local KEEP = { DEC = true, BYE = true, END = true, LOG = true }
+local KEEP = { DEC = true, BYE = true, END = true, LOG = true, FIN = true }
 function Comm.purge(mid)
   for i = #Comm.queue, 1, -1 do
     local text = Comm.queue[i].text

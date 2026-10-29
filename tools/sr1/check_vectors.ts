@@ -7,7 +7,7 @@
  * PASS means: Lua encoder == TS decoder/encoder, and Lua's replay/verification == the web's.
  */
 import { readFileSync } from "node:fs";
-import { decodeChallenge, decodeResult, encodeChallenge, encodeResult, importResult } from "./sr1.ts";
+import { decodeChallenge, decodeResult, encodeChallenge, encodeResult, importResult, runKey } from "./sr1.ts";
 
 const web = process.argv[2];
 if (!web) throw new Error("usage: bun tools/sr1/check_vectors.ts <web repo> [vectors.json]");
@@ -43,18 +43,23 @@ for (const c of vec.challenges) {
   check(`challenge: ${c.name}`, eq(got, c.expect), () => `ts ${JSON.stringify(got)} / lua ${JSON.stringify(c.expect)}`);
   if (d.ok) {
     const re = encodeChallenge(d.ruleset, d.seed, d.engine, hashString);
-    check(`challenge re-encode: ${c.name}`, re === c.code.replace(/\s+/g, ""));
+    check(`challenge re-encode: ${c.name}`, re === c.code.replace(/[ \t\r\n\f\v]+/g, ""));
   }
 }
 
 for (const r of vec.results) {
-  const got = importResult(r.code, r.challenge, r.elapsedMs, { hashString, verifyLog });
+  const got = importResult(r.code, r.challenge, r.nowMs, { hashString, verifyLog });
   check(`result: ${r.name}`, eq(got, r.expect), () => `ts  ${JSON.stringify(sort(got))}\n      lua ${JSON.stringify(sort(r.expect))}`);
   const d = decodeResult(r.code, hashString);
   if (d.ok) {
     const re = encodeResult(d, hashString);
-    check(`result re-encode: ${r.name}`, re === r.code.replace(/\s+/g, ""));
+    check(`result re-encode: ${r.name}`, re === r.code.replace(/[ \t\r\n\f\v]+/g, ""));
   }
+}
+
+for (const k of vec.runKeys) {
+  const a = decodeResult(k.a, hashString), b = decodeResult(k.b, hashString);
+  check(`run key: ${k.note ?? "different runs"}`, a.ok && b.ok && (runKey(a) === runKey(b)) === k.same);
 }
 
 console.log(`SR1 vectors (web engine v${ENGINE_VERSION}, vectors from web commit ${String(vec.webCommit).slice(0, 7)}): ${pass} passed, ${fails.length} failed`);

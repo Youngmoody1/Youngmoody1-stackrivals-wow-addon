@@ -53,7 +53,15 @@
 - Fixtures re-based on web commit 29afe52 (no gameplay change); match rules in the fingerprint.
 - Docs: MULTIPLAYER_TEST.md (Danish two-client test guide), rewritten CROSS_PLATFORM_MULTIPLAYER.md
   and WEB_INTEGRATION_PROMPT.md.
-- Tests: 215 Lua tests (55 duel/codes) + 57 cross-implementation vector checks.
+- Second independent review (14 findings, all fixed, regression tests added): late GO no longer
+  makes an honest host look too fast (both sides could record a win); a BYE "left" that overtakes
+  a lost END gives no result instead of a win; ignored DECs no longer keep a dead duel alive; offline
+  lines match only the rival's exact name and need 6 s of silence; FIN kept on purge and re-acked;
+  closed-match memory expires; Trial accounts stay silent; strangers can't flood the diagnostics.
+  SR1: printable-ASCII rule (`chars`), real Daily dates, WoW name rules (no invisible/bidi
+  characters, BOM kept and rejected), `expired` imports, run key against re-wrapped runs, link codes
+  consumed on first use, honest wording on Daily pre-computation.
+- Tests: 220 Lua tests + 77 cross-implementation vector checks + a 4,000-code Lua/TS differential fuzz.
 
 ## Unreleased (main)
 

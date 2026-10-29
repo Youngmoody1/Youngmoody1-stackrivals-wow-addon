@@ -110,13 +110,15 @@ end
 ------------------------------------------------------------------------------------------------
 -- The server import algorithm (spec §6), Lua edition. TS must give identical output.
 ------------------------------------------------------------------------------------------------
-function M.importResult(code, challenge, elapsedMs)
+function M.importResult(code, challenge, nowMs)
   local r, err = C.parseResult(code)
   if not r then return { decode = err } end
+  local elapsedMs = nowMs - challenge.createdAtMs
   local out = { decode = "ok", platform = r.platform, ruleset = r.ruleset, engine = r.engine, seed = r.seed,
     player = r.player, link = r.link or M.NULL, ticks = r.ticks, inputs = #r.log / 2,
     claimed = { score = r.score, lines = r.lines, level = r.level, hash = r.hash } }
   if r.ruleset ~= challenge.ruleset then out.verify = { ok = false, reasons = { "ruleset_mismatch" } }; return out end
+  if nowMs > challenge.closesAtMs then out.verify = { ok = false, reasons = { "expired" } }; return out end
   local v = V.verify(r.log, r.seed, r.ticks, {
     engine = r.engine, seed = challenge.seed, capTicks = capTicks(challenge.ruleset), elapsedMs = elapsedMs,
     claimed = { score = r.score, lines = r.lines, level = r.level, hash = r.hash },
@@ -148,7 +150,7 @@ function M.build()
   local vec = {
     format = "SR1", engineVersion = E.ENGINE_VERSION, webCommit = fx.webCommit or "",
     rulesets = {}, actions = E.INPUT_ACTIONS, platforms = { "wow-classic", "wow-forever", "wow-retail" },
-    importAlgorithm = "docs/CROSS_PLATFORM_MULTIPLAYER.md §6.4",
+    importAlgorithm = "docs/CROSS_PLATFORM_MULTIPLAYER.md §6.4 (importResult(code, challenge{ruleset,seed,createdAtMs,closesAtMs}, nowMs))",
     challenges = {}, results = {}, checksums = {},
   }
   for id, rs in pairs(C.RULESETS) do
@@ -176,12 +178,19 @@ function M.build()
   ch("daily ruleset with a non-daily seed", rebuild(C.challenge("b120", "srchal-7f3k2p9d"), function(f) f[2] = "daily120" end))
   ch("unknown ruleset", rebuild(cB, function(f) f[2] = "z999" end))
   ch("uppercase seed", rebuild(cB, function(f) f[4] = "SRCHAL-7F3K2P9D" end))
+  ch("daily seed with an impossible date", rebuild(C.challenge("daily120", "srwow-daily-2026-11-05"), function(f) f[4] = "srwow-daily-2026-02-30" end))
+  ch("daily seed on a leap day", C.challenge("daily120", "srwow-daily-2028-02-29"))
+  ch("pasted with a non-breaking space", cB:sub(1, 10) .. "\194\160" .. cB:sub(11))
   ch("missing engine field", "SR1C.b120.srchal-7f3k2p9d." .. string.format("%08x", ns.Prng.hashString("SR1C.b120.srchal-7f3k2p9d")))
 
   -- result codes
-  local function rv(name, code, challenge, elapsedMs, note)
-    local exp = M.importResult(code, challenge, elapsedMs)
-    vec.results[#vec.results + 1] = { name = name, note = note, code = code, challenge = challenge, elapsedMs = elapsedMs, expect = exp }
+  -- every challenge was created at T0 (2026-11-05 00:00 UTC) and closes 24 h later (a Daily: that
+  -- UTC day); `elapsed` below = import time - T0
+  local T0, DAY = 1793836800000, 86400000
+  local function rv(name, code, challenge, elapsed, note)
+    local chal = { ruleset = challenge.ruleset, seed = challenge.seed, createdAtMs = T0, closesAtMs = T0 + DAY }
+    local exp = M.importResult(code, chal, T0 + elapsed)
+    vec.results[#vec.results + 1] = { name = name, note = note, code = code, challenge = chal, nowMs = T0 + elapsed, expect = exp }
   end
   local chB = { ruleset = "b120", seed = "bot-elite-1" }
   local sB = play("bot-elite-1", "bot-elite-1", capTicks("b120")) -- still alive at 2:00
@@ -192,8 +201,8 @@ function M.build()
 
   local chR = { ruleset = "r180", seed = "bot-rival-1" }
   local sR = play("bot-rival-1", "bot-rival-1", capTicks("r180"))
-  rv("valid 3:00 web rules, retail, unicode name + link code",
-    C.result(resultOf(sR, "wow-retail", "r180", "Ægir-Draenor", "K7Q2M9XA")), chR, 200000)
+  local okR = C.result(resultOf(sR, "wow-retail", "r180", "Ægir-Draenor", "K7Q2M9XA"))
+  rv("valid 3:00 web rules, retail, unicode name + link code", okR, chR, 200000)
 
   local daySeed = "srwow-daily-2026-11-05"
   local sD = scripted(daySeed, capTicks("daily120"))
@@ -235,9 +244,32 @@ function M.build()
   rv("player name is not valid UTF-8", rebuild(okB, function(f) f[11] = "c328" end), chB, slow)
   rv("link code with lowercase letters", rebuild(okB, function(f) f[12] = "k7q2m9xa" end), chB, slow)
   rv("input after the claimed end tick", rebuild(okB, function(f) f[6] = P.b36(10) end), chB, slow)
+  rv("imported after the challenge closed", okB, chB, DAY + 1, "Daily boards close at the end of the UTC day")
+  rv("player name starts with a BOM", rebuild(okB, function(f) f[11] = "efbbbf" .. C.hex("Alice-Realm") end), chB, slow)
+  rv("player name with a line break", rebuild(okB, function(f) f[11] = C.hex("Al\nice-Realm") end), chB, slow)
+  rv("player name with a zero-width space", rebuild(okB, function(f) f[11] = C.hex("Ali\226\128\139ce-Realm") end), chB, slow)
+  rv("player name with a right-to-left override", rebuild(okB, function(f) f[11] = C.hex("\226\128\174Alice-Realm") end), chB, slow)
+  rv("player name without a realm", rebuild(okB, function(f) f[11] = C.hex("Alice") end), chB, slow)
+  rv("player name with digits", rebuild(okB, function(f) f[11] = C.hex("Al1ce-Realm") end), chB, slow)
+  rv("realm with digits and an apostrophe is fine", rebuild(okB, function(f) f[11] = C.hex("Zoë-Kel'Thuzad52") end), chB, slow)
+  rv("pasted with a non-breaking space", okB:sub(1, 40) .. "\194\160" .. okB:sub(41), chB, slow,
+    "only ASCII whitespace is removed; anything else is rejected the same way on both sides")
   rv("empty log is valid (no inputs, pieces fall until top-out or time)",
     C.result(resultOf(E.replay("srchal-emptylog", { startLevel = 1 }, {}, capTicks("b120")), "wow-forever", "b120", "Idle-Realm")),
     { ruleset = "b120", seed = "srchal-emptylog" }, slow)
+  -- A re-wrapped code (someone else's run under another name/platform/link): it verifies, so the
+  -- server must catch it by the run key (spec §6.5). Both implementations must agree on runKey.
+  local stolen = rebuild(okR, function(f) f[2] = "wow-classic"; f[11] = C.hex("Thief-Realm"); f[12] = "THIEF123" end)
+  rv("someone else's run re-wrapped under another name (verifies: caught by the run key)", stolen, chR, 200000)
+  vec.runKeys = {
+    { a = okR, b = stolen, same = true, note = "same seed, ticks and inputs = the same run" },
+    { a = okB, b = okR, same = false },
+    { a = okB, b = okB:sub(1, 30) .. " " .. okB:sub(31), same = true, note = "whitespace never changes the run" },
+  }
+  for _, k in ipairs(vec.runKeys) do
+    local ra, rb = assert(C.parseResult(k.a)), assert(C.parseResult(k.b))
+    assert((C.runKey(ra) == C.runKey(rb)) == k.same)
+  end
   return vec
 end
 

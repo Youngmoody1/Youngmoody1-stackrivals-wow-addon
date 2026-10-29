@@ -37,11 +37,11 @@ describe("SR1 codes", function()
       E.tick(s)
     end
     local code = C.result({ platform = "wow-forever", ruleset = "b120", seed = s.seed, ticks = s.tick, score = s.score,
-      lines = s.lines, level = s.level, hash = E.hashState(s), player = "Zoë-Argent Dawn", log = s.inputLog })
+      lines = s.lines, level = s.level, hash = E.hashState(s), player = "Zoë-ArgentDawn", log = s.inputLog })
     ok(code:match("^SR1R%.wow%-forever%.b120%.e1%.srchal%-roundtrip1%."))
     ok(#code < 4000, "fits a paste box (" .. #code .. " chars)")
     local d = assert(C.parseResult(code))
-    eq(d.player, "Zoë-Argent Dawn"); eq(d.score, s.score); eq(#d.log, #s.inputLog)
+    eq(d.player, "Zoë-ArgentDawn"); eq(d.score, s.score); eq(#d.log, #s.inputLog)
     eq(C.result({ platform = d.platform, ruleset = d.ruleset, seed = d.seed, ticks = d.ticks, score = d.score, lines = d.lines,
       level = d.level, hash = d.hash, player = d.player, log = d.log }), code)
     local r = ns.Verify.verify(d.log, d.seed, d.ticks, { seed = s.seed, capTicks = 7200, engine = d.engine, elapsedMs = 200000,
@@ -57,6 +57,9 @@ describe("SR1 codes", function()
       ok(okC and c == nil)
     end
     ok(C.utf8ok("Zoë")); ok(not C.utf8ok("\195")); ok(not C.utf8ok("\192\128"), "overlong"); ok(not C.utf8ok("\237\160\128"), "surrogate")
+    ok(C.nameOk("Zoë-ArgentDawn")); ok(C.nameOk("Влад-Гордунни")); ok(C.nameOk("Bob-Kel'Thuzad")); ok(C.nameOk("Bob-Area52"))
+    ok(not C.nameOk("Bob-Argent Dawn"), "spaces are removed from realms by the client")
+    ok(not C.nameOk("B\226\128\139ob-Realm"), "zero-width space"); ok(not C.nameOk("Bob"), "no realm"); ok(not C.nameOk("B0b-Realm"))
   end)
 end)
 

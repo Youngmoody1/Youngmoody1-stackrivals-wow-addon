@@ -33,15 +33,49 @@ const b36 = (n: number) => {
 };
 const unb36 = (s: string): number | null => (B36_RE.test(s) ? parseInt(s, 36) : null);
 
+function realDate(y: number, m: number, d: number): boolean {
+  if (m < 1 || m > 12 || d < 1) return false;
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  return d <= [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1]!;
+}
+
 function seedOk(ruleset: string, seed: string): ruleset is Sr1RulesetId {
   const rs = (SR1_RULESETS as Record<string, { seedRe?: RegExp }>)[ruleset];
   if (!rs || !SEED_RE.test(seed)) return false;
-  return !rs.seedRe || rs.seedRe.test(seed);
+  if (!rs.seedRe) return true;
+  if (!rs.seedRe.test(seed)) return false;
+  const [y, m, d] = seed.slice("srwow-daily-".length).split("-").map(Number);
+  return realDate(y!, m!, d!);
 }
 
-function clean(code: unknown): string | null {
-  if (typeof code !== "string" || code.length > SR1_MAX_CODE) return null;
-  return code.replace(/\s+/g, "");
+/** Remove ASCII whitespace only; anything else outside printable ASCII is "chars"; then the size. */
+function clean(code: unknown): { code: string } | { error: "size" | "chars" } {
+  if (typeof code !== "string") return { error: "size" };
+  const c = code.replace(/[ \t\r\n\f\v]+/g, "");
+  if (/[^\x21-\x7e]/.test(c)) return { error: "chars" };
+  if (c.length > SR1_MAX_CODE) return { error: "size" };
+  return { code: c };
+}
+
+// Letters of WoW's character-name locales (Latin incl. accents, Greek, Cyrillic, Hangul, CJK).
+function isLetter(cp: number): boolean {
+  return (cp >= 65 && cp <= 90) || (cp >= 97 && cp <= 122)
+    || (cp >= 0xc0 && cp <= 0x24f && cp !== 0xd7 && cp !== 0xf7)
+    || (cp >= 0x370 && cp <= 0x3ff) || (cp >= 0x400 && cp <= 0x4ff)
+    || (cp >= 0xac00 && cp <= 0xd7a3) || (cp >= 0x4e00 && cp <= 0x9fff);
+}
+
+/** "Name-Realm": name 2..12 letters; realm 1..40 letters/digits/apostrophes; 1..64 UTF-8 bytes. */
+export function nameOk(s: string): boolean {
+  const bytes = new TextEncoder().encode(s).length;
+  if (bytes < 1 || bytes > 64) return false;
+  const cps = [...s].map((ch) => ch.codePointAt(0)!);
+  const dashes = cps.filter((cp) => cp === 45).length;
+  if (dashes !== 1) return false;
+  const dash = cps.indexOf(45);
+  const name = cps.slice(0, dash), realm = cps.slice(dash + 1);
+  if (name.length < 2 || name.length > 12 || realm.length < 1 || realm.length > 40) return false;
+  return name.every(isLetter) && realm.every((cp) => isLetter(cp) || (cp >= 48 && cp <= 57) || cp === 39);
 }
 
 function checkOk(fields: string[], h: HashString): boolean {
@@ -58,7 +92,8 @@ export function fromHex(h: string): string | null {
   const bytes = new Uint8Array(h.length / 2);
   for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(h.slice(i * 2, i * 2 + 2), 16);
   try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    // ignoreBOM: keep a leading U+FEFF (then rejected by nameOk) instead of silently dropping it
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
   } catch {
     return null;
   }
@@ -100,15 +135,15 @@ export function encodeChallenge(ruleset: Sr1RulesetId, seed: string, engineVersi
   return `${body}.${checkOf(body, h)}`;
 }
 
-export type DecodeError = "size" | "format" | "fields" | "check" | "engine" | "ruleset_or_seed" | "platform"
+export type DecodeError = "size" | "chars" | "format" | "fields" | "check" | "engine" | "ruleset_or_seed" | "platform"
   | "numbers" | "hash" | "player" | "link" | "log";
 
 export function decodeChallenge(code: unknown, h: HashString):
   | { ok: true; ruleset: Sr1RulesetId; engine: number; seed: string }
   | { ok: false; error: DecodeError } {
-  const c = clean(code);
-  if (c === null) return { ok: false, error: "size" };
-  const f = c.split(".");
+  const cl = clean(code);
+  if ("error" in cl) return { ok: false, error: cl.error };
+  const f = cl.code.split(".");
   if (f[0] !== "SR1C") return { ok: false, error: "format" };
   if (f.length !== 5) return { ok: false, error: "fields" };
   if (!checkOk(f, h)) return { ok: false, error: "check" };
@@ -138,8 +173,8 @@ export interface Sr1Result {
 export function encodeResult(r: Sr1Result, h: HashString): string {
   if (!SR1_PLATFORMS.includes(r.platform)) throw new Error("platform");
   if (!seedOk(r.ruleset, r.seed)) throw new Error("ruleset/seed");
+  if (!nameOk(r.player)) throw new Error("player");
   const player = toHex(r.player);
-  if (player.length < 2 || player.length > 128) throw new Error("player");
   if (r.link !== null && !LINK_RE.test(r.link)) throw new Error("link");
   const body = [
     "SR1R", r.platform, r.ruleset, `e${r.engine}`, r.seed, b36(r.ticks), b36(r.score), b36(r.lines), b36(r.level),
@@ -150,9 +185,9 @@ export function encodeResult(r: Sr1Result, h: HashString): string {
 
 /** Decoding only. Nothing in a result code is trusted until importResult has replayed it. */
 export function decodeResult(code: unknown, h: HashString): ({ ok: true } & Sr1Result) | { ok: false; error: DecodeError } {
-  const c = clean(code);
-  if (c === null) return { ok: false, error: "size" };
-  const f = c.split(".");
+  const cl = clean(code);
+  if ("error" in cl) return { ok: false, error: cl.error };
+  const f = cl.code.split(".");
   if (f[0] !== "SR1R") return { ok: false, error: "format" };
   if (f.length !== 14) return { ok: false, error: "fields" };
   if (!checkOk(f, h)) return { ok: false, error: "check" };
@@ -164,7 +199,7 @@ export function decodeResult(code: unknown, h: HashString): ({ ok: true } & Sr1R
   if (ticks == null || score == null || lines == null || level == null) return { ok: false, error: "numbers" };
   if (!/^[0-9a-f]{8}$/.test(f[9]!)) return { ok: false, error: "hash" };
   const player = f[10]!.length >= 2 && f[10]!.length <= 128 ? fromHex(f[10]!) : null;
-  if (player === null) return { ok: false, error: "player" };
+  if (player === null || !nameOk(player)) return { ok: false, error: "player" };
   const link = f[11]!;
   if (link !== "-" && !LINK_RE.test(link)) return { ok: false, error: "link" };
   const inputs = unpackInputs(f[12]!);
@@ -186,11 +221,21 @@ export interface ImportDeps {
   }) => { ok: boolean; reasons: string[]; final: unknown | null; score: number; lines: number; level: number; hash: string | null; toppedOut: boolean };
 }
 
+/** The run itself, independent of who claims it. Store SHA-256(runKey) as UNIQUE (spec §6.5). */
+export function runKey(r: Pick<Sr1Result, "seed" | "ticks" | "inputs">): string {
+  return `${r.seed}.${b36(r.ticks)}.${packInputs(r.inputs)}`;
+}
+
 /**
- * challenge: the server's own record of the challenge being answered (never taken from the code).
- * elapsedMs: server clock, now - challenge.createdAt (enables faster_than_clock).
+ * challenge: the server's own record of the challenge being answered (never taken from the code):
+ * createdAtMs / closesAtMs (a Daily: 00:00 UTC of its date / 24 h later). nowMs: the server clock.
  */
-export function importResult(code: unknown, challenge: { ruleset: Sr1RulesetId; seed: string }, elapsedMs: number, deps: ImportDeps) {
+export function importResult(
+  code: unknown,
+  challenge: { ruleset: Sr1RulesetId; seed: string; createdAtMs: number; closesAtMs: number },
+  nowMs: number,
+  deps: ImportDeps,
+) {
   const r = decodeResult(code, deps.hashString);
   if (!r.ok) return { decode: r.error } as const;
   const out: Record<string, unknown> = {
@@ -202,6 +247,11 @@ export function importResult(code: unknown, challenge: { ruleset: Sr1RulesetId; 
     out.verify = { ok: false, reasons: ["ruleset_mismatch"] };
     return out;
   }
+  if (nowMs > challenge.closesAtMs) {
+    out.verify = { ok: false, reasons: ["expired"] };
+    return out;
+  }
+  const elapsedMs = nowMs - challenge.createdAtMs;
   const v = deps.verifyLog({
     log: { v: r.engine, seed: r.seed, startLevel: 1, ticks: r.ticks, inputs: r.inputs },
     seed: challenge.seed, timeCapMs: SR1_RULESETS[challenge.ruleset].timeCapMs, elapsedMs,
