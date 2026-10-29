@@ -25,7 +25,7 @@ end
 local function rowsOf(s) return s.config.height + s.config.hiddenRows end
 
 describe("prng", function()
-  local fx = dofile(testdir .. "/fixtures/parity.lua")
+  local fx = dofile(os.getenv("SR_FIXTURES") or (testdir .. "/fixtures/parity.lua"))
   it("hashString and mulberry32 match the web engine bit for bit", function()
     for _, v in ipairs(fx.prngVectors) do
       eq(Prng.hashString(v.str), v.hash, "hash of " .. v.str)
@@ -249,8 +249,55 @@ describe("input handler (DAS/ARR like the web game)", function()
   end)
 end)
 
+-- Fixtures can be swapped for a freshly generated set (tools/parity/check_web.sh) via SR_FIXTURES.
+local FIXTURES = os.getenv("SR_FIXTURES") or (testdir .. "/fixtures/parity.lua")
+
+describe("rules fingerprint (every gameplay constant vs the web engine)", function()
+  local R = dofile(FIXTURES).rules
+  local function same(a, b, path)
+    if type(b) == "table" then
+      ok(type(a) == "table", path .. ": missing in Lua")
+      for k, v in pairs(b) do same(a[k], v, path .. "." .. tostring(k)) end
+      for k in pairs(a) do if b[k] == nil then error(path .. "." .. tostring(k) .. ": extra in Lua", 0) end end
+    else
+      if a ~= b then error(path .. ": web " .. tostring(b) .. " / lua " .. tostring(a), 0) end
+    end
+  end
+  it("engine version, tick rate, actions, piece ids", function()
+    eq(E.ENGINE_VERSION, R.engineVersion, "ENGINE_VERSION")
+    eq(E.TICKS_PER_SECOND, R.ticksPerSecond, "TICKS_PER_SECOND")
+    same(E.INPUT_ACTIONS, R.inputActions, "inputActions")
+    same(P.IDS, R.pieceIds, "pieceIds")
+  end)
+  it("board config, lock delay, preview count, lines per level", function()
+    same(E.DEFAULT_CONFIG, R.config, "config")
+  end)
+  it("scoring: line points, back-to-back, combo, drop points", function()
+    same(E.LINE_POINTS, R.linePoints, "linePoints")
+    eq(E.B2B_MULTIPLIER, R.b2bMultiplier, "b2b"); eq(E.COMBO_POINTS, R.comboPoints, "combo")
+    eq(E.SOFT_DROP_POINTS, R.softDropPoints, "soft"); eq(E.HARD_DROP_POINTS, R.hardDropPoints, "hard")
+  end)
+  it("speed curve for levels 1-25", function()
+    for lvl, g in ipairs(R.gravity) do eq(E.gravityTicks(lvl), g, "gravity level " .. lvl) end
+  end)
+  it("input handling (DAS / ARR / soft drop repeat)", function()
+    same(Input.HANDLING, R.handling, "handling")
+  end)
+  it("piece shapes in all rotations", function()
+    for id, rots in pairs(R.shapes) do
+      for r, cells in ipairs(rots) do same(P.SHAPES[id][r], cells, "shape " .. id .. " rot " .. (r - 1)) end
+    end
+  end)
+  it("wall kicks for every piece and rotation", function()
+    for key, list in pairs(R.kicks) do
+      local id, f, t = key:match("^(%w+):(%d)>(%d)$")
+      same(P.getKicks(id, tonumber(f), tonumber(t)), list, "kicks " .. key)
+    end
+  end)
+end)
+
 describe("parity with the web engine", function()
-  local fx = dofile(testdir .. "/fixtures/parity.lua")
+  local fx = dofile(FIXTURES)
   for _, c in ipairs(fx.cases) do
     it(c.name .. " (" .. c.seed .. ", " .. (#c.log / 2) .. " inputs)", function()
       for _, cp in ipairs(c.checkpoints) do

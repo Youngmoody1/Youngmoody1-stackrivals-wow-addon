@@ -99,10 +99,33 @@ function DB.sanitize(raw)
   end
   db.bindings = b
 
-  local rr = (type(raw.records) == "table") and raw.records or {}
-  db.records = { classic = cleanRecord(rr.classic), blitz = cleanRecord(rr.blitz), daily = cleanRecord(rr.daily) }
-  local rd = (type(rr.dailyToday) == "table") and rr.dailyToday or {}
-  db.records.dailyToday = { date = str(rd.date, 16), best = math.floor(num(rd.best, 0, 0, 1e12)), tries = math.floor(num(rd.tries, 0, 0, 1e6)) }
+  -- Records belong to a ruleset (= engine version). If the rules ever change, old scores are not
+  -- comparable any more: they are moved to db.archive["rules<N>"] (never deleted) and the
+  -- current rules start with fresh records.
+  local current = (ns.Engine and ns.Engine.ENGINE_VERSION) or 1
+  local savedRules = math.floor(num(raw.rules, 1, 0, 1e6)) -- data from before this field = rules 1
+  local function cleanRecords(rr)
+    rr = (type(rr) == "table") and rr or {}
+    local out = { classic = cleanRecord(rr.classic), blitz = cleanRecord(rr.blitz), daily = cleanRecord(rr.daily) }
+    local rd = (type(rr.dailyToday) == "table") and rr.dailyToday or {}
+    out.dailyToday = { date = str(rd.date, 16), best = math.floor(num(rd.best, 0, 0, 1e12)), tries = math.floor(num(rd.tries, 0, 0, 1e6)) }
+    return out
+  end
+  db.archive = {}
+  if type(raw.archive) == "table" then
+    local n = 0
+    for k, v in pairs(raw.archive) do
+      if type(k) == "string" and k:match("^rules%d+$") and n < 8 then n = n + 1; db.archive[k] = cleanRecords(v) end
+    end
+  end
+  if savedRules == current then
+    db.records = cleanRecords(raw.records)
+  else
+    if type(raw.records) == "table" then db.archive["rules" .. savedRules] = cleanRecords(raw.records) end
+    db.records = cleanRecords(nil)
+    db.rulesChangedFrom = savedRules
+  end
+  db.rules = current
 
   local w = (type(raw.window) == "table") and raw.window or {}
   db.window = {
@@ -212,6 +235,7 @@ function DB.recordRun(db, modeKey, state, playSeconds, runDate, logStr, today)
 end
 
 function DB.resetRecords(db)
+  db.rules = (ns.Engine and ns.Engine.ENGINE_VERSION) or 1
   db.records = { classic = emptyRecord(), blitz = emptyRecord(), daily = emptyRecord(), dailyToday = { date = nil, best = 0, tries = 0 } }
 end
 

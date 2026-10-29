@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Web sync: fixtures now record the web commit they came from (5d2a9fd) and a full rules
+  fingerprint; `tools/parity/check_web.sh` compares any newer web version and names each differing
+  rule. Records are tagged with the ruleset and archived (never deleted) if the rules change.
+
 ## 0.3.1 — prelaunch candidate (not released yet)
 
 Fixes from an independent code review of 0.3.0:

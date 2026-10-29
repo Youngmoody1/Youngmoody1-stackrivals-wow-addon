@@ -80,8 +80,10 @@ python3 tools/validate_addon.py StackRivals   # static checks of the addon folde
 tools/build_release.sh               # validate + test + reproducible ZIP + sha256 + metadata in dist/
 lua5.1 tests/dump_screens.lua /tmp/p && python3 tools/render_preview.py /tmp/p StackRivals/Media
                                      # developer previews of every screen (not in-game screenshots)
+tools/parity/check_web.sh ../stackrivals-practice-arena
+                                     # compare with a newer web version (rules + 66 games), read-only
 bun tools/parity/gen-fixtures.ts ../stackrivals-practice-arena > tests/fixtures/parity.lua
-                                     # regenerate fixtures from the web engine
+                                     # move the web base forward after a reviewed port
 ```
 
 - `StackRivals/Engine` — pure Lua 5.1 game engine (no WoW API): PRNG, pieces, rules, input DAS/ARR.
@@ -96,7 +98,7 @@ The release ZIP contains only `StackRivals/`. The same commit always builds the 
 Docs: [testing in WoW](docs/TESTING_IN_WOW.md) · [compatibility](docs/COMPATIBILITY.md) ·
 [release plan](docs/RELEASE_PLAN.md) · [launch day](docs/LAUNCH_DAY.md) ·
 [CurseForge listing](docs/CURSEFORGE.md) · [architecture](docs/ARCHITECTURE.md) ·
-[previews](docs/preview/README.md)
+[previews](docs/preview/README.md) · [web sync](docs/WEB_SYNC.md)
 
 ## License
 
