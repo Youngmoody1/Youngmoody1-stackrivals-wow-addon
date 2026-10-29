@@ -143,6 +143,7 @@ function UI:Create()
     if side[3] then l:SetWidth(side[3]) else l:SetHeight(side[4]) end
   end
   rim:SetAlpha(0)
+  self.rim = rim
   local rg = rim:CreateAnimationGroup()
   local ra = rg:CreateAnimation("Alpha"); ra:SetFromAlpha(0.55); ra:SetToAlpha(0); ra:SetDuration(0.18); ra:SetOrder(1); ra:SetSmoothing("OUT")
   self.rimAnim = rg
@@ -910,6 +911,10 @@ end
 
 function UI:ShowOver(info)
   local s = info.state
+  -- a callout from the last line clear must not sit behind the result
+  self.calloutAnim:Stop(); self.calloutBox:SetAlpha(0)
+  self.scorePopAnim:Stop(); self.scorePopBox:SetAlpha(0)
+  self.overBadge:SetTextColor(C.gold[1], C.gold[2], C.gold[3])
   self.overTitle:SetTextColor(C.paper[1], C.paper[2], C.paper[3])
   self.againBtn:SetLabel("Play again")
   if info.duel then

@@ -33,47 +33,48 @@ local CANCEL = {
 
 local function short(n) return ns.Duel.short(n) or "?" end
 
+local SZ = T.SIZE
+
 ------------------------------------------------------------------------------------------------
--- Duel sheet: find players + challenge
+-- Duel sheet: find players + challenge (full window, like Records / How to play)
 ------------------------------------------------------------------------------------------------
+local ROWS = 6
+
 function UI:CreateDuelSheet()
-  local F = self.frame
-  local s = CreateFrame("Frame", nil, F)
-  s:SetPoint("TOPLEFT", F, "TOPLEFT", 1, -40)
-  s:SetPoint("BOTTOMRIGHT", F, "BOTTOMRIGHT", -1, 1)
-  s:SetFrameLevel(F:GetFrameLevel() + 40)
-  local bg = T.tex(s, "BACKGROUND", C.navy, 1); bg:SetAllPoints()
-  s:EnableMouse(true)
-  s:Hide()
+  local s = self:Body(40)
   self.duelSheet = s
-  local title = T.text(s, 15, C.paper); title:SetPoint("TOPLEFT", 20, -12); title:SetText("DUEL")
-  local sub = T.text(s, 10, C.label); sub:SetPoint("TOPLEFT", 20, -32)
+  local L = 24
+  local cw = self.frame:GetWidth() - 2 * L - 2
+  local title = T.display(s, SZ.title, C.paper); title:SetPoint("TOPLEFT", L, -14); title:SetText("DUEL")
+  local sub = T.text(s, SZ.small, C.label); sub:SetPoint("TOPLEFT", L, -38)
   sub:SetText("1v1 score race. Same pieces for both. Highest score wins.")
 
+  -- ruleset: a two-way segmented choice
   self.duelRuleset = "b120"
-  local b120 = T.button(s, "Blitz 2:00", 96, 22, "steel", function() UI.duelRuleset = "b120"; UI:RefreshDuelSheet() end)
-  b120:SetPoint("TOPLEFT", 20, -52)
-  local r180 = T.button(s, "3:00 web rules", 112, 22, "frame", function() UI.duelRuleset = "r180"; UI:RefreshDuelSheet() end)
-  r180:SetPoint("LEFT", b120, "RIGHT", 6, 0)
+  local b120 = T.button(s, "Blitz 2:00", 118, 30, "frame", function() UI.duelRuleset = "b120"; UI:RefreshDuelSheet() end)
+  b120:SetPoint("TOPLEFT", L, -62)
+  b120.tip = "2 minutes, 3 s countdown."
+  local r180 = T.button(s, "3:00 web rules", 132, 30, "frame", function() UI.duelRuleset = "r180"; UI:RefreshDuelSheet() end)
+  r180:SetPoint("LEFT", b120, "RIGHT", 4, 0)
+  r180.tip = "3 minutes and a 4 s countdown: the same rules as a 1v1 on stackrivals.io."
   s.b120, s.r180 = b120, r180
 
-  local find = T.button(s, "Find players", 110, 22, "primary", function()
+  local find = T.button(s, "Find players", 146, 30, "primary", function()
     local okFind, why = ns.Duel.findPlayers()
-    UI.duelFindNote = okFind and "Asked your guild and group..." or (why == "cooldown" and "Just asked - wait a moment." or "Join a guild or group to find players.")
+    UI.duelFindNote = okFind and "Asked your guild and group..." or (why == "cooldown" and "Just asked - wait a moment." or (ns.Duel.WHY_NOT[why] or "Join a guild or group to find players."))
     UI:RefreshDuelSheet()
   end)
-  find:SetPoint("TOPRIGHT", -20, -52)
-  s.note = T.text(s, 10, C.body); s.note:SetPoint("TOPLEFT", 20, -82)
+  find:SetPoint("TOPRIGHT", -L - 2, -62)
+  s.note = T.text(s, SZ.small, C.body); s.note:SetPoint("TOPLEFT", L, -102)
 
   s.rows = {}
-  for i = 1, 8 do
-    local row = CreateFrame("Frame", nil, s)
-    row:SetSize(410, 26)
-    row:SetPoint("TOPLEFT", 20, -100 - (i - 1) * 30)
-    local rbg = T.tex(row, "BACKGROUND", C.surface1, 0.9); rbg:SetAllPoints()
-    row.name = T.text(row, 12, C.paper); row.name:SetPoint("LEFT", 8, 0); row.name:SetJustifyH("LEFT")
-    row.info = T.text(row, 10, C.label); row.info:SetPoint("LEFT", 190, 0); row.info:SetJustifyH("LEFT")
-    row.btn = T.button(row, "Challenge", 84, 20, "steel", function(b)
+  for i = 1, ROWS do
+    local row = T.panel(s)
+    row:SetSize(cw, 34)
+    row:SetPoint("TOPLEFT", L, -122 - (i - 1) * 38)
+    row.name = T.display(row, SZ.big, C.paper); row.name:SetPoint("LEFT", 12, 0); row.name:SetJustifyH("LEFT")
+    row.info = T.text(row, SZ.label, C.label); row.info:SetPoint("LEFT", 196, 0); row.info:SetJustifyH("LEFT")
+    row.btn = T.button(row, "Challenge", 112, 26, "steel", function(b)
       local okC, why = ns.Duel.challenge(b.target, UI.duelRuleset)
       if not okC then UI.duelFindNote = "Can't challenge: " .. (ns.Duel.WHY_NOT[why] or tostring(why)) .. "." end
       UI:RefreshDuelSheet()
@@ -82,22 +83,34 @@ function UI:CreateDuelSheet()
     row:Hide()
     s.rows[i] = row
   end
-  s.empty = T.text(s, 11, C.label); s.empty:SetPoint("TOPLEFT", 20, -104); s.empty:SetWidth(410); s.empty:SetJustifyH("LEFT")
-  s.empty:SetText("Press Find players to see who in your guild or group has StackRivals.\nOr type /sr duel Name to challenge anyone on your realm.")
+  s.empty = T.text(s, SZ.body, C.body); s.empty:SetPoint("TOPLEFT", L, -126); s.empty:SetWidth(cw); s.empty:SetJustifyH("LEFT")
+  s.empty:SetSpacing(4)
+  s.empty:SetText("Press |cfff6f4f0Find players|r to see who in your guild or group has StackRivals.\nOr type |cffff4d5a/sr duel Name|r to challenge anyone on your realm.")
 
-  s.stats = T.text(s, 10, C.label); s.stats:SetPoint("BOTTOMLEFT", 20, 58); s.stats:SetWidth(410); s.stats:SetJustifyH("LEFT")
-  local close = T.button(s, "Close", 120, 28, "primary", function() s:Hide(); UI:RefreshPhase() end)
-  close:SetPoint("BOTTOM", 0, 16)
+  -- your record
+  local rec = T.label(s, "YOUR DUELS"); rec:SetPoint("BOTTOMLEFT", L, 74)
+  s.won = T.display(s, SZ.title, C.green); s.won:SetPoint("BOTTOMLEFT", L, 48)
+  s.lost = T.display(s, SZ.title, C.redLight); s.lost:SetPoint("BOTTOMLEFT", L + 92, 48)
+  s.draws = T.display(s, SZ.title, C.paper); s.draws:SetPoint("BOTTOMLEFT", L + 184, 48)
+  local trust = T.text(s, SZ.label, C.label); trust:SetPoint("BOTTOMLEFT", L, 22); trust:SetWidth(270); trust:SetJustifyH("LEFT")
+  trust:SetText("Checked by both players' addons, not by a server.")
+  local close = T.button(s, "Close", 130, 32, "frame", function() s:Hide(); UI:RefreshPhase() end)
+  close:SetPoint("BOTTOMRIGHT", -20, 16)
   s:SetScript("OnShow", function() UI:RefreshDuelSheet() end)
+end
+
+local function setSegment(b, on)
+  local c = on and C.steelDeep or C.surface2
+  b.bgTex:SetColorTexture(c[1], c[2], c[3], 1)
+  local e = on and C.steel or C.line
+  b.border:SetColorTexture(e[1], e[2], e[3], 1)
 end
 
 function UI:RefreshDuelSheet()
   local s = self.duelSheet
   if not s or not s:IsShown() then return end
-  local st = s.b120.bgTex
-  local on, off = C.steelDeep, C.surface2
-  s.b120.bgTex:SetColorTexture((self.duelRuleset == "b120" and on or off)[1], (self.duelRuleset == "b120" and on or off)[2], (self.duelRuleset == "b120" and on or off)[3], 1)
-  s.r180.bgTex:SetColorTexture((self.duelRuleset == "r180" and on or off)[1], (self.duelRuleset == "r180" and on or off)[2], (self.duelRuleset == "r180" and on or off)[3], 1)
+  setSegment(s.b120, self.duelRuleset == "b120")
+  setSegment(s.r180, self.duelRuleset == "r180")
   s.note:SetText(not ns.Comm.enabled and "Addon messages are not available in this client."
     or ns.Comm.trial and "Trial/Veteran account: Blizzard blocks addon messages, so duels can't work."
     or (self.duelFindNote or ""))
@@ -119,7 +132,7 @@ function UI:RefreshDuelSheet()
   end
   s.empty:SetShown(#list == 0)
   local d = ns.db.duels
-  s.stats:SetText(string.format("Your duels: %d won, %d lost, %d draws.  Results are checked by both players' addons\n(replay of the rival's game), not by a server.", d.wins, d.losses, d.draws))
+  s.won:SetText(d.wins .. " won"); s.lost:SetText(d.losses .. " lost"); s.draws:SetText(d.draws .. " draws")
 end
 
 ------------------------------------------------------------------------------------------------
@@ -127,25 +140,34 @@ end
 ------------------------------------------------------------------------------------------------
 function UI:CreateInvitePopup()
   local f = CreateFrame("Frame", nil, UIParent)
-  f:SetSize(300, 96)
+  f:SetSize(340, 124)
   f:SetPoint("TOP", UIParent, "TOP", 0, -140)
   f:SetFrameStrata("DIALOG")
+  f:SetClampedToScreen(true)
   local p = T.panel(f, C.steel, 0.97); p:SetAllPoints()
-  f.title = T.text(f, 13, C.paper); f.title:SetPoint("TOP", 0, -12)
-  f.sub = T.text(f, 10, C.body); f.sub:SetPoint("TOP", f.title, "BOTTOM", 0, -4)
-  local acc = T.button(f, "Accept", 110, 24, "primary", function() ns.Duel.accept(); f:Hide() end)
-  acc:SetPoint("BOTTOMRIGHT", f, "BOTTOM", -4, 12)
-  local dec = T.button(f, "Decline", 110, 24, "frame", function() ns.Duel.decline("no"); f:Hide() end)
-  dec:SetPoint("BOTTOMLEFT", f, "BOTTOM", 4, 12)
+  local mark = f:CreateTexture(nil, "ARTWORK")
+  mark:SetTexture(T.MEDIA .. "marksmall"); mark:SetSize(26, 26); mark:SetPoint("TOPLEFT", 14, -14)
+  f.kind = T.label(f, "DUEL CHALLENGE"); f.kind:SetPoint("TOPLEFT", 50, -12); f.kind:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
+  f.title = T.display(f, SZ.title, C.paper); f.title:SetPoint("TOPLEFT", 50, -26); f.title:SetJustifyH("LEFT")
+  f.sub = T.text(f, SZ.small, C.body); f.sub:SetPoint("TOPLEFT", 50, -50); f.sub:SetJustifyH("LEFT")
+  -- time left, as a shrinking bar under the text
+  local track = T.tex(f, "ARTWORK", C.line, 1); track:SetPoint("TOPLEFT", 14, -72); track:SetSize(312, 3)
+  f.bar = T.tex(f, "OVERLAY", C.steel, 1); f.bar:SetPoint("TOPLEFT", track, "TOPLEFT"); f.bar:SetSize(312, 3)
+  local acc = T.button(f, "Accept", 150, 30, "primary", function() ns.Duel.accept(); f:Hide() end)
+  acc:SetPoint("BOTTOMRIGHT", f, "BOTTOM", -5, 12)
+  local dec = T.button(f, "Decline", 150, 30, "frame", function() ns.Duel.decline("no"); f:Hide() end)
+  dec:SetPoint("BOTTOMLEFT", f, "BOTTOM", 5, 12)
   f.acc = acc
   f:Hide()
   f:SetScript("OnUpdate", function(self)
     local m = ns.Duel.current
     if not m or m.state ~= "invited" then self:Hide(); return end
-    local left = math.max(0, math.ceil(ns.Duel.INVITE_TIMEOUT - (GetTime() - m.createdAt)))
+    local frac = math.max(0, 1 - (GetTime() - m.createdAt) / ns.Duel.INVITE_TIMEOUT)
+    self.bar:SetWidth(math.max(1, 312 * frac))
+    local left = math.ceil(ns.Duel.INVITE_TIMEOUT * frac)
     if self.left ~= left then
       self.left = left
-      self.sub:SetText(m.ruleset.name .. "  -  " .. left .. " s")
+      self.sub:SetText(m.ruleset.name .. "  -  answer within " .. left .. " s")
     end
     if UI.inCombat() then self.acc:Disable() else self.acc:Enable() end
   end)
@@ -153,43 +175,64 @@ function UI:CreateInvitePopup()
 end
 
 ------------------------------------------------------------------------------------------------
--- Lobby overlay on the playfield + rival panel
+-- Lobby: a full-window "YOU vs RIVAL" screen; rival panel under NEXT while playing
 ------------------------------------------------------------------------------------------------
+local function playerCard(parent, edge, w)
+  local c = T.panel(parent, edge)
+  c:SetSize(w, 92)
+  c.who = T.label(c, ""); c.who:SetPoint("TOP", 0, -12)
+  c.name = T.display(c, SZ.title, C.paper); c.name:SetPoint("TOP", 0, -28)
+  c.state = T.display(c, SZ.small, C.label); c.state:SetPoint("TOP", 0, -60)
+  return c
+end
+
 function UI:CreateDuelOverlays()
-  local field = self.field
-  local o = CreateFrame("Frame", nil, field)
-  o:SetAllPoints(field)
-  o:SetFrameLevel(field:GetFrameLevel() + 12)
-  local bg = T.tex(o, "BACKGROUND", C.navy, 0.95); bg:SetAllPoints()
-  o:EnableMouse(true)
-  o:Hide()
+  local o = self:Body(35, true)
   self.lobby = o
-  local vs = T.text(o, 13, C.label); vs:SetPoint("TOP", 0, -60); vs:SetText("DUEL")
-  o.rival = T.text(o, 18, C.paper); o.rival:SetPoint("TOP", vs, "BOTTOM", 0, -8)
-  o.rules = T.text(o, 10, C.steel); o.rules:SetPoint("TOP", o.rival, "BOTTOM", 0, -6)
-  o.status = T.text(o, 11, C.body); o.status:SetPoint("TOP", o.rules, "BOTTOM", 0, -24); o.status:SetWidth(170)
-  o.me = T.text(o, 11, C.body); o.me:SetPoint("TOP", o.status, "BOTTOM", 0, -18)
-  o.them = T.text(o, 11, C.body); o.them:SetPoint("TOP", o.me, "BOTTOM", 0, -6)
-  o.ready = T.button(o, "Ready", 150, 28, "primary", function() ns.Duel.ready() end)
-  o.ready:SetPoint("BOTTOM", 0, 74)
-  o.cancel = T.button(o, "Cancel", 150, 24, "frame", function()
+  local w = self.frame:GetWidth()
+  o.rules = T.display(o, SZ.small, C.steel); o.rules:SetPoint("TOP", 0, -20)
+  local cardW = 160
+  o.meCard = playerCard(o, C.red, cardW); o.meCard:SetPoint("TOPRIGHT", o, "TOP", -34, -48)
+  o.themCard = playerCard(o, C.steel, cardW); o.themCard:SetPoint("TOPLEFT", o, "TOP", 34, -48)
+  o.meCard.who:SetText("YOU")
+  o.themCard.who:SetText("RIVAL")
+  local vs = T.text(o, 30, C.red, "", nil, "italic"); vs:SetPoint("TOP", 0, -74); vs:SetText("VS")
+  o.rival = o.themCard.name
+  o.status = T.text(o, SZ.body, C.body); o.status:SetPoint("TOP", 0, -162); o.status:SetWidth(w - 80)
+  o.ready = T.button(o, "Ready", 220, 36, "primary", function() ns.Duel.ready() end)
+  o.ready:SetPoint("TOP", 0, -202)
+  o.cancel = T.button(o, "Cancel", 220, 28, "frame", function()
     local m = ns.Duel.current
     if m and (m.state == "cancelled") then ns.Duel.clear(); ns.App:ShowMenu() else ns.Duel.leave() end
     UI:RefreshPhase()
   end)
-  o.cancel:SetPoint("TOP", o.ready, "BOTTOM", 0, -8)
+  o.cancel:SetPoint("TOP", o.ready, "BOTTOM", 0, -10)
+  o.hint = T.text(o, SZ.label, C.label); o.hint:SetPoint("BOTTOM", 0, 14); o.hint:SetWidth(w - 80)
+  o.hint:SetText("The countdown starts when both are ready. Combat pauses only your own run.")
+  o.fade = T.fadeInAnim(o, 0.2)
 
-  -- rival panel under NEXT (only during a duel)
+  -- rival panel under NEXT (only during a duel; NEXT shortens to make room)
   local rp = T.panel(self.frame, C.steel)
-  rp:SetSize(104, 34)
-  rp:SetPoint("BOTTOMLEFT", field, "BOTTOMRIGHT", 12, 0)
-  rp.name = T.text(rp, 9, C.label); rp.name:SetPoint("TOPLEFT", 6, -5); rp.name:SetJustifyH("LEFT")
-  rp.score = T.text(rp, 13, C.steel); rp.score:SetPoint("TOPLEFT", 6, -16); rp.score:SetJustifyH("LEFT")
+  rp:SetSize(108, 72)
+  rp:SetPoint("BOTTOMLEFT", self.field, "BOTTOMRIGHT", 12, 0)
+  rp.name = T.label(rp, ""); rp.name:SetPoint("TOPLEFT", 10, -9); rp.name:SetJustifyH("LEFT")
+  rp.name:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
+  rp.score = T.display(rp, SZ.title, C.steel); rp.score:SetPoint("TOPLEFT", 10, -24); rp.score:SetJustifyH("LEFT")
+  rp.state = T.text(rp, SZ.label, C.label); rp.state:SetPoint("TOPLEFT", 10, -48); rp.state:SetJustifyH("LEFT")
+  -- tug-of-war bar: red = you lead, steel = rival leads
+  local track = T.tex(rp, "ARTWORK", C.line, 1); track:SetPoint("BOTTOMLEFT", 10, 6); track:SetSize(88, 3)
+  rp.bar = T.tex(rp, "OVERLAY", C.red, 1); rp.bar:SetPoint("BOTTOMLEFT", track, "BOTTOMLEFT"); rp.bar:SetSize(44, 3)
   rp:Hide()
   self.rivalPanel = rp
 end
 
---- Sync the duel UI with the current duel state; returns true if the lobby took over the field.
+local function chip(fs, ready)
+  fs:SetText(ready and "READY" or "not ready")
+  local c = ready and C.green or C.label
+  fs:SetTextColor(c[1], c[2], c[3])
+end
+
+--- Sync the duel UI with the current duel state; returns true if the lobby took over the window.
 function UI:RefreshDuel(phase)
   if not self.lobby then return false end
   local m = ns.Duel.current
@@ -200,33 +243,37 @@ function UI:RefreshDuel(phase)
   local s = ns.App.session
   local inDuel = s and s.duel and s.duel == m
   if pre and not (inDuel and s:isActive()) then
-    -- the panel covers the field: never let a solo run keep falling underneath it
+    -- the lobby covers the window: never let a solo run keep falling underneath it
     if s and not s.duel and s:isActive() then s:pause("manual") end
-    o:Show()
-    o.rival:SetText(short(m.rival))
-    o.rules:SetText(m.ruleset.name)
+    if not o:IsShown() then o:Show(); o.fade:Play() end
+    o.meCard.name:SetText(short(ns.Comm.me()) or "You")
+    o.themCard.name:SetText(short(m.rival))
+    o.rules:SetText(string.upper(m.ruleset.name) .. "  -  SAME PIECES FOR BOTH")
     o.ready:Hide()
     o.cancel:SetLabel("Cancel")
     if m.state == "inviting" then
-      o.status:SetText("Challenge sent. Waiting for an answer...")
-      o.me:SetText(""); o.them:SetText("")
+      o.status:SetText("Challenge sent. Waiting for " .. short(m.rival) .. "...")
+      o.meCard.state:SetText(""); o.themCard.state:SetText("invited...")
+      o.themCard.state:SetTextColor(C.label[1], C.label[2], C.label[3])
     elseif m.state == "lobby" then
       o.status:SetText(m.silentWarned and "No answer from your rival... (connection?)" or "Press Ready when you are set.")
-      o.me:SetText("You: " .. (m.myReady and "|cff7be3a0READY|r" or "not ready"))
-      o.them:SetText(short(m.rival) .. ": " .. (m.rivalReady and "|cff7be3a0READY|r" or "not ready"))
+      chip(o.meCard.state, m.myReady); chip(o.themCard.state, m.rivalReady)
       if not m.myReady then o.ready:Show() end
       if UI.inCombat() then o.ready:Disable() else o.ready:Enable() end
     else
       local why = CANCEL[m.endReason] or "Duel cancelled."
       o.status:SetText(why:match("^%l") and (short(m.rival) .. " " .. why) or why)
-      o.me:SetText(""); o.them:SetText("")
+      o.meCard.state:SetText(""); o.themCard.state:SetText("")
       o.cancel:SetLabel("Back")
     end
     self.menu:Hide(); self.pause:Hide(); self.over:Hide()
   else
     o:Hide()
   end
-  self.rivalPanel:SetShown(inDuel and true or false)
+  local showRival = inDuel and true or false
+  self.rivalPanel:SetShown(showRival)
+  self.nextPanel:SetHeight(self.field:GetHeight() - (showRival and 82 or 0))
+  self.nextPreviews[5]:SetShown(not showRival)
   self:RenderRival()
   return o:IsShown()
 end
@@ -240,11 +287,15 @@ function UI:RenderRival()
   local r = m.rival_
   local my = s.state.score
   local their = r.score or 0
-  rp.name:SetText("VS " .. short(m.rival):sub(1, 14) .. (m.silentWarned and "  ?" or ""))
-  local lead = their - my
-  rp.score:SetText(T.commas(their) .. (r.over and "  done" or ""))
-  local c = (lead > 0) and C.redLight or C.steel
+  rp.name:SetText("VS " .. string.upper(short(m.rival)):sub(1, 13))
+  rp.score:SetText(T.commas(their))
+  rp.state:SetText(m.silentWarned and "no signal..." or (r.over and "finished" or "playing"))
+  local c = (their > my) and C.redLight or C.steel
   rp.score:SetTextColor(c[1], c[2], c[3])
+  -- share of the combined score that is mine (half/half at the start)
+  local total = my + their
+  local share = total > 0 and (my / total) or 0.5
+  rp.bar:SetWidth(math.max(1, 88 * share))
 end
 
 ------------------------------------------------------------------------------------------------
@@ -252,7 +303,7 @@ end
 ------------------------------------------------------------------------------------------------
 function UI:ShowDuelOver(m)
   local s = ns.App.session
-  self.shareGuild:Hide(); self.shareGroup:Hide()
+  self.shareGuild:Hide(); self.shareGroup:Hide(); self.shareLabel:Hide()
   self.againHint:SetText("")
   if m.state ~= "done" then
     self.overTitle:SetText("FINISHED")
@@ -260,6 +311,7 @@ function UI:ShowDuelOver(m)
     self.overScore:SetText(T.commas(s and s.state.score or 0))
     local r = m.rival_
     self.overBadge:SetText(short(m.rival) .. ": " .. T.commas(r.score or 0) .. (r.over and "" or "  (playing)"))
+    self.overBadge:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
     self.overDetail:SetText(m.silentWarned and "No answer from your rival..." or "Waiting for your rival to finish.")
     self.againBtn:SetLabel("Leave duel")
   else
@@ -268,10 +320,13 @@ function UI:ShowDuelOver(m)
     self.overTitle:SetTextColor(o[2][1], o[2][2], o[2][3])
     self.overScore:SetText(T.commas(m.myScore or 0))
     self.overBadge:SetText(short(m.rival) .. ": " .. T.commas(m.theirScore or 0))
+    self.overBadge:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
     self.overDetail:SetText(REASON[m.endReason] or "")
     self.againBtn:SetLabel("Rematch")
+    if m.outcome == "win" then self.badgePulse:Stop(); self.badgePulse:Play() end
   end
 end
+
 
 function UI:PlayAgain()
   local s = ns.App.session

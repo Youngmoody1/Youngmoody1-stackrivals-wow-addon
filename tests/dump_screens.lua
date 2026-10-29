@@ -12,6 +12,8 @@ BUILD = (commit ~= "") and string.format("  (%s @ %s%s)", branch, commit, dirty 
 for _, sc in ipairs(S.list) do
   local M, ns, root_ = sc[3]()
   local F = root_ or StackRivalsFrame
+  -- the hard-drop rim is an 0.18 s flash: never part of a still picture
+  if ns.UI and ns.UI.rim then ns.UI.rim:SetAlpha(0) end
   local R, items = L.collect(M, F)
   L.dump(outdir .. "/" .. sc[1] .. ".txt", F, R, items, "StackRivals " .. (ns.VERSION or "?") .. BUILD .. "  -  " .. sc[2])
   print("dumped " .. sc[1])
