@@ -220,7 +220,7 @@ function L.dump(path, root, R, items, title)
     local a = R.alpha(o)
     if o._kind == "Texture" then
       if o._tex then
-        fh:write(string.format("IMG\t%.1f\t%.1f\t%.1f\t%.1f\t%.3f\t%s\n", rc.l, rc.b, rc.r, rc.t, a, o._tex))
+        fh:write(string.format("IMG\t%.1f\t%.1f\t%.1f\t%.1f\t%.3f\t%s\t%s\n", rc.l, rc.b, rc.r, rc.t, a, o._tex, o._desat and "1" or "0"))
       elseif o._r then
         fh:write(string.format("RECT\t%.1f\t%.1f\t%.1f\t%.1f\t%.3f\t%.3f\t%.3f\t%.3f\n", rc.l, rc.b, rc.r, rc.t, o._r, o._g, o._b, (o._a or 1) * a))
       end

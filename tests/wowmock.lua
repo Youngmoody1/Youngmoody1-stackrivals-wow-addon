@@ -80,6 +80,7 @@ local function newTexture(parent, layer, sub)
     _parent = parent, _layer = layer or "ARTWORK", _sub = sub or 0, _order = nextOrder(),
     SetColorTexture = function(o, r, g, b, a) assert(type(r) == "number" and type(g) == "number" and type(b) == "number", "SetColorTexture needs numbers"); o._r, o._g, o._b, o._a = r, g, b, a end,
     SetTexture = function(o, path) o._tex = path end,
+    SetDesaturated = function(o, v) o._desat = v and true or false end,
     SetDrawLayer = function() end,
   }), "Texture")
 end

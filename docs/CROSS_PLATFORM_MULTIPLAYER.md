@@ -25,6 +25,13 @@ Status words: **BUILT** (code + automated tests), **SIMULATED** (tested only in 
 (3) shared Daily + server replay, (4) shared account/statistics where technically possible,
 (5) real-time only if a safe, allowed, documented method appears (none exists today).
 
+## 1b. Spell Battle (branch `spellbattle`, v0.5.0 preview)
+
+Spell Battle from Play 2.0 is BUILT and SIMULATED for **WoW ↔ WoW** duels (ruleset `s180`) and for
+vs Bot. Details, the protocol additions (`RDY`/`GO` loadout, `SP`, cast letters `H`–`P`), the result
+rule (both logs replayed in lockstep = the web's `verifySpellMatch`) and what needs real clients:
+`docs/SPELL_BATTLE.md`. Findings and an SR1 proposal for the web: `docs/WEB_SPELL_REPORT.md`.
+
 ## 2. What is built in the addon (branch `multiplayer`, v0.4.0 preview)
 
 A 1v1 **score race on a shared seed**: both players get the same pieces and play for a fixed time;

@@ -11,8 +11,8 @@
     1:INV:<mid>:<ruleset>:<engine>:<commitA>        challenge; commitA = hex FNV-1a of "srcommit-<mid>-<nonceA>"
     1:ACC:<mid>:<nonceB>                            accept: the guest picks nonceB without knowing nonceA
     1:DEC:<mid>:<reason>                            decline / cancel before start
-    1:RDY:<mid>                                     I'm ready
-    1:GO:<mid>:<nonceA>                             inviter: both ready, countdown starts now; reveals
+    1:RDY:<mid>[:<loadout>]                         I'm ready (Spell Battle: + my 4 spells, locked; 0.5+)
+    1:GO:<mid>:<nonceA>[:<loadout>]                 inviter: both ready, countdown starts now; reveals
                                                     nonceA (must match commitA). seed = srduel-<mid>-<nonceA><nonceB>,
                                                     so neither player can pick or grind the seed
     1:PNG:<mid>                                     keep-alive while not playing
@@ -23,6 +23,12 @@
     1:BYE:<mid>:<reason>                            forfeit (during play) / left (after my own run ended)
     1:FIN:<mid>                                     I have your END and your complete log: stop re-sending
                                                     (an accepted send is never proof of delivery)
+    1:SP:<mid>:<seq>:<tick36>:<spell>               Spell Battle (0.5+): I cast a spell on you at my tick;
+                                                    it lands on your board at tick + 90 (Spells.DELIVERY_TICKS)
+
+  Spell Battle (ruleset s180) uses the same flow; only clients 0.5+ know s180, SP and the cast
+  letters in the log (H..P = cast codes 100..108). Classic duels (b120 / r180) are unchanged, so
+  0.4 and 0.5 clients still duel each other in those.
 ]]
 local _, ns = ...
 ns = ns or {}
@@ -39,7 +45,25 @@ P.RULESETS = {
   -- id = { name, ticks, countdown ticks }
   b120 = { id = "b120", name = "Duel - Blitz 2:00", limitTicks = 7200, countdownTicks = 180 },
   r180 = { id = "r180", name = "Duel - 3:00 (web rules)", limitTicks = 10800, countdownTicks = 240 },
+  -- Spell Battle: the web's 3:00 cap and 4 s countdown; the result = lockstep replay of both logs
+  s180 = { id = "s180", name = "Spell Duel - 3:00 (web rules)", limitTicks = 10800, countdownTicks = 240, spell = true },
 }
+--- Oldest addon version that knows each ruleset (for the duel sheet: who can play what).
+P.RULESET_MIN_VERSION = { s180 = "0.5.0" }
+
+--- "0.4.0" < "0.5.0"? (numeric parts; anything unparsable counts as old)
+function P.versionAtLeast(v, min)
+  local a = {}
+  for n in tostring(v or ""):gmatch("%d+") do a[#a + 1] = tonumber(n) end
+  local b = {}
+  for n in tostring(min):gmatch("%d+") do b[#b + 1] = tonumber(n) end
+  if #a == 0 then return false end
+  for i = 1, math.max(#a, #b) do
+    local x, y = a[i] or 0, b[i] or 0
+    if x ~= y then return x > y end
+  end
+  return true
+end
 
 P.DECLINE = { no = true, busy = true, combat = true, version = true, timeout = true, cancel = true, ruleset = true }
 P.BYE = { forfeit = true, left = true, quit = true, timeout = true, combat = true }
@@ -81,7 +105,9 @@ end
 --- Build a message string (fields are validated by decode on the receiving side and in tests).
 function P.encode(kind, ...)
   local parts = { tostring(P.VERSION), kind }
-  for i = 1, select("#", ...) do parts[#parts + 1] = tostring((select(i, ...))) end
+  local n = select("#", ...)
+  while n > 0 and select(n, ...) == nil do n = n - 1 end -- optional trailing fields left out
+  for i = 1, n do parts[#parts + 1] = tostring((select(i, ...))) end
   local s = table.concat(parts, ":")
   assert(#s <= P.MAX_LEN, "message too long")
   return s
@@ -89,7 +115,9 @@ end
 
 local SPEC = {
   HEL = 2, HI = 3, INV = 4, ACC = 2, DEC = 2, RDY = 1, GO = 2, PNG = 1, SC = 5, END = 7, LOG = 4, BYE = 2, RQ = 2, FIN = 1,
+  SP = 4,
 }
+local OPTIONAL = { RDY = 1, GO = 1 } -- extra trailing fields a kind may carry (newer clients)
 
 --- Parse and validate. Returns a table {kind=..., ...} or nil, reason.
 function P.decode(s)
@@ -101,7 +129,7 @@ function P.decode(s)
   local kind = f[2]
   local want = SPEC[kind]
   if not want then return nil, "kind" end
-  if #f - 2 ~= want then return nil, "fields" end
+  if #f - 2 ~= want and not (OPTIONAL[kind] and #f - 2 > want and #f - 2 <= want + OPTIONAL[kind]) then return nil, "fields" end
   local m = { kind = kind }
   if kind == "HEL" then
     if not isVer(f[3]) or not isInt(f[4], 1, 9999) then return nil, "bad" end
@@ -122,9 +150,23 @@ function P.decode(s)
   elseif kind == "GO" then
     if not isMid(f[3]) or not isNonce(f[4]) then return nil, "bad" end
     m.mid, m.nonce = f[3], f[4]
+    if f[5] then -- Spell Battle: the host's loadout again (its RDY may arrive after GO)
+      if not (ns.Spells and ns.Spells.decodeLoadout(f[5])) then return nil, "bad" end
+      m.loadout = f[5]
+    end
   elseif kind == "RDY" or kind == "PNG" or kind == "FIN" then
     if not isMid(f[3]) then return nil, "bad" end
     m.mid = f[3]
+    if kind == "RDY" and f[4] then
+      if not (ns.Spells and ns.Spells.decodeLoadout(f[4])) then return nil, "bad" end
+      m.loadout = f[4]
+    end
+  elseif kind == "SP" then
+    local t, sp = P.unb36(f[5]), tonumber(f[6])
+    if not isMid(f[3]) or not isInt(f[4], 1, 9999) or not t or not isInt(f[6], 0, 8) then return nil, "bad" end
+    local id = ns.Spells and ns.Spells.SPELLS[sp + 1]
+    if not id or ns.Spells.INFO[id].target ~= "opponent" then return nil, "bad" end
+    m.mid, m.seq, m.tick, m.spell = f[3], tonumber(f[4]), t, id
   elseif kind == "SC" then
     local t, sc, ln = P.unb36(f[4]), P.unb36(f[5]), P.unb36(f[6])
     if not isMid(f[3]) or not t or not sc or not ln or (f[7] ~= "0" and f[7] ~= "1") then return nil, "bad" end
@@ -138,7 +180,7 @@ function P.decode(s)
     m.mid, m.i = f[3], tonumber(f[4])
   elseif kind == "LOG" then
     if not isMid(f[3]) or not isInt(f[4], 1, 200) or not isInt(f[5], 1, 200) or tonumber(f[4]) > tonumber(f[5]) then return nil, "bad" end
-    if #f[6] > P.CHUNK_PAYLOAD or not f[6]:match("^[0-9a-zA-G]*$") then return nil, "bad" end
+    if #f[6] > P.CHUNK_PAYLOAD or not f[6]:match("^[0-9a-zA-P]*$") then return nil, "bad" end
     m.mid, m.i, m.n, m.payload = f[3], tonumber(f[4]), tonumber(f[5]), f[6]
   end
   return m
@@ -147,26 +189,34 @@ end
 ------------------------------------------------------------------------------------------------
 -- Compact input-log codec: each input = tick delta in base36 (lowercase/digits) + action letter
 -- A..G (action index 0..6). "3A0Bc C" style, no separators. ~2.5 bytes per input.
+-- Spell Battle casts (codes 100..108) are the letters H..P; classic logs never contain them.
 ------------------------------------------------------------------------------------------------
+local function codeLetter(c)
+  if c >= 0 and c <= 6 then return string.char(65 + c) end
+  if c >= 100 and c <= 108 then return string.char(72 + c - 100) end
+  error("code can't be packed: " .. tostring(c))
+end
+local function letterCode(b) return (b <= 71) and (b - 65) or (100 + b - 72) end
+
 function P.packLog(log)
   local out, prev = {}, 0
   for i = 1, #log, 2 do
     local d = log[i] - prev
     prev = log[i]
-    out[#out + 1] = P.b36(d) .. string.char(65 + log[i + 1])
+    out[#out + 1] = P.b36(d) .. codeLetter(log[i + 1])
   end
   return table.concat(out)
 end
 
 function P.unpackLog(s)
-  if type(s) ~= "string" or not s:match("^[0-9a-zA-G]*$") then return nil end
+  if type(s) ~= "string" or not s:match("^[0-9a-zA-P]*$") then return nil end
   local log, t = {}, 0
-  for d, a in s:gmatch("([0-9a-z]+)([A-G])") do
+  for d, a in s:gmatch("([0-9a-z]+)([A-P])") do
     local delta = P.unb36(d)
     if not delta then return nil end
     t = t + delta
     log[#log + 1] = t
-    log[#log + 1] = a:byte() - 65
+    log[#log + 1] = letterCode(a:byte())
   end
   -- every character must belong to a pair
   if P.packLog(log) ~= s then return nil end
@@ -180,7 +230,7 @@ function P.chunk(packed)
     local j = math.min(n, i + P.CHUNK_PAYLOAD - 1)
     if j < n then
       -- move the cut back to just after an action letter
-      while j > i and not packed:sub(j, j):match("[A-G]") do j = j - 1 end
+      while j > i and not packed:sub(j, j):match("[A-P]") do j = j - 1 end
     end
     chunks[#chunks + 1] = packed:sub(i, j)
     i = j + 1

@@ -13,6 +13,12 @@
     each side replays the rival's log with the engine (Verify) -> winner, "peer-checked"
     FIN  <----------------------------> FIN                      "I have your result": stop re-sending
 
+  Spell Battle (ruleset s180, 0.5+): RDY / GO also carry the player's 4 spells (locked at Ready).
+  A spell cast on the rival is sent at once (SP, repeated twice) and lands on their board 90 ticks
+  later on their clock, as on the web. The result is the web's verification: both players replay
+  BOTH logs in lockstep (Spells.verifyMatch), so both PCs get the same boards and the same scores
+  even if a spell arrived late in the live view.
+
   Commit-reveal: neither player can choose or grind the seed, and the guest only learns it at GO.
 
   A successful SendAddonMessage only means "queued", never "delivered" (warcraft.wiki.gg), so
@@ -35,7 +41,7 @@
   Combat during a duel pauses your own run (safety first); the rival keeps playing.
 ]]
 local _, ns = ...
-local P, E, V = ns.Protocol, ns.Engine, ns.Verify
+local P, E, V, S = ns.Protocol, ns.Engine, ns.Verify, ns.Spells
 
 local Duel = { state = "idle", players = {}, listeners = {} }
 ns.Duel = Duel
@@ -63,7 +69,9 @@ Duel.WHY_NOT = {
   trial = "Trial and Veteran accounts can't send addon messages (Blizzard rule)",
   busy = "you are already in a duel", combat = "you are in combat", self = "that's you",
   unavailable = "addon messages are unavailable on this client", ruleset = "unknown rules",
+  old = "they need StackRivals 0.5 or newer for Spell Battle",
 }
+Duel.SP_REPEAT = { 1.0, 3.0 } -- s after a cast: send the SP again (lost messages; the rival ignores repeats)
 
 local function now() return GetTime() end
 local diag = function() end -- DuelDiag.poll once Duel.init ran
@@ -84,7 +92,7 @@ local function send(m, kind, ...)
   if m.rivalOffline then return end -- whispering an offline player only spams the chat
   local key
   if KEYED[kind] then key = kind .. ":" .. m.mid
-  elseif kind == "LOG" or kind == "RQ" then key = kind .. ":" .. m.mid .. ":" .. tostring((select(2, ...))) end
+  elseif kind == "LOG" or kind == "RQ" or kind == "SP" then key = kind .. ":" .. m.mid .. ":" .. tostring((select(2, ...))) end
   ns.Comm.send(P.encode(kind, ...), "WHISPER", m.rival, function(reason)
     -- never act inside the send call itself: just flag it, update() handles it next frame
     if reason == "offline" then m.rivalOffline = true end
@@ -178,6 +186,10 @@ end
 function Duel.challenge(name, rulesetId)
   rulesetId = rulesetId or "b120"
   if not P.RULESETS[rulesetId] then return false, "ruleset" end
+  -- a player we know runs an older addon can't play this ruleset (they would never see the invite)
+  local minV = P.RULESET_MIN_VERSION[rulesetId]
+  local known = minV and Duel.players[ns.Comm.fullName(name) or ""]
+  if known and not P.versionAtLeast(known.addon, minV) then return false, "old" end
   if not ns.Comm.enabled then return false, "unavailable" end
   if ns.Comm.trial then return false, "trial" end
   if Duel.busy() then return false, "busy" end
@@ -270,7 +282,10 @@ function Duel.ready()
   if not m or m.state ~= "lobby" or m.myReady then return false end
   m.myReady = true
   m.myReadyAt = now() -- the host can't start before this (it needs our RDY): safe clock reference
-  send(m, "RDY", m.mid)
+  if m.ruleset.spell then
+    m.myLoadout = (ns.db and ns.db.spell and S.decodeLoadout(ns.db.spell.loadout)) and ns.db.spell.loadout or S.encodeLoadout(S.DEFAULT_LOADOUT)
+  end
+  send(m, "RDY", m.mid, m.myLoadout)
   if m.role == "host" and m.rivalReady then Duel.go(m) end
   emit("changed", m)
   return true
@@ -279,8 +294,9 @@ end
 local function seedFor(m) return P.seed(m.mid, m.nonceA, m.nonceB) end
 
 function Duel.go(m)
+  if m.ruleset.spell and not m.rivalLoadout then return end -- wait for their spells (RDY / GO repeat)
   m.seed = seedFor(m)
-  if m.role == "host" then send(m, "GO", m.mid, m.nonceA) end
+  if m.role == "host" then send(m, "GO", m.mid, m.nonceA, m.myLoadout) end
   m.state = "playing"
   m.goAt = now()
   m.deadline = m.goAt + m.ruleset.limitTicks / 60 + m.ruleset.countdownTicks / 60 + Duel.AFTER_TIME
@@ -308,13 +324,25 @@ local function sendEnd(m)
   send(m, "END", m.mid, P.b36(m.my.ticks), P.b36(m.my.score), P.b36(m.my.lines), P.b36(m.my.level), m.my.hash, #m.outChunks)
 end
 
+--- Spell Battle: a spell I cast on the rival (from the live session). Sent now and repeated.
+function Duel.sendCast(m, inc)
+  if not m or m.state ~= "playing" then return end
+  m.castSeq = (m.castSeq or 0) + 1
+  local c = { seq = m.castSeq, tick = inc.castTick, idx = S.INDEX[inc.spell], at = now(), n = 0 }
+  m.outCasts = m.outCasts or {}
+  m.outCasts[#m.outCasts + 1] = c
+  send(m, "SP", m.mid, c.seq, P.b36(c.tick), c.idx)
+end
+
 --- Called by the app when my run in this duel is over (top-out or time).
-function Duel.onLocalEnd(state)
+--- `log` = the run's full log (Spell Battle: moves + casts); default: the engine's move log.
+function Duel.onLocalEnd(state, log)
   local m = Duel.current
   if not m or m.state ~= "playing" then return end
   m.my = { score = state.score, lines = state.lines, level = state.level, ticks = state.tick, hash = E.hashState(state), over = state.gameOver }
+  m.myLog = log or state.inputLog
   m.myEndAt = now()
-  m.outChunks = P.chunk(P.packLog(state.inputLog))
+  m.outChunks = P.chunk(P.packLog(m.myLog))
   m.outNext = 1
   m.state = "waiting"
   send(m, "SC", m.mid, P.b36(state.tick), P.b36(state.score), P.b36(state.lines), 1)
@@ -388,6 +416,10 @@ end
 HANDLERS.RDY = function(msg, sender)
   local m = matchFor(msg, sender)
   if not m or m.state ~= "lobby" then return end
+  if m.ruleset.spell then
+    if not msg.loadout then return end -- a Spell Battle Ready must name the spells
+    m.rivalLoadout = m.rivalLoadout or msg.loadout -- locked: the first one counts
+  end
   m.rivalReady = true
   if m.role == "host" and m.myReady then Duel.go(m) end
   emit("changed", m)
@@ -405,11 +437,39 @@ HANDLERS.GO = function(msg, sender)
     return
   end
   m.nonceA = msg.nonce
+  if m.ruleset.spell then
+    if not (m.rivalLoadout or msg.loadout) then return end -- GO repeats with the loadout
+    m.rivalLoadout = m.rivalLoadout or msg.loadout
+  end
   if not m.myReady then return end -- can't happen with a well-behaved host; ignore
   Duel.go(m)
 end
 
 HANDLERS.PNG = function(msg, sender) matchFor(msg, sender) end
+
+--- A rival spell. Checked against what can be known live: a Spell Battle, their announced
+--- loadout, an opponent spell (decode), at most one cast per cooldown, within the time cap.
+--- Mana can't be checked live (it depends on their board): the final replay checks everything.
+HANDLERS.SP = function(msg, sender)
+  local m = matchFor(msg, sender)
+  if not m or not m.ruleset.spell or (m.state ~= "playing" and m.state ~= "waiting") then return end
+  m.inCasts = m.inCasts or {}
+  if m.inCasts[msg.seq] then return end -- a repeat
+  local reject
+  local lo = S.decodeLoadout(m.rivalLoadout or "")
+  local inLo = false
+  for _, x in ipairs(lo or {}) do if x == msg.spell then inLo = true end end
+  if not inLo then reject = "not_in_loadout" end
+  if msg.tick > m.ruleset.limitTicks then reject = "after_cap" end
+  for _, c in pairs(m.inCasts) do
+    if c.ok and math.abs(c.tick - msg.tick) < S.CAST_COOLDOWN_TICKS then reject = "cooldown" end
+  end
+  m.inCasts[msg.seq] = { tick = msg.tick, spell = msg.spell, ok = not reject, reason = reject }
+  if reject then m.spRejected = (m.spRejected or 0) + 1; return end
+  local s = session()
+  if s and s.duel == m and s.spell and m.state == "playing" then ns.SpellBattle.incoming(s, msg.tick, msg.spell) end
+  emit("cast", m, msg.spell)
+end
 
 HANDLERS.SC = function(msg, sender)
   local m = matchFor(msg, sender)
@@ -522,6 +582,53 @@ local function haveAllChunks(m)
   return true
 end
 
+--- Spell Battle result: replay BOTH logs in lockstep (the web's verifySpellMatch). Both PCs run
+--- the same replay of the same two logs, so they agree on every board and score.
+--- What counts against the rival (their result is rejected):
+---   a broken / foreign log, a loadout other than the one they announced, a cast the replay can
+---   never allow (cooldown, not in the loadout, unknown code), more than 2 casts without the mana,
+---   or a spell they sent me live that isn't in their log at all (a fake).
+--- Not counted: "inputs after top-out" and a few casts without mana - a spell that reached a
+--- board late in the live view can change that board in the replay (lag, a combat pause); the
+--- replay simply ignores those inputs, which can't help anyone.
+local DIVERGENCE_OK = { inputs_after_topout = true }
+function Duel.decideSpell(m, log)
+  local mine = { v = E.ENGINE_VERSION, seed = m.seed, startLevel = 1, ticks = m.my.ticks, log = m.myLog or {}, loadout = S.decodeLoadout(m.myLoadout or "") }
+  local theirs = { v = E.ENGINE_VERSION, seed = m.seed, startLevel = 1, ticks = m.rivalEnd.ticks, log = log, loadout = S.decodeLoadout(m.rivalLoadout or "") }
+  local hostFirst = m.role == "host"
+  local res = S.verifyMatch({ seed = m.seed, capTicks = m.ruleset.limitTicks, players = hostFirst and { mine, theirs } or { theirs, mine } })
+  local me, them = res[hostFirst and 1 or 2], res[hostFirst and 2 or 1]
+  local fraud = {}
+  for _, r in ipairs(them.reasons) do
+    if r == "impossible_cast" then
+      local noMana = 0
+      for _, c in ipairs(them.invalidCasts) do
+        if c.reason == "insufficient_mana" or c.reason == "topped_out" then noMana = noMana + 1
+        else fraud[#fraud + 1] = "impossible_cast" end
+      end
+      if noMana > 2 then fraud[#fraud + 1] = "impossible_cast" end
+    elseif not DIVERGENCE_OK[r] then
+      fraud[#fraud + 1] = r
+    end
+  end
+  -- every spell they sent me live must be a cast in their log at that tick
+  local logged = {}
+  for k = 1, #log, 2 do if S.isCastCode(log[k + 1]) then logged[log[k] .. ":" .. S.spellOfCode(log[k + 1])] = true end end
+  for _, c in pairs(m.inCasts or {}) do
+    if c.ok and not logged[c.tick .. ":" .. c.spell] then fraud[#fraud + 1] = "fake_cast"; break end
+  end
+  m.spell = {
+    myLive = m.my.score, theirClaim = m.rivalEnd.score,
+    my = me.score, their = them.score, diverged = me.hash ~= m.my.hash,
+    late = (session() and session().duel == m and session().spell and session().spell.late) or 0,
+    reasons = them.reasons, rejected = m.spRejected or 0,
+  }
+  -- the replay is the result (also for my own score)
+  m.my.score, m.rivalEnd.score = me.score, them.score
+  m.rival_.score = them.score
+  return { ok = #fraud == 0, reasons = fraud, score = them.score }
+end
+
 function Duel.tryDecide(m)
   if m.state ~= "waiting" then return end -- my own run must be over first
   -- a complete log beats everything else: the rival finished, even if they left afterwards
@@ -533,6 +640,8 @@ function Duel.tryDecide(m)
       m.check = { ok = false, reasons = { "malformed_log" } }
     elseif m.tooFast then
       m.check = { ok = false, reasons = { "faster_than_clock" } }
+    elseif m.ruleset.spell then
+      m.check = Duel.decideSpell(m, log)
     else
       m.check = V.verify(log, m.seed, m.rivalEnd.ticks, {
         seed = m.seed, capTicks = m.ruleset.limitTicks,
@@ -654,11 +763,11 @@ function Duel.update()
       send(m, "INV", m.mid, m.rulesetId, E.ENGINE_VERSION, m.commitA)
     elseif m.state == "lobby" then
       if m.role == "guest" then send(m, "ACC", m.mid, m.nonceB) end
-      if m.myReady then send(m, "RDY", m.mid) elseif m.role == "host" then send(m, "PNG", m.mid) end
+      if m.myReady then send(m, "RDY", m.mid, m.myLoadout) elseif m.role == "host" then send(m, "PNG", m.mid) end
     elseif m.state == "playing" and s and s.duel == m then
       send(m, "SC", m.mid, P.b36(s.state.tick), P.b36(s.state.score), P.b36(s.state.lines), 0)
       -- repeat GO until the guest's first score shows it started
-      if m.role == "host" and m.rival_.tick == nil and t - m.goAt < 30 then send(m, "GO", m.mid, m.nonceA) end
+      if m.role == "host" and m.rival_.tick == nil and t - m.goAt < 30 then send(m, "GO", m.mid, m.nonceA, m.myLoadout) end
     elseif m.state == "waiting" and m.my then
       if not m.rivalHasMine then sendEnd(m) else send(m, "PNG", m.mid) end
     else
@@ -667,6 +776,13 @@ function Duel.update()
   end
   if m.state == "playing" or m.state == "waiting" then
     requestMissing(m, t, m.state == "playing" and 2 or 3)
+  end
+  -- Spell Battle: repeat each cast twice (lost whispers); the rival drops the repeats by seq
+  if m.outCasts and (m.state == "playing" or m.state == "waiting") then
+    for _, c in ipairs(m.outCasts) do
+      local due = Duel.SP_REPEAT[c.n + 1]
+      if due and t - c.at >= due then c.n = c.n + 1; send(m, "SP", m.mid, c.seq, P.b36(c.tick), c.idx) end
+    end
   end
   if not m.rivalHasMine then streamLog(m, t) end
   -- silence

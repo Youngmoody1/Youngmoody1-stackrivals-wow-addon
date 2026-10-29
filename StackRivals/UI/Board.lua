@@ -143,6 +143,57 @@ function Board.renderField(f, s, showGhost)
   end
 end
 
+--- Mini board (the rival in a Spell Battle): flat cells, no bevels, recoloured only on change.
+function Board.createMini(parent, width, rows, cell)
+  local f = CreateFrame("Frame", nil, parent)
+  f:SetSize(width * (cell + 1) + 1, rows * (cell + 1) + 1)
+  local bg = T.tex(f, "BACKGROUND", T.C.ink, 1)
+  bg:SetAllPoints()
+  f.cells, f.vals = {}, {}
+  for y = 0, rows - 1 do
+    for x = 0, width - 1 do
+      local t = f:CreateTexture(nil, "ARTWORK")
+      t:SetSize(cell, cell)
+      t:SetPoint("TOPLEFT", f, "TOPLEFT", 1 + x * (cell + 1), -(1 + y * (cell + 1)))
+      t:SetColorTexture(EMPTY[1], EMPTY[2], EMPTY[3], 1)
+      local i = y * width + x + 1
+      f.cells[i], f.vals[i] = t, 0
+    end
+  end
+  f.width, f.rows = width, rows
+  f.act = {}
+  return f
+end
+
+--- Draw a state on a mini board (board + active piece). `dim` = the rival can't see its NEXT
+--- (Blackout): purely cosmetic, the board is drawn the same.
+function Board.renderMini(f, s)
+  local w, hidden, rows = s.config.width, s.config.hiddenRows, f.rows
+  local act = f.act
+  for k in pairs(act) do act[k] = nil end
+  local a = s.active
+  if a then
+    local idx = P.INDEX[a.id]
+    for _, c in ipairs(P.SHAPES[a.id][a.rotation + 1]) do
+      local x, y = a.x + c[1], a.y + c[2] - hidden
+      if y >= 0 and y < rows then act[y * w + x + 1] = idx end
+    end
+  end
+  local board, cells, vals = s.board, f.cells, f.vals
+  for y = 0, rows - 1 do
+    local by = (y + hidden) * w
+    for x = 0, w - 1 do
+      local i = y * w + x + 1
+      local v = act[i] or board[by + x + 1]
+      if vals[i] ~= v then
+        vals[i] = v
+        local col = (v == 0) and EMPTY or (T.PIECE[v] or T.PIECE[8])
+        cells[i]:SetColorTexture(col[1], col[2], col[3], 1)
+      end
+    end
+  end
+end
+
 --- Small 4x4 preview box for hold/next.
 function Board.createPreview(parent, cell)
   local f = CreateFrame("Frame", nil, parent)

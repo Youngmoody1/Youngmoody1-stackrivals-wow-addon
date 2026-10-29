@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.5.0 — Spell Battle preview (branch `spellbattle`, not released)
+
+- **Spell Battle** from stackrivals.io Play 2.0 (web `48fdf46`): the same 9 spells (Bomb, Line
+  Blast, Freeze, Swap, Clear Board on your board; Garbage, Speed Up, Blackout, Scramble on your
+  rival's), mana from line clears, 3 s cooldown, spells land 1.5 s after the cast, 2 + 2 loadout.
+  StackRivals spells on StackRivals boards only: nothing touches WoW abilities or gameplay.
+- **Spell Battle vs Bot**: the web's bot at 5 levels (same placement AI, same casting rules, same
+  tuning versions), 3:00. The match ends the moment it's decided (bot topped out while you lead:
+  Victory at once, no more input or casts); behind, you play on ("beat N to win"); after your
+  top-out the bot plays on to 3:00 like on the web (spread over a few frames). Local W/L/D per
+  level. /reload restores a match exactly.
+- **Pick Spells** sheet (the web's icons), spell tiles with keys, mana progress and cooldown,
+  bomb target on your board, FROZEN / SPEED UP / BLACKOUT chips, hit flashes, the rival's live
+  mini board and mana, Victory / Defeat. Spell keys Q / E / R / F (web) and 1-4, rebindable
+  ("Spells 1-4"), only read during a live Spell Battle.
+- **Spell Battle duels** with guild / group members (ruleset `s180`, 0.5+ on both sides): spells
+  chosen in the lobby and locked at Ready, casts sent at once (SP, repeated), the result = both
+  logs replayed together on both PCs (the web's `verifySpellMatch`), peer-checked. Forged spells,
+  impossible casts, a changed loadout are caught; lag-only differences are not held against anyone.
+  Score-race duels are unchanged and still work with 0.4 clients.
+- Menu: a VERSUS row with Spell Battle and Duel; Settings: spell keys.
+- Parity: `tools/parity/gen-spell-fixtures.ts` generates fixtures from the web's real code;
+  `check_web.sh` runs them. Two web findings reported in `docs/WEB_SPELL_REPORT.md` (final tick,
+  input after an incoming top-out); the addon follows the web server's verification.
+- Tests: 91 new (66 parity + rules, 13 vs Bot in the WoW mock, 12 two-client duels). All 274
+  earlier tests and the 77 SR1 vectors unchanged.
+
 ## 0.4.0 — multiplayer preview (branch `multiplayer`, not released)
 
 - **Duels**: challenge a guild or group member to a 1v1 score race on a shared seed — Blitz 2:00,

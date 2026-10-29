@@ -17,11 +17,13 @@ ADDON_FONTS = "StackRivals/Media/Fonts"
 
 
 def load_tex(media, path):
-    name = path.replace("\\", "/").split("/")[-1].lower()
-    for ext in (".tga", ".png", ""):
-        p = os.path.join(media, name + ext)
-        if os.path.isfile(p):
-            return Image.open(p).convert("RGBA")
+    rel = path.replace("\\", "/")
+    rel = rel.split("/Media/", 1)[1] if "/Media/" in rel else rel.split("/")[-1]
+    for name in (rel, rel.lower()):
+        for ext in (".tga", ".png", ""):
+            p = os.path.join(media, name + ext)
+            if os.path.isfile(p):
+                return Image.open(p).convert("RGBA")
     return None
 
 
@@ -60,6 +62,10 @@ def render(dump, media, out_png):
                 d.ellipse((x0, y0, x1, y1), outline=(150, 150, 150, int(160 * a)), width=SCALE)
                 continue
             tex = tex.resize((x1 - x0, y1 - y0), Image.LANCZOS)
+            if len(row) > 7 and row[7] == "1":  # SetDesaturated(true)
+                g = tex.convert("LA").convert("RGBA")
+                g.putalpha(tex.split()[3])
+                tex = g
             if a < 1:
                 alpha = tex.split()[3].point(lambda v: int(v * a))
                 tex.putalpha(alpha)

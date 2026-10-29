@@ -7,6 +7,7 @@
 # 2. Lists web commits since the base that touch gameplay code (engine, controls, bot, match rules).
 # 3. Generates fresh fixtures from the web checkout into a temp file and runs the Lua engine tests
 #    against them: rules fingerprint (every constant) + 66 replayed games + Daily sequences.
+# 4. Generates Spell Battle + bot fixtures (tools/parity/gen-spell-fixtures.ts) and runs tests/test_spells.lua.
 # PASS = the web and WoW engines still play identically. FAIL lists exactly what differs.
 # Nothing is copied automatically: a FAIL is reviewed and ported by hand (docs/WEB_SYNC.md).
 set -euo pipefail
@@ -48,6 +49,20 @@ if SR_FIXTURES="$TMP" "$LUA" -e 'local H=assert(loadfile("tests/test_engine.lua"
 else
   echo "FAIL: gameplay differs. Review the lines above, port the change (docs/WEB_SYNC.md), bump"
   echo "ENGINE_VERSION in Lua if the web bumped it, then regenerate the fixtures."
+  exit 1
+fi
+# Spell Battle + bots: spells, mana, cooldowns, effects, bot decisions (v1 + v2), lockstep battles,
+# verifySpellMatch verdicts - all from the web's real code
+TMP2=$(mktemp)
+trap 'rm -f "$TMP" "$TMP2"' EXIT
+bun tools/parity/gen-spell-fixtures.ts "$WEB" > "$TMP2"
+echo
+echo "== Spell Battle + bots: Lua vs web @ ${HEAD:0:7} =="
+if SR_SPELL_FIXTURES="$TMP2" "$LUA" -e 'local H=assert(loadfile("tests/test_spells.lua"))("StackRivals","tests"); if not H.report("spells") then os.exit(1) end'; then
+  echo "PASS: spells and bots play identically."
+  echo "To move the base forward: bun tools/parity/gen-spell-fixtures.ts \"$WEB\" > tests/fixtures/spells.lua"
+else
+  echo "FAIL: Spell Battle or the bot differs. Port the change (docs/SPELL_BATTLE.md), then regenerate."
   exit 1
 fi
 if [ -n "${SR1_FAIL:-}" ]; then

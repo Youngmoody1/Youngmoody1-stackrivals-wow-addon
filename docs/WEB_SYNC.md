@@ -11,6 +11,7 @@ silent automatic updates would be fragile. What *is* automated is the **comparis
 | Web repo | `Youngmoody1/stackrivals-practice-arena` (read-only from this project) |
 | Web commit the addon matches | `29afe520d483539a3bc83417c542bf43fffae874` (29 Oct 2026) — stored in `tests/fixtures/parity.lua` |
 | Engine version | `ENGINE_VERSION = 1` on both sides |
+| Spell Battle + bots | web `48fdf46` (Play 2.0) — `tests/fixtures/spells.lua` from `tools/parity/gen-spell-fixtures.ts`; `check_web.sh` runs it |
 | Verified by | rules fingerprint (every constant, incl. the 1v1 match rules and `CLOCK_SLACK_MS`) + 66 replayed games + PRNG vectors + Daily sequences, all equal |
 | Shared codes | SR1 vectors (`docs/vectors/sr1.json`): TS reference + the web's real `verifyLog` reproduce all 57 checks |
 

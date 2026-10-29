@@ -26,6 +26,9 @@ Session.MODE_ORDER = { "classic", "blitz", "daily" }
 -- Duel modes (not in the solo menu); limits must match Protocol.RULESETS.
 Session.MODES.duel_b120 = { key = "duel_b120", name = "Duel 2:00", short = "1v1 score race", limitTicks = 7200, countdownTicks = 180, duel = true }
 Session.MODES.duel_r180 = { key = "duel_r180", name = "Duel 3:00", short = "1v1 score race, web rules", limitTicks = 10800, countdownTicks = 240, duel = true }
+-- Spell Battle vs Bot: the web's 3:00 cap and 4 s countdown (src/lib/match/rules.ts).
+Session.MODES.spellbot = { key = "spellbot", name = "Spell Battle", short = "Spells vs a bot. 3:00", limitTicks = 10800, countdownTicks = 240, spell = true }
+Session.MODES.duel_s180 = { key = "duel_s180", name = "Spell Duel 3:00", short = "1v1 Spell Battle", limitTicks = 10800, countdownTicks = 240, duel = true, spell = true }
 
 --- Seed shared by every player for a UTC date string "YYYY-MM-DD".
 function Session.dailySeed(dateStr) return "srwow-daily-" .. dateStr end
@@ -34,7 +37,8 @@ function Session.dailyDate(seed) return type(seed) == "string" and seed:match("^
 
 --- `dateStr` = UTC date the run started; records are filed under it (a Daily that ends after
 --- midnight UTC still counts for the day its pieces belong to).
-function Session.new(modeKey, seed, dateStr)
+--- opts (Spell Battle only): { loadout, difficulty, createdAtMs }
+function Session.new(modeKey, seed, dateStr, opts)
   local mode = Session.MODES[modeKey] or Session.MODES.classic
   local self = setmetatable({
     mode = mode,
@@ -50,6 +54,7 @@ function Session.new(modeKey, seed, dateStr)
     endReason = nil,
     playSeconds = 0,
   }, Session)
+  if mode.spell and ns.SpellBattle then ns.SpellBattle.setup(self, opts or {}) end
   self:emit("count", math.ceil(self.countdown / 60))
   return self
 end
@@ -76,6 +81,7 @@ function Session:suspendData()
   if self.duel or self.mode.duel then return nil end -- a duel can't be resumed after /reload
   if self.phase == "over" or self.state.gameOver then return nil end
   if self.state.tick == 0 and #self.state.inputLog == 0 then return nil end
+  if self.spell then return ns.SpellBattle.suspendData(self) end
   return { mode = self.mode.key, log = E.serializeLog(self.state), playSeconds = self.playSeconds }
 end
 
@@ -135,11 +141,21 @@ end
 
 --- Key handling from the UI. Only works while the board is live (countdown inputs are ignored).
 function Session:press(action)
-  if self.phase == "playing" then self.input:press(action) end
+  if self.phase ~= "playing" then return end
+  local slot = type(action) == "string" and action:match("^spell(%d)$")
+  if slot then
+    if self.spell then ns.SpellBattle.cast(self, tonumber(slot)) end
+    return
+  end
+  self.input:press(action)
 end
-function Session:release(action) self.input:release(action) end
+function Session:release(action)
+  if type(action) == "string" and action:match("^spell%d$") then return end
+  self.input:release(action)
+end
 
 local function stepOnce(self)
+  if self.spell then return ns.SpellBattle.step(self) end
   local s = self.state
   -- plain locals, not a table: this runs 60 times a second
   local bLines, bLevel, bPieces = s.lines, s.level, s.piecesPlaced
@@ -174,6 +190,10 @@ end
 
 --- Advance by real elapsed seconds. Returns true when something visible changed.
 function Session:update(dt)
+  if self.spell and self.spell.settling then
+    ns.SpellBattle.settle(self) -- you topped out: the bot plays on to the cap over a few frames
+    return true
+  end
   if self.phase ~= "playing" and self.phase ~= "countdown" then return false end
   if dt > MAX_DT then dt = MAX_DT end
   self.acc = self.acc + dt

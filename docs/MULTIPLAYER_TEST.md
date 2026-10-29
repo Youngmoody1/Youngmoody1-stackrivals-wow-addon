@@ -50,6 +50,22 @@ Spiller **A** udfordrer, spiller **B** svarer, medmindre andet står. Tag screen
 | 15 | B har markøren i chatten (skriver), når nedtællingen starter | Bs spil starter pauset: "Paused so you can type" | |
 | 16 | Valgfri: begge i en dungeon (inde i instansen), samme gruppe | Duellen virker. Gentag punkt 5–6 | |
 
+### 1b. Spell Battle (kun 0.5.0 på begge maskiner)
+
+| # | Gør dette | Det skal ske | ✅ |
+|---|---|---|---|
+| S1 | Solo: menu → **Spell Battle** ✱ | Pick Spells viser 9 spells med ikoner, 2 + 2 valgt, Bot-niveauer | |
+| S2 | Vælg Rookie → **Start Spell Battle**. Ryd linjer, så MANA stiger. Tryk **Q** (eller 1) ✱ | Spell-feltet lyser, når der er mana nok. Effekten ses på brættet, og "LINE BLAST" vises | |
+| S3 | Kast Garbage (R) ✱ | "GARBAGE SENT". Efter ca. 1,5 s får bottens minibræt 2 grå rækker | |
+| S4 | Lad botten toppe ud, mens du fører | **VICTORY** med det samme. Timeren stopper, og Q/E/R/F/Space gør ikke mere i spillet | |
+| S5 | Efter kampen: tryk Q, E, R, F uden for et run | Det er WoW's egne taster igen (fx strafe/autorun) | |
+| S6 | Midt i kampen: `/reload` → **Continue your Spell Battle run** | Brættet, botten og mana er præcis som før reload | |
+| S7 | Duel: A vælger **Spell Battle** og udfordrer B. Begge: **Change spells** → Done → **Ready** ✱ | Lobbyen viser dine 4 spells. Efter Ready står der "locked" | |
+| S8 | Under duellen: A kaster Garbage på B ✱ | B ser "INCOMING GARBAGE" og 2 grå rækker ca. 1,5 s senere | |
+| S9 | Spil til 3:00 (begge) ✱ | Samme to tal hos begge (spejlvendt). Tekst: "Both games replayed together on your PC" | |
+| S10 | B går i combat midt i duellen og genoptager | Duellen afsluttes normalt. Teksten kan nævne, at en spell nåede frem for sent. Det er forventet | |
+| S11 | Valgfri: B har 0.4.0 | A ser "needs 0.5.0" ud for B, når Spell Battle er valgt. Score-race-duellen virker stadig | |
+
 ## 2. Efter hver duel
 
 Begge skriver `/sr duel debug` og tager screenshot. Det viser:

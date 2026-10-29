@@ -75,6 +75,27 @@ local function duelPair()
   return net, a, b, NS
 end
 
+-- Spell Battle: the web's spell bot plays your side through the real keys (like the web's DEV autoplay)
+local function spellAutoplay(M, ns, frames)
+  local sess = ns.App.session
+  local bot = ns.Bot.SpellBot.new("preview-player", "elite")
+  for _ = 1, frames do
+    if sess.phase ~= "playing" then break end
+    local sp = sess.spell
+    local c = bot:act(sp.me, sp.opp)
+    if c then
+      local spell = ns.Spells.spellOfCode(c)
+      if spell then
+        for i, x in ipairs(sp.me.loadout) do if x == spell then sess:press("spell" .. i) end end
+      else
+        local a = ns.Engine.INPUT_ACTIONS[c + 1]
+        sess:press(a); sess:release(a)
+      end
+    end
+    M.frames_step(1)
+  end
+end
+
 S.list = {
   { "1-menu", "Mode menu", function()
     local M, ns = boot(); seedRecords(ns); SlashCmdList.STACKRIVALS(""); M.frames_step(1); return M, ns
@@ -151,6 +172,66 @@ S.list = {
     a.ns.Duel.ready(); b.ns.Duel.ready(); net.step(30)
     local pa, pb = NS.autoplay(a, "fast"), NS.autoplay(b, "slow")
     for _ = 1, 7200 + 900 do pa(); pb(); net.step(1) end
+    return a.M, a.ns, a.env.StackRivalsFrame
+  end },
+  { "13-spell-pick", "Spell Battle - Pick Spells", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS(""); ns.UI:ShowSheet("spell"); M.frames_step(1); return M, ns
+  end },
+  { "14-spell-battle", "Spell Battle vs Bot - mid match", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS("")
+    ns.db.spell.difficulty = "contender"
+    ns.App:Start("spellbot"); M.frames_step(241)
+    spellAutoplay(M, ns, 2400)
+    local sp = ns.App.session.spell
+    sp.me.mana = math.max(sp.me.mana, 9) -- show castable and not-yet-castable spells side by side
+    ns.UI.dirty = true; M.frames_step(1)
+    return M, ns
+  end },
+  { "15-spell-victory", "Spell Battle vs Bot - Victory (bot topped out, you ahead)", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS("")
+    ns.App:Start("spellbot"); M.frames_step(241)
+    spellAutoplay(M, ns, 900)
+    local sp = ns.App.session.spell
+    for y = 2, 21 do for x = 0, 9 do if x ~= y % 10 then sp.opp.game.board[y * 10 + x + 1] = 8 end end end
+    sp.me.game.score = sp.me.game.score + 4000
+    M.frames_step(200)
+    return M, ns
+  end },
+  { "16-spell-finishing", "Spell Battle vs Bot - you topped out, the bot plays on", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS("")
+    ns.App:Start("spellbot"); M.frames_step(241)
+    local sess = ns.App.session
+    for _ = 1, 400 do
+      if sess.phase ~= "playing" then break end
+      sess:press("hardDrop"); M.frames_step(1); sess:release("hardDrop")
+    end
+    return M, ns
+  end },
+  { "17-spell-duel-lobby", "Spell Battle duel - lobby with your spells", function()
+    local net, a, b = duelPair()
+    a.ns.Duel.challenge("Bob", "s180"); net.step(30); b.ns.Duel.accept(); net.step(30)
+    b.ns.Duel.ready(); net.step(30)
+    a.ns.UI:RefreshPhase()
+    return a.M, a.ns, a.env.StackRivalsFrame
+  end },
+  { "18-spell-duel-playing", "Spell Battle duel - live (rival's spells land on your board)", function()
+    local net, a, b = duelPair()
+    a.ns.Duel.challenge("Bob", "s180"); net.step(30); b.ns.Duel.accept(); net.step(30)
+    a.ns.Duel.ready(); b.ns.Duel.ready(); net.step(30)
+    local function player(c, seed, diff)
+      local bot = c.ns.Bot.SpellBot.new(seed, diff)
+      return function()
+        local s = c.ns.App.session
+        if not (s and s.spell and s.phase == "playing") then return end
+        local code = bot:act(s.spell.me, { game = { score = s.duel.rival_.score or 0 } })
+        if not code then return end
+        local spell = c.ns.Spells.spellOfCode(code)
+        if spell then for i, x in ipairs(s.spell.me.loadout) do if x == spell then s:press("spell" .. i) end end
+        else local k = c.ns.Engine.INPUT_ACTIONS[code + 1]; s:press(k); s:release(k) end
+      end
+    end
+    local pa, pb = player(a, "sa", "elite"), player(b, "sb", "rival")
+    for _ = 1, 2400 do pa(); pb(); net.step(1) end
     return a.M, a.ns, a.env.StackRivalsFrame
   end },
   { "8-records", "Records", function()

@@ -177,9 +177,10 @@ function UI:Create()
   self.bestLabel = label("BEST", 10, -60)
   self.bestText = T.display(stats, SZ.big, C.gold); self.bestText:SetPoint("TOPLEFT", 10, -74)
   local div = T.tex(stats, "ARTWORK", C.line, 1); div:SetPoint("TOPLEFT", 10, -100); div:SetPoint("TOPRIGHT", -10, -100); div:SetHeight(1)
-  label("LINES", 10, -112)
+  self.statsDiv = div
+  self.linesLabel = label("LINES", 10, -112)
   self.linesText = T.display(stats, SZ.title, C.paper); self.linesText:SetPoint("TOPLEFT", 10, -126)
-  label("LEVEL", 60, -112)
+  self.levelLabel = label("LEVEL", 60, -112)
   self.levelText = T.display(stats, SZ.title, C.paper); self.levelText:SetPoint("TOPLEFT", 60, -126)
   -- time sits at the bottom of the panel (steel; red in the last 10 s of a timed run)
   self.timeLabel = T.label(stats, "TIME"); self.timeLabel:SetPoint("BOTTOMLEFT", 10, 40)
@@ -214,6 +215,7 @@ function UI:Create()
   self:CreateSettings()
   self:CreateKeyboard()
   if ns.Duel and self.CreateDuel then self:CreateDuel() end
+  if ns.SpellBattle and self.CreateSpell then self:CreateSpell() end
 
   F:SetScript("OnShow", function() UI:OnShow() end)
   F:SetScript("OnHide", function() UI:OnHide() end)
@@ -350,7 +352,10 @@ function UI:CreateOverlays()
   again:SetPoint("TOP", over, "TOP", 0, -222)
   self.againHint = T.text(over, SZ.label, C.label); self.againHint:SetPoint("TOP", again, "BOTTOM", 0, -4)
   self.againBtn = again
-  local menuB = T.button(over, "Modes", 164, 28, "frame", function() ns.App:ShowMenu() end)
+  local menuB = T.button(over, "Modes", 164, 28, "frame", function()
+    local s = ns.App.session
+    if s and s.spell and not s.duel then ns.App:ShowMenu(); UI:ShowSheet("spell") else ns.App:ShowMenu() end
+  end)
   menuB:SetPoint("TOP", again, "BOTTOM", 0, -22)
   self.modesBtn = menuB
   self.shareRow = CreateFrame("Frame", nil, over)
@@ -371,9 +376,10 @@ function UI:CreateMenu()
   local menu = self:Body(30, true)
   self.menu = menu
   local cw = self.frame:GetWidth() - 2 * 24 - 2
-  local CARD, GAP = 70, 8
+  local CARD, GAP = 56, 6
   local mt = T.display(menu, SZ.title, C.paper); mt:SetPoint("TOPLEFT", 24, -14); mt:SetText("PICK A MODE")
   local ms = T.text(menu, SZ.small, C.label); ms:SetPoint("TOPLEFT", 24, -38); ms:SetText("Same rules and pieces as stackrivals.io. Click a mode to play.")
+  self.menuSub = ms
   self.modeButtons = {}
   local y = -62
   for _, key in ipairs(Session.MODE_ORDER) do
@@ -381,15 +387,15 @@ function UI:CreateMenu()
     local b = T.button(menu, "", cw, CARD, key == "daily" and "gold" or "frame", function() ns.App:Start(key) end)
     b:SetPoint("TOP", menu, "TOP", 0, y)
     b.noPress = true
-    b.fs:ClearAllPoints(); b.fs:SetPoint("TOPLEFT", 62, -14); b.fs:SetJustifyH("LEFT")
+    b.fs:ClearAllPoints(); b.fs:SetPoint("TOPLEFT", 62, -10); b.fs:SetJustifyH("LEFT")
     T.setFont(b.fs, T.DISPLAY, SZ.title)
     b.fs:SetText(mode.name)
-    b.desc = T.text(b, SZ.small, C.body); b.desc:SetPoint("TOPLEFT", 62, -41)
+    b.desc = T.text(b, SZ.small, C.body); b.desc:SetPoint("TOPLEFT", 62, -34)
     b.desc:SetWidth(200); b.desc:SetJustifyH("LEFT")
     b.desc:SetText(mode.short)
-    b.bestLabel = T.label(b, key == "daily" and "TODAY" or "BEST"); b.bestLabel:SetPoint("TOPRIGHT", -16, -11); b.bestLabel:SetJustifyH("RIGHT")
-    b.best = T.display(b, SZ.title, C.gold); b.best:SetPoint("TOPRIGHT", -16, -25); b.best:SetJustifyH("RIGHT")
-    b.side = T.text(b, SZ.label, C.label); b.side:SetPoint("TOPRIGHT", -16, -51); b.side:SetJustifyH("RIGHT")
+    b.bestLabel = T.label(b, key == "daily" and "TODAY" or "BEST"); b.bestLabel:SetPoint("TOPRIGHT", -16, -6); b.bestLabel:SetJustifyH("RIGHT")
+    b.best = T.display(b, SZ.heading, C.gold); b.best:SetPoint("TOPRIGHT", -16, -20); b.best:SetJustifyH("RIGHT")
+    b.side = T.text(b, SZ.label, C.label); b.side:SetPoint("TOPRIGHT", -16, -40); b.side:SetJustifyH("RIGHT")
     local edgeC = C[MODE_EDGE[key]]
     local e = T.tex(b, "ARTWORK", edgeC, 1); e:SetPoint("TOPLEFT", 1, -1); e:SetPoint("BOTTOMLEFT", 1, 1); e:SetWidth(4)
     -- a piece in the mode colour: the cards read as things to play, not form fields
@@ -402,17 +408,35 @@ function UI:CreateMenu()
     self.modeButtons[key] = b
   end
   self.cardStep = CARD + GAP
+  -- VERSUS row: Spell Battle (vs the web's bot) and Duel (a guild / group member)
+  local half = math.floor((cw - 8) / 2)
+  local function vsCard(name, desc, style, edgeC, iconPath, onClick)
+    local b = T.button(menu, "", half, 54, style, onClick)
+    b.noPress = true
+    b.fs:ClearAllPoints(); b.fs:SetPoint("TOPLEFT", 52, -9); b.fs:SetJustifyH("LEFT")
+    T.setFont(b.fs, T.DISPLAY, SZ.heading)
+    b.fs:SetText(name)
+    b.desc = T.text(b, SZ.label, C.body); b.desc:SetPoint("TOPLEFT", 52, -31); b.desc:SetWidth(half - 60); b.desc:SetJustifyH("LEFT")
+    b.desc:SetText(desc)
+    local e = T.tex(b, "ARTWORK", edgeC, 1); e:SetPoint("TOPLEFT", 1, -1); e:SetPoint("BOTTOMLEFT", 1, 1); e:SetWidth(4)
+    b.icon = b:CreateTexture(nil, "ARTWORK"); b.icon:SetSize(34, 34); b.icon:SetPoint("LEFT", 12, 0); b.icon:SetTexture(iconPath)
+    b:HookScript("OnEnter", function(self) self.border:SetColorTexture(edgeC[1], edgeC[2], edgeC[3], 1) end)
+    b:HookScript("OnLeave", function(self) local c = self.style.border; self.border:SetColorTexture(c[1], c[2], c[3], 1) end)
+    return b
+  end
+  self.spellCard = vsCard("Spell Battle", "vs Bot", "frame", C.red, T.MEDIA .. "Spells\\bomb", function() UI:ShowSheet("spell") end)
+  self.spellCard.tip = "Spells, mana and the stackrivals.io bot. Pick 2 spells for your board, 2 for the bot's."
+  self.duelBtn = vsCard("Duel", "1v1 with a guild member", "frame", C.steel, T.MEDIA .. "marksmall", function() UI:ShowSheet("duel") end)
+  self.duelBtn.tip = "Challenge a guild or group member: score race or Spell Battle."
   self.continueBtn = T.button(menu, "Continue last run", cw, 30, "primary", function() ns.App:ContinueSuspended() end)
-  self.continueBtn:SetPoint("TOP", menu, "TOP", 0, -62) -- above the cards when there is a run to continue
+  self.continueBtn:SetPoint("TOP", menu, "TOP", 0, -40) -- above the cards when there is a run to continue
   self.continueBtn.tip = "Your unfinished run from before /reload or logout, restored exactly."
-  -- secondary navigation (the multiplayer build adds "Duel" here)
+  -- secondary navigation
   self.navRow = CreateFrame("Frame", nil, menu)
   self.navRow:SetSize(cw, 28); self.navRow:SetPoint("BOTTOM", menu, "BOTTOM", 0, 34)
-  self.howBtn = T.button(self.navRow, "How to play", 130, 28, "frame", function() UI:ShowSheet("help") end)
-  self.duelBtn = T.button(self.navRow, "Duel", 130, 28, "steel", function() UI:ShowSheet("duel") end)
-  self.duelBtn.tip = "Challenge a guild or group member to a 1v1 score race."
-  self.recBtn = T.button(self.navRow, "Records", 130, 28, "frame", function() UI:ShowSheet("records") end)
-  self:LayoutNav({ self.howBtn, self.duelBtn, self.recBtn })
+  self.howBtn = T.button(self.navRow, "How to play", 140, 28, "frame", function() UI:ShowSheet("help") end)
+  self.recBtn = T.button(self.navRow, "Records", 140, 28, "frame", function() UI:ShowSheet("records") end)
+  self:LayoutNav({ self.howBtn, self.recBtn })
   self.statsLine = T.text(menu, SZ.label, C.label); self.statsLine:SetPoint("BOTTOM", 0, 12)
   self.statsLine:SetWidth(cw)
   self.menuFade = T.fadeInAnim(menu, 0.2)
@@ -469,21 +493,34 @@ function UI:CreateSettings()
 
   section("CONTROLS  -  click a key, then press the new key", L, -162)
   self.bindButtons = {}
-  for i, action in ipairs(DB.BIND_ORDER) do
-    local col = (i - 1) % 2
-    local row = math.floor((i - 1) / 2)
-    local lx, ly = (col == 0) and L or R, -180 - row * 30
-    local l = T.text(s, SZ.body, C.body); l:SetPoint("TOPLEFT", lx, ly - 6); l:SetText(DB.BIND_LABEL[action])
-    local b = T.button(s, "", 96, 26, "frame", function(btn) UI:BeginBind(action, btn) end)
-    b:SetPoint("TOPLEFT", lx + 104, ly)
+  local n = 0
+  for _, action in ipairs(DB.BIND_ORDER) do
+    if not action:match("^spell") then
+      n = n + 1
+      local col = (n - 1) % 2
+      local row = math.floor((n - 1) / 2)
+      local lx, ly = (col == 0) and L or R, -180 - row * 30
+      local l = T.text(s, SZ.body, C.body); l:SetPoint("TOPLEFT", lx, ly - 6); l:SetText(DB.BIND_LABEL[action])
+      local b = T.button(s, "", 96, 26, "frame", function(btn) UI:BeginBind(action, btn) end)
+      b:SetPoint("TOPLEFT", lx + 104, ly)
+      self.bindButtons[action] = b
+    end
+  end
+  -- Spell Battle keys: one row, slot 1-4 (the order of your loadout)
+  local sl2 = T.text(s, SZ.body, C.body); sl2:SetPoint("TOPLEFT", L, -306); sl2:SetText("Spells 1-4")
+  for i = 1, 4 do
+    local action = "spell" .. i
+    local b = T.button(s, "", 50, 26, "frame", function(btn) UI:BeginBind(action, btn) end)
+    b:SetPoint("TOPLEFT", L + 104 + (i - 1) * 56, -300)
+    b.tip = "Spell slot " .. i .. " (Spell Battle only)"
     self.bindButtons[action] = b
   end
-  local alt = T.text(s, SZ.label, C.label); alt:SetPoint("TOPLEFT", L, -304)
+  local alt = T.text(s, SZ.label, C.label); alt:SetPoint("TOPLEFT", L, -336)
   alt:SetWidth(412); alt:SetJustifyH("LEFT"); alt:SetSpacing(2)
-  alt:SetText("Also: A/D move, S soft drop, W/X rotate, L-Ctrl rotate left, Shift hold, Esc pause. Keys are only captured while a run is live.")
-  local rb = T.button(s, "Default controls", 150, 28, "frame", function() DB.resetBindings(db); UI:RefreshSettings() end)
-  rb:SetPoint("TOPLEFT", L, -336)
-  self.resetRecords = T.button(s, "Reset records", 170, 28, "frame", function(btn)
+  alt:SetText("Also: A/D move, S soft drop, W/X rotate, L-Ctrl rotate left, Shift hold, Esc pause, 1-4 spells. Keys are only captured while a run is live.")
+  local rb = T.button(s, "Default controls", 136, 28, "frame", function() DB.resetBindings(db); UI:RefreshSettings() end)
+  rb:SetPoint("BOTTOMLEFT", L, 18)
+  self.resetRecords = T.button(s, "Reset records", 150, 28, "frame", function(btn)
     if btn.armed then
       DB.resetRecords(db); btn.armed = false; btn:SetLabel("Records reset"); UI:RefreshMenu()
     else
@@ -492,7 +529,7 @@ function UI:CreateSettings()
   end)
   self.resetRecords:SetPoint("LEFT", rb, "RIGHT", 10, 0)
 
-  local done = T.button(s, "Done", 130, 32, "primary", function() UI:ShowSettings(false) end)
+  local done = T.button(s, "Done", 110, 32, "primary", function() UI:ShowSettings(false) end)
   done:SetPoint("BOTTOMRIGHT", -20, 16)
 end
 
@@ -656,6 +693,7 @@ function UI:OnHide()
   if self.settings and self.settings:IsShown() then self.settings:Hide() end
   if self.help then self.help:Hide(); self.records:Hide() end
   if self.duelSheet then self.duelSheet:Hide() end
+  if self.spellSheet then self.spellSheet:Hide() end
   ns.App:Pause("hidden")
   self:EndBind()
   self:SetKeyboard(false)
@@ -724,7 +762,7 @@ function UI:OnUpdate(elapsed)
   local App = ns.App
   local sess = App.session
   if sess then
-    if sess:isActive() and sess:update(elapsed) then self.dirty = true end
+    if (sess:isActive() or (sess.spell and sess.spell.settling)) and sess:update(elapsed) then self.dirty = true end
     if #sess.events > 0 then
       for _, ev in ipairs(sess:takeEvents()) do self:OnEvent(ev) end
     end
@@ -775,6 +813,7 @@ function UI:Callout(main, sub, color, points, tier, top)
 end
 
 function UI:OnEvent(ev)
+  if self.OnSpellEvent and self:OnSpellEvent(ev) then return end
   ns.Sound.forEvent(ev)
   local k = ev.kind
   if k == "clear" then
@@ -877,6 +916,7 @@ function UI:Render()
     self.countBox:Hide()
   end
   if sess.duel and self.RenderRival then self:RenderRival() end
+  if sess.spell and self.RenderSpell then self:RenderSpell(sess) end
 end
 
 --- Show the overlay that matches the current phase and take/release the keyboard.
@@ -899,6 +939,7 @@ function UI:RefreshPhase()
     if phase ~= "playing" and not self.goUntil then self.countBox:Hide() end
   end
   self.modeText:SetText(sess and not App.inMenu and string.upper(sess.mode.name) or "")
+  if self.SetSpellLayout then self:SetSpellLayout((sess and sess.spell and not App.inMenu) and true or false, sess and sess.spell and sess.spell.remote) end
   if self.RefreshDuel and self:RefreshDuel(phase) then phase = "lobby" end
   if phase == "paused" then
     local r = sess.pauseReason
@@ -961,12 +1002,26 @@ function UI:RefreshMenu()
     local m = Session.MODES[su.mode]
     self.continueBtn:SetLabel("Continue your " .. (m and m.name or "last") .. " run")
   end
-  local y = su and -100 or -62
+  -- with a run to continue the subtitle makes room for the Continue button
+  self.menuSub:SetShown(su == nil)
+  local y = su and -78 or -62
   for _, key in ipairs(Session.MODE_ORDER) do
     local b = self.modeButtons[key]
     b:ClearAllPoints(); b:SetPoint("TOP", self.menu, "TOP", 0, y)
     y = y - self.cardStep
   end
+  local cw = self.spellCard:GetWidth()
+  self.spellCard:ClearAllPoints(); self.spellCard:SetPoint("TOPLEFT", self.menu, "TOP", -cw - 4, y)
+  self.duelBtn:ClearAllPoints(); self.duelBtn:SetPoint("TOPLEFT", self.menu, "TOP", 4, y)
+  local sd = db.spell and db.spell.difficulty
+  if sd then
+    local st = db.spell.stats[sd]
+    local rec = (st.wins + st.losses + st.draws > 0) and string.format("  -  %d-%d", st.wins, st.losses) or ""
+    self.spellCard.desc:SetText("vs " .. (UI.DIFF_LABEL and UI.DIFF_LABEL[sd] or sd) .. " bot" .. rec)
+  end
+  local du = db.duels
+  if du and du.wins + du.losses + du.draws > 0 then self.duelBtn.desc:SetText(string.format("Guild 1v1  -  %d-%d", du.wins, du.losses)) end
+  if inCombat() then self.spellCard:Disable() else self.spellCard:Enable() end
   -- a brand-new player gets a default: Blitz is the short, forgiving way in
   local fresh = true
   for _, k in ipairs(Session.MODE_ORDER) do if db.records[k].games > 0 then fresh = false end end
@@ -996,6 +1051,16 @@ function UI:ShowOver(info)
     self.overReadyAt, self.overListenUntil = nil, 0
     self.badgePulse:Stop()
     self:ShowDuelOver(info.duel)
+    self.overFade:Play()
+    self:RefreshPhase()
+    return
+  end
+  self.modesBtn:SetLabel("Modes")
+  if info.spell then
+    self.overReadyAt = GetTime() + 1.0
+    self.overListenUntil = GetTime() + 6.0
+    self.badgePulse:Stop()
+    self:ShowSpellOver(ns.App.session)
     self.overFade:Play()
     self:RefreshPhase()
     return
@@ -1215,12 +1280,13 @@ end
 
 function UI:SheetOpen()
   return (self.help and self.help:IsShown()) or (self.records and self.records:IsShown()) or (self.settings and self.settings:IsShown())
-    or (self.duelSheet and self.duelSheet:IsShown()) or false
+    or (self.duelSheet and self.duelSheet:IsShown()) or (self.spellSheet and self.spellSheet:IsShown()) or false
 end
 
 function UI:HideSheets()
   if self.help then self.help:Hide(); self.records:Hide() end
   if self.duelSheet then self.duelSheet:Hide() end
+  if self.spellSheet then self.spellSheet:Hide() end
   if self.settings and self.settings:IsShown() then self:ShowSettings(false) end
 end
 
@@ -1230,6 +1296,7 @@ function UI:ShowSheet(which)
   self.help:SetShown(which == "help")
   self.records:SetShown(which == "records")
   if self.duelSheet then self.duelSheet:SetShown(which == "duel") end
+  if self.spellSheet then self.spellSheet:SetShown(which == "spell"); if which == "spell" then self.spellSheetDuel = false; self:RefreshSpellSheet() end end
   if self.settings:IsShown() then self:ShowSettings(false) end
   self:RefreshPhase()
 end

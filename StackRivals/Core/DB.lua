@@ -15,17 +15,24 @@ DB.MAX_LOG = 1500000
 DB.DEFAULT_BINDINGS = {
   left = "LEFT", right = "RIGHT", softDrop = "DOWN", hardDrop = "SPACE",
   rotateCW = "UP", rotateCCW = "Z", hold = "C", pause = "P",
+  -- Spell Battle: the web's Q / E / R / F. Only read during a Spell Battle run (while a run is
+  -- live every key is the game's anyway; outside a run these keys are WoW's).
+  spell1 = "Q", spell2 = "E", spell3 = "R", spell4 = "F",
 }
 -- Extra fixed keys that always work while playing (like the web game's alternates).
+-- 1-4 cast spells too (action-bar habit).
 DB.ALT_KEYS = {
   A = "left", D = "right", S = "softDrop", W = "rotateCW", X = "rotateCW",
   LSHIFT = "hold", RSHIFT = "hold", LCTRL = "rotateCCW", ESCAPE = "pause",
+  ["1"] = "spell1", ["2"] = "spell2", ["3"] = "spell3", ["4"] = "spell4",
 }
-DB.BIND_ORDER = { "left", "right", "softDrop", "hardDrop", "rotateCW", "rotateCCW", "hold", "pause" }
+DB.BIND_ORDER = { "left", "right", "softDrop", "hardDrop", "rotateCW", "rotateCCW", "hold", "pause", "spell1", "spell2", "spell3", "spell4" }
 DB.BIND_LABEL = {
   left = "Move left", right = "Move right", softDrop = "Soft drop", hardDrop = "Hard drop",
   rotateCW = "Rotate right", rotateCCW = "Rotate left", hold = "Hold", pause = "Pause",
+  spell1 = "Spell 1", spell2 = "Spell 2", spell3 = "Spell 3", spell4 = "Spell 4",
 }
+DB.SPELL_DIFFICULTIES = { "rookie", "challenger", "contender", "elite", "rival" }
 
 local function defaultSettings()
   return { sound = true, ghost = true, hideInCombat = true, scale = 1.0, minimapHide = false, minimapAngle = 215 }
@@ -208,9 +215,35 @@ function DB.sanitize(raw)
     end
   end
 
+  -- Spell Battle: chosen loadout + bot level, and results vs each bot level (local, never ranked).
+  local rsp = (type(raw.spell) == "table") and raw.spell or {}
+  local Sp = ns.Spells
+  local lo = str(rsp.loadout, 4)
+  db.spell = {
+    loadout = (Sp and lo and Sp.decodeLoadout(lo)) and lo or (Sp and Sp.encodeLoadout(Sp.DEFAULT_LOADOUT) or "1057"),
+    difficulty = "challenger", stats = {},
+  }
+  for _, d in ipairs(DB.SPELL_DIFFICULTIES) do
+    if rsp.difficulty == d then db.spell.difficulty = d end
+    local r = (type(rsp.stats) == "table" and type(rsp.stats[d]) == "table") and rsp.stats[d] or {}
+    db.spell.stats[d] = {
+      wins = math.floor(num(r.wins, 0, 0, 1e9)), losses = math.floor(num(r.losses, 0, 0, 1e9)),
+      draws = math.floor(num(r.draws, 0, 0, 1e9)), best = math.floor(num(r.best, 0, 0, 1e12)),
+    }
+  end
+
   -- An unfinished run saved at logout / reload (mode + web-compatible input log).
   local su = raw.suspended
-  if type(su) == "table" and ns.Session and ns.Session.MODES[su.mode] and str(su.log, DB.MAX_LOG) then
+  if type(su) == "table" and ns.Session and ns.Session.MODES[su.mode] and su.mode == "spellbot" then
+    -- Spell Battle vs Bot: your log (moves + casts); the bot is rebuilt from the seed
+    if str(su.seed, 64) and str(su.slog, DB.MAX_LOG) and str(su.loadout, 4) and str(su.difficulty, 16) and type(su.ticks) == "number" then
+      db.suspended = {
+        mode = su.mode, seed = su.seed, slog = su.slog, loadout = su.loadout, difficulty = su.difficulty,
+        ticks = math.floor(num(su.ticks, 0, 0, 1e6)), createdAtMs = num(su.createdAtMs, nil, 0, 1e15),
+        playSeconds = num(su.playSeconds, 0, 0, 1e9), date = str(su.date, 16),
+      }
+    end
+  elseif type(su) == "table" and ns.Session and ns.Session.MODES[su.mode] and str(su.log, DB.MAX_LOG) then
     db.suspended = { mode = su.mode, log = su.log, playSeconds = num(su.playSeconds, 0, 0, 1e9), date = str(su.date, 16) }
   end
   return db

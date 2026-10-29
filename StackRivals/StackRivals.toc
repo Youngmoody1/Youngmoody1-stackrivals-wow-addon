@@ -2,7 +2,7 @@
 ## Title: |cfff6f4f0Stack|r|cffe0242fRivals|r
 ## Notes: Competitive falling-block puzzle minigame. Classic, Blitz 2:00 and a Daily Blitz with the same pieces for everyone. Pauses itself in combat.
 ## Author: StackRivals
-## Version: 0.4.0
+## Version: 0.5.0
 ## SavedVariables: StackRivalsDB
 ## IconTexture: Interface\AddOns\StackRivals\Media\icon
 ## AddonCompartmentFunc: StackRivals_OnAddonCompartmentClick
@@ -14,7 +14,10 @@ Engine\Pieces.lua
 Engine\Engine.lua
 Engine\Input.lua
 Engine\Verify.lua
+Engine\Spells.lua
+Engine\Bot.lua
 Core\Session.lua
+Core\SpellBattle.lua
 Core\DB.lua
 Net\Protocol.lua
 Net\Codes.lua
@@ -27,4 +30,5 @@ Net\Comm.lua
 Core\Duel.lua
 Core\DuelDiag.lua
 UI\DuelUI.lua
+UI\SpellUI.lua
 Core\Main.lua

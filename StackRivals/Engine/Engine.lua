@@ -273,7 +273,8 @@ function E.applyInput(s, action)
 end
 
 --- Advance one fixed 60 Hz tick: gravity + lock delay. Mutates s.
-function E.tick(s)
+--- `gravity` (Spell Battle only): nil/"normal", "frozen" (no falling) or "double" (half the ticks per row).
+function E.tick(s, gravity)
   if s.gameOver then return end
   s.tick = s.tick + 1
   if not s.active then return end
@@ -283,8 +284,11 @@ function E.tick(s)
     return
   end
   s.lockCounter = 0
+  if gravity == "frozen" then return end
   s.gravityCounter = s.gravityCounter + 1
-  if s.gravityCounter >= E.gravityTicks(s.level) then
+  local g = E.gravityTicks(s.level)
+  if gravity == "double" then g = floor(g / 2); if g < 1 then g = 1 end end
+  if s.gravityCounter >= g then
     s.gravityCounter = 0
     tryMove(s, 0, 1)
   end
@@ -326,6 +330,82 @@ function E.replay(seed, config, log, untilTick)
   end
   return s
 end
+
+------------------------------------------------------------------------------------------------
+-- Spell Battle board effects (port of the web engine's; never used by classic play). Mutate s.
+------------------------------------------------------------------------------------------------
+E.GARBAGE_CELL = 8
+
+--- Clear the given cells {{x, y}, ...}; out-of-range cells are ignored.
+function E.clearCells(s, cells)
+  local w, h = s.config.width, rows(s.config)
+  for _, c in ipairs(cells) do
+    local x, y = c[1], c[2]
+    if x >= 0 and x < w and y >= 0 and y < h then s.board[y * w + x + 1] = 0 end
+  end
+end
+
+--- Remove the bottom n rows; everything above falls down by n.
+function E.removeBottomRows(s, n)
+  local w, h = s.config.width, rows(s.config)
+  local nb, k = {}, 0
+  for _ = 1, w * n do k = k + 1; nb[k] = 0 end
+  for i = 1, (h - n) * w do k = k + 1; nb[k] = s.board[i] end
+  s.board = nb
+end
+
+function E.clearBoard(s)
+  local b = s.board
+  for i = 1, #b do b[i] = 0 end
+end
+
+--- Push n garbage rows (one gap at column `gap`) up from the bottom. Blocks pushed off the top,
+--- or an active piece that can't be moved up out of the new rows, end the game.
+function E.addGarbage(s, n, gap)
+  if s.gameOver then return end
+  local w = s.config.width
+  local old = s.board
+  local lost = false
+  for i = 1, n * w do if old[i] ~= 0 then lost = true end end
+  local nb, k = {}, 0
+  for i = n * w + 1, #old do k = k + 1; nb[k] = old[i] end
+  for _ = 1, n do for x = 0, w - 1 do k = k + 1; nb[k] = (x == gap) and 0 or E.GARBAGE_CELL end end
+  s.board = nb
+  if lost then
+    s.gameOver = true
+    s.active = nil
+    return
+  end
+  local p = s.active
+  if p then
+    local y = p.y
+    while collidesAt(s, p.id, p.rotation, p.x, y) and y > 0 do y = y - 1 end
+    if collidesAt(s, p.id, p.rotation, p.x, y) then
+      s.gameOver = true
+      s.active = nil
+    else
+      s.active = { id = p.id, rotation = p.rotation, x = p.x, y = y }
+    end
+  end
+end
+
+--- Swap the active piece with hold (if any) or else with the next queued piece.
+function E.swapActive(s)
+  if not s.active or s.gameOver then return end
+  local current = s.active.id
+  if s.hold then
+    local h = s.hold
+    s.hold = current
+    spawn(s, h)
+  else
+    local n = s.queue[1]
+    s.queue[1] = current
+    spawn(s, n)
+  end
+end
+
+--- Replace the next queued piece.
+function E.replaceNext(s, id) s.queue[1] = id end
 
 local function num(n) return format("%.0f", n) end
 

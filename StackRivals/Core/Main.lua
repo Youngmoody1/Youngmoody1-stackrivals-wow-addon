@@ -68,7 +68,13 @@ function App:Start(mode)
   if ns.Duel then ns.Duel.clear() end -- a finished/cancelled duel must not cover the new run
   ns.UI:Create()
   local seed = (mode == "daily") and Session.dailySeed(self:Today()) or newSeed()
-  self.session = Session.new(mode, seed, self:Today())
+  local opts
+  if mode == "spellbot" then
+    -- your saved loadout and bot level; the match time picks the bot tuning (as on the web)
+    opts = { loadout = ns.Spells.decodeLoadout(ns.db.spell.loadout) or ns.Spells.DEFAULT_LOADOUT,
+      difficulty = ns.db.spell.difficulty, createdAtMs = (time and time() or 0) * 1000 }
+  end
+  self.session = Session.new(mode, seed, self:Today(), opts)
   self.lastMode = mode
   self.inMenu = false
   ns.db.suspended = nil
@@ -79,7 +85,19 @@ end
 function App:ContinueSuspended()
   local su = ns.db.suspended
   if not su then return end
-  local sess = Session.restore(su.mode, su.log, su.playSeconds, su.date)
+  local sess
+  if su.mode == "spellbot" then
+    sess = Session.new("spellbot", su.seed, su.date, { loadout = ns.Spells.decodeLoadout(su.loadout), difficulty = su.difficulty, createdAtMs = su.createdAtMs })
+    if ns.SpellBattle.restore(sess, su) then
+      sess.events = {}
+      sess.playSeconds = su.playSeconds or 0
+      sess.phase, sess.resumePhase, sess.pauseReason = "paused", "playing", "restored"
+    else
+      sess = nil
+    end
+  else
+    sess = Session.restore(su.mode, su.log, su.playSeconds, su.date)
+  end
   ns.db.suspended = nil
   if not sess then self:Print("That saved run could not be restored."); ns.UI:RefreshMenu(); return end
   self.session = sess
@@ -125,7 +143,13 @@ function App:StartDuel(m)
     local data = cur:suspendData() -- keep an unfinished solo run for "Continue last run"
     if data then data.date = cur.date or self:Today(); ns.db.suspended = data end
   end
-  local s = Session.new("duel_" .. m.rulesetId, m.seed, self:Today())
+  local opts
+  if m.ruleset.spell then
+    -- Spell Battle duel: my locked loadout; my casts on the rival go out as SP messages
+    opts = { loadout = ns.Spells.decodeLoadout(m.myLoadout), remote = {
+      loadout = ns.Spells.decodeLoadout(m.rivalLoadout), send = function(inc) ns.Duel.sendCast(m, inc) end } }
+  end
+  local s = Session.new("duel_" .. m.rulesetId, m.seed, self:Today(), opts)
   s.duel = m
   self.session = s
   self.lastMode = s.mode.key
@@ -145,8 +169,15 @@ function App:OnRunOver(reason)
   s.recorded = true
   if s.duel then
     ns.Sound.play("gameover")
-    ns.Duel.onLocalEnd(s.state)
+    ns.Duel.onLocalEnd(s.state, s.spell and s.spell.me.log or nil)
     ns.UI:ShowOver({ state = s.state, reason = reason, mode = s.mode.key, modeName = s.mode.name, duel = s.duel })
+    return
+  end
+  if s.spell then
+    -- Spell Battle vs Bot: the result is final once the bot has played out (see OnSpellResult)
+    ns.Sound.play("gameover")
+    ns.UI:ShowOver({ state = s.state, reason = reason, mode = s.mode.key, modeName = s.mode.name, spell = s.spell })
+    if s.spell.result then self:OnSpellResult() end
     return
   end
   local mode = s.mode.key
@@ -156,6 +187,22 @@ function App:OnRunOver(reason)
     state = s.state, reason = reason, mode = mode, modeName = s.mode.name,
     newBest = res.newBest, prevBest = res.prevBest, newTodayBest = res.newTodayBest, rank = res.rank,
   })
+  ns.UI:RefreshMenu()
+end
+
+--- Spell Battle vs Bot result is final: count it once (local stats, never ranked), show it.
+function App:OnSpellResult()
+  local s = self.session
+  if not s or not s.spell or not s.spell.result or s.spellCounted then return end
+  s.spellCounted = true
+  local r = s.spell.result
+  local st = ns.db.spell.stats[s.spell.difficulty]
+  if st then
+    if r.outcome == "win" then st.wins = st.wins + 1 elseif r.outcome == "loss" then st.losses = st.losses + 1 else st.draws = st.draws + 1 end
+    if r.me > st.best then st.best = r.me end
+  end
+  ns.Sound.play(r.outcome == "win" and "record" or "gameover")
+  if ns.UI.over and ns.UI.over:IsShown() then ns.UI:ShowSpellOver(s) end
   ns.UI:RefreshMenu()
 end
 
@@ -192,6 +239,8 @@ local function slash(msg)
     ns.UI:Toggle()
   elseif cmd == "classic" or cmd == "blitz" or cmd == "daily" then
     App:Start(cmd)
+  elseif cmd == "spell" or cmd == "spells" then
+    ns.UI:Create(); ns.UI.frame:Show(); App:ShowMenu(); ns.UI:ShowSheet("spell")
   elseif cmd == "pause" then
     App:Pause("manual")
   elseif cmd == "settings" or cmd == "options" or cmd == "config" then
@@ -233,7 +282,7 @@ local function slash(msg)
   elseif cmd == "version" then
     App:Print("version " .. ns.VERSION .. ", engine v" .. E.ENGINE_VERSION .. ", interface " .. tostring(select(4, GetBuildInfo())))
   else
-    App:Print("commands: /sr (open), /sr blitz | classic | daily, /sr duel [Name] [3], /sr leave, /sr pause, /sr settings, /sr minimap, /sr scale 0.8, /sr reset, /sr sound, /sr stats, /sr version")
+    App:Print("commands: /sr (open), /sr blitz | classic | daily, /sr spell, /sr duel [Name] [3], /sr leave, /sr pause, /sr settings, /sr minimap, /sr scale 0.8, /sr reset, /sr sound, /sr stats, /sr version")
   end
 end
 

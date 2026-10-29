@@ -47,19 +47,22 @@ function UI:CreateDuelSheet()
   local cw = self.frame:GetWidth() - 2 * L - 2
   local title = T.display(s, SZ.title, C.paper); title:SetPoint("TOPLEFT", L, -14); title:SetText("DUEL")
   local sub = T.text(s, SZ.small, C.label); sub:SetPoint("TOPLEFT", L, -38)
-  sub:SetText("1v1 score race. Same pieces for both. Highest score wins.")
+  s.sub = sub
 
-  -- ruleset: a two-way segmented choice
+  -- ruleset: a three-way segmented choice
   self.duelRuleset = "b120"
-  local b120 = T.button(s, "Blitz 2:00", 118, 30, "frame", function() UI.duelRuleset = "b120"; UI:RefreshDuelSheet() end)
+  local b120 = T.button(s, "Blitz 2:00", 96, 30, "frame", function() UI.duelRuleset = "b120"; UI:RefreshDuelSheet() end)
   b120:SetPoint("TOPLEFT", L, -62)
-  b120.tip = "2 minutes, 3 s countdown."
-  local r180 = T.button(s, "3:00 web rules", 132, 30, "frame", function() UI.duelRuleset = "r180"; UI:RefreshDuelSheet() end)
+  b120.tip = "Score race: 2 minutes, 3 s countdown."
+  local r180 = T.button(s, "3:00", 70, 30, "frame", function() UI.duelRuleset = "r180"; UI:RefreshDuelSheet() end)
   r180:SetPoint("LEFT", b120, "RIGHT", 4, 0)
-  r180.tip = "3 minutes and a 4 s countdown: the same rules as a 1v1 on stackrivals.io."
-  s.b120, s.r180 = b120, r180
+  r180.tip = "Score race, 3 minutes and a 4 s countdown: the same rules as a 1v1 on stackrivals.io."
+  local s180 = T.button(s, "Spell Battle", 112, 30, "frame", function() UI.duelRuleset = "s180"; UI:RefreshDuelSheet() end)
+  s180:SetPoint("LEFT", r180, "RIGHT", 4, 0)
+  s180.tip = "Spell Battle 3:00 with the web's spells: casts land on your rival's board. Both need StackRivals 0.5+."
+  s.b120, s.r180, s.s180 = b120, r180, s180
 
-  local find = T.button(s, "Find players", 146, 30, "primary", function()
+  local find = T.button(s, "Find players", 120, 30, "primary", function()
     local okFind, why = ns.Duel.findPlayers()
     UI.duelFindNote = okFind and "Asked your guild and group..." or (why == "cooldown" and "Just asked - wait a moment." or (ns.Duel.WHY_NOT[why] or "Join a guild or group to find players."))
     UI:RefreshDuelSheet()
@@ -111,6 +114,10 @@ function UI:RefreshDuelSheet()
   if not s or not s:IsShown() then return end
   setSegment(s.b120, self.duelRuleset == "b120")
   setSegment(s.r180, self.duelRuleset == "r180")
+  setSegment(s.s180, self.duelRuleset == "s180")
+  s.sub:SetText(self.duelRuleset == "s180" and "1v1 Spell Battle. Same pieces, spells hit each other's boards."
+    or "1v1 score race. Same pieces for both. Highest score wins.")
+  local minV = P.RULESET_MIN_VERSION[self.duelRuleset]
   s.note:SetText(not ns.Comm.enabled and "Addon messages are not available in this client."
     or ns.Comm.trial and "Trial/Veteran account: Blizzard blocks addon messages, so duels can't work."
     or (self.duelFindNote or ""))
@@ -122,9 +129,10 @@ function UI:RefreshDuelSheet()
     local p = list[i]
     if p then
       row.name:SetText(short(p.name))
-      row.info:SetText(not p.compatible and "other version" or (p.busy and "in a duel" or ("v" .. p.addon)))
+      local old = minV and not P.versionAtLeast(p.addon, minV)
+      row.info:SetText(not p.compatible and "other version" or (p.busy and "in a duel") or (old and ("v" .. p.addon .. ", needs " .. minV)) or ("v" .. p.addon))
       row.btn.target = p.name
-      if p.compatible and not p.busy and not busy then row.btn:Enable() else row.btn:Disable() end
+      if p.compatible and not p.busy and not busy and not old then row.btn:Enable() else row.btn:Disable() end
       row:Show()
     else
       row:Hide()
@@ -201,6 +209,19 @@ function UI:CreateDuelOverlays()
   o.status = T.text(o, SZ.body, C.body); o.status:SetPoint("TOP", 0, -162); o.status:SetWidth(w - 80)
   o.ready = T.button(o, "Ready", 220, 36, "primary", function() ns.Duel.ready() end)
   o.ready:SetPoint("TOP", 0, -202)
+  -- Spell Battle: your 4 spells (locked at Ready) and a way to change them
+  local sr = CreateFrame("Frame", nil, o)
+  sr:SetSize(4 * 32 + 10 + 120, 30); sr:SetPoint("TOP", 0, -190)
+  sr.icons = {}
+  for i = 1, 4 do
+    local ic = sr:CreateTexture(nil, "ARTWORK"); ic:SetSize(28, 28); ic:SetPoint("LEFT", (i - 1) * 32, 0)
+    sr.icons[i] = ic
+  end
+  sr.change = T.button(sr, "Change spells", 120, 28, "frame", function() UI:ShowSpellPicker(true) end)
+  sr.change:SetPoint("LEFT", 4 * 32 + 10, 0)
+  sr.locked = T.text(sr, SZ.small, C.label); sr.locked:SetPoint("LEFT", 4 * 32 + 10, 0); sr.locked:SetText("locked")
+  sr:Hide()
+  o.spells = sr
   o.cancel = T.button(o, "Cancel", 220, 28, "frame", function()
     local m = ns.Duel.current
     if m and (m.state == "cancelled") then ns.Duel.clear(); ns.App:ShowMenu() else ns.Duel.leave() end
@@ -259,6 +280,13 @@ function UI:RefreshDuel(phase)
       o.status:SetText(m.silentWarned and "No answer from your rival... (connection?)" or "Press Ready when you are set.")
       chip(o.meCard.state, m.myReady); chip(o.themCard.state, m.rivalReady)
       if not m.myReady then o.ready:Show() end
+      if m.ruleset.spell then
+        local S = ns.Spells
+        local lo = S.decodeLoadout(m.myLoadout or ns.db.spell.loadout) or S.DEFAULT_LOADOUT
+        for i, ic in ipairs(o.spells.icons) do ic:SetTexture(T.MEDIA .. "Spells\\" .. lo[i]) end
+        o.spells.change:SetShown(not m.myReady)
+        o.spells.locked:SetShown(m.myReady)
+      end
       if UI.inCombat() then o.ready:Disable() else o.ready:Enable() end
     else
       local why = CANCEL[m.endReason] or "Duel cancelled."
@@ -266,6 +294,9 @@ function UI:RefreshDuel(phase)
       o.meCard.state:SetText(""); o.themCard.state:SetText("")
       o.cancel:SetLabel("Back")
     end
+    local spell = m.ruleset and m.ruleset.spell and m.state == "lobby"
+    o.spells:SetShown(spell and true or false)
+    o.ready:ClearAllPoints(); o.ready:SetPoint("TOP", 0, spell and -232 or -202)
     self.menu:Hide(); self.pause:Hide(); self.over:Hide()
   else
     o:Hide()
@@ -321,7 +352,14 @@ function UI:ShowDuelOver(m)
     self.overScore:SetText(T.commas(m.myScore or 0))
     self.overBadge:SetText(short(m.rival) .. ": " .. T.commas(m.theirScore or 0))
     self.overBadge:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
-    self.overDetail:SetText(REASON[m.endReason] or "")
+    local note = REASON[m.endReason] or ""
+    if m.spell and m.endReason == "checked" then
+      note = "Both games replayed together on your PC (peer check)."
+      if m.spell.diverged then note = note .. " A spell reached a board late, so the replay differs from what you saw." end
+    elseif m.spell and m.endReason == "check_failed" then
+      note = "Your rival's spells or moves failed the replay check: their result is rejected."
+    end
+    self.overDetail:SetText(note)
     self.againBtn:SetLabel("Rematch")
     if m.outcome == "win" then self.badgePulse:Stop(); self.badgePulse:Play() end
   end
