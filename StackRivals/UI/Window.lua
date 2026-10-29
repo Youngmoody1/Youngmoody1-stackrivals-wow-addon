@@ -749,6 +749,9 @@ function UI:Callout(main, sub, color, points, tier, top)
   self.calloutAnim:Stop(); self.calloutSoft:Stop()
   if tier == "soft" then self.calloutSoft:Play() else self.calloutAnim:Play() end
   if points and points > 0 then
+    -- right under the last visible line of the callout (no gap when there's no combo line)
+    local sp = self.scorePopBox
+    sp:ClearAllPoints(); sp:SetPoint("TOP", (sub and sub ~= "") and self.callout2 or self.callout, "BOTTOM", 0, -6)
     self.scorePop:SetText("+" .. T.commas(points))
     self.scorePopAnim:Stop(); self.scorePopAnim:Play()
   end
@@ -946,6 +949,9 @@ end
 
 function UI:ShowOver(info)
   local s = info.state
+  -- a callout from the last line clear must not sit behind the result
+  self.calloutAnim:Stop(); self.calloutSoft:Stop(); self.calloutBox:SetAlpha(0)
+  self.scorePopAnim:Stop(); self.scorePopBox:SetAlpha(0)
   self.overTitle:SetText(info.reason == "time" and "TIME!" or "GAME OVER")
   self.overScore:SetText(T.commas(s.score))
   self.badgePulse:Stop()
