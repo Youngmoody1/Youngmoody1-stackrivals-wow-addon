@@ -179,6 +179,7 @@ try {
   match = {
     timeCapMs: m.DEFAULT_TIME_CAP_MS, countdownMs: m.COUNTDOWN_MS, maxInputsPerTick: m.MAX_INPUTS_PER_TICK,
     maxInputsPerSecond: m.MAX_INPUTS_PER_SECOND, reconnectGraceMs: m.RECONNECT_GRACE_MS,
+    clockSlackMs: m.CLOCK_SLACK_MS,
   };
 } catch { /* web match rules unavailable: leave empty */ }
 const kicks: Record<string, number[][]> = {};

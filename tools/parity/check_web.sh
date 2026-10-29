@@ -32,6 +32,11 @@ else
   echo "(base commit not in this checkout's history; fetch more history to list commits)"
 fi
 
+# SR1 cross-platform codes: the TS reference + the web's real verifyLog must reproduce every vector
+echo
+echo "== SR1 code vectors vs web @ ${HEAD:0:7} =="
+bun tools/sr1/check_vectors.ts "$WEB" docs/vectors/sr1.json || SR1_FAIL=1
+
 TMP=$(mktemp)
 trap 'rm -f "$TMP"' EXIT
 bun tools/parity/gen-fixtures.ts "$WEB" > "$TMP"
@@ -43,5 +48,9 @@ if SR_FIXTURES="$TMP" "$LUA" -e 'local H=assert(loadfile("tests/test_engine.lua"
 else
   echo "FAIL: gameplay differs. Review the lines above, port the change (docs/WEB_SYNC.md), bump"
   echo "ENGINE_VERSION in Lua if the web bumped it, then regenerate the fixtures."
+  exit 1
+fi
+if [ -n "${SR1_FAIL:-}" ]; then
+  echo "FAIL: SR1 code vectors differ between the addon and the web (see above)."
   exit 1
 fi

@@ -20,9 +20,13 @@ V.MAX_INPUTS_PER_SECOND = 80
 V.TIME_CAP_MS = 180000 -- web 1v1 default cap; a ruleset may use a shorter cap
 V.COUNTDOWN_MS = 4000
 V.RECONNECT_GRACE_MS = 15000
+V.CLOCK_SLACK_MS = 3000 -- web CLOCK_SLACK_MS: a log may run up to 3 s longer than the observed clock
 
 --- Verify a flat log {tick, action, tick, action, ...}.
---- opts: seed, capTicks, claimed = {score, lines, hash} (optional)
+--- opts: seed, capTicks, claimed = {score, lines, level?, hash} (optional),
+---       engine (optional: the log's engine version, like the web's log.v),
+---       elapsedMs (optional: wall-clock ms observed by the verifier, enables faster_than_clock)
+--- Reasons appear in the web's order; claim_mismatch / hash_mismatch are added after (import spec).
 --- Returns { ok, reasons = {...}, score, lines, level, ticks, hash, toppedOut }
 function V.verify(log, logSeed, logTicks, opts)
   local reasons = {}
@@ -30,10 +34,14 @@ function V.verify(log, logSeed, logTicks, opts)
     reasons[#reasons + 1] = r
     return { ok = false, reasons = reasons, score = 0, lines = 0, level = 1, ticks = 0, hash = nil, toppedOut = false }
   end
+  if opts.engine ~= nil and opts.engine ~= E.ENGINE_VERSION then return fail("engine_mismatch") end
   if logSeed ~= opts.seed then return fail("seed_mismatch") end
   if type(logTicks) ~= "number" or logTicks < 0 or logTicks % 1 ~= 0 then return fail("malformed_log") end
   local cap = opts.capTicks
   if logTicks > cap then reasons[#reasons + 1] = "over_time_cap" end
+  if opts.elapsedMs and (logTicks / E.TICKS_PER_SECOND) * 1000 > opts.elapsedMs + V.CLOCK_SLACK_MS then
+    reasons[#reasons + 1] = "faster_than_clock"
+  end
 
   local n = #log
   if n % 2 ~= 0 then return fail("malformed_log") end
@@ -72,7 +80,9 @@ function V.verify(log, logSeed, logTicks, opts)
   }
   local c = opts.claimed
   if c then
-    if c.score ~= res.score or c.lines ~= res.lines then reasons[#reasons + 1] = "claim_mismatch" end
+    if c.score ~= res.score or c.lines ~= res.lines or (c.level and c.level ~= res.level) then
+      reasons[#reasons + 1] = "claim_mismatch"
+    end
     if c.hash and c.hash ~= res.hash then reasons[#reasons + 1] = "hash_mismatch" end
   end
   res.ok = #reasons == 0

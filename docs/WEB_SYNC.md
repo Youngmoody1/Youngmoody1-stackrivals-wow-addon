@@ -9,11 +9,13 @@ silent automatic updates would be fragile. What *is* automated is the **comparis
 | | |
 |---|---|
 | Web repo | `Youngmoody1/stackrivals-practice-arena` (read-only from this project) |
-| Web commit the addon matches | `5d2a9fda381db6dc86d28afb964e82b00c8553e7` (29 Oct 2026) — stored in `tests/fixtures/parity.lua` |
+| Web commit the addon matches | `29afe520d483539a3bc83417c542bf43fffae874` (29 Oct 2026) — stored in `tests/fixtures/parity.lua` |
 | Engine version | `ENGINE_VERSION = 1` on both sides |
-| Verified by | rules fingerprint (every constant) + 66 replayed games + PRNG vectors + Daily sequences, all equal |
+| Verified by | rules fingerprint (every constant, incl. the 1v1 match rules and `CLOCK_SLACK_MS`) + 66 replayed games + PRNG vectors + Daily sequences, all equal |
+| Shared codes | SR1 vectors (`docs/vectors/sr1.json`): TS reference + the web's real `verifyLog` reproduce all 57 checks |
 
-The engine code has not changed on the web between `5bb25f2` (the original port) and `5d2a9fd`.
+The engine code has not changed on the web between `5bb25f2` (the original port) and `29afe52`
+(the commits after `5d2a9fd` are layout/QA only).
 
 ## How a web change is detected
 
@@ -35,7 +37,10 @@ tools/parity/check_web.sh ../stackrivals-practice-arena
      replayed in Lua must reach the exact same `hashState`, score, lines, level, piece count and
      game-over at three checkpoints each.
    - **Piece generation**: PRNG vectors and the first 14 Daily Blitz pieces for fixed dates.
-3. PASS means nothing to port. FAIL lists exactly what to port.
+3. Checks the SR1 cross-platform code vectors with `tools/sr1/check_vectors.ts`: the TypeScript
+   reference decoder plus the web's real `verifyLog` must reproduce every expectation the Lua
+   addon generated (decode errors, replayed score, hash, rejection reasons in order).
+4. PASS means nothing to port. FAIL lists exactly what to port.
 
 ## Porting procedure (reviewed, never automatic)
 

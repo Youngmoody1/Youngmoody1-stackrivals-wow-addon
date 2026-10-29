@@ -17,6 +17,7 @@ Engine\Verify.lua
 Core\Session.lua
 Core\DB.lua
 Net\Protocol.lua
+Net\Codes.lua
 UI\Theme.lua
 Core\Sound.lua
 UI\Board.lua
