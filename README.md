@@ -98,7 +98,8 @@ The release ZIP contains only `StackRivals/`. The same commit always builds the 
 Docs: [testing in WoW](docs/TESTING_IN_WOW.md) · [compatibility](docs/COMPATIBILITY.md) ·
 [release plan](docs/RELEASE_PLAN.md) · [launch day](docs/LAUNCH_DAY.md) ·
 [CurseForge listing](docs/CURSEFORGE.md) · [architecture](docs/ARCHITECTURE.md) ·
-[previews](docs/preview/README.md) · [web sync](docs/WEB_SYNC.md)
+[previews](docs/preview/README.md) · [web sync](docs/WEB_SYNC.md) ·
+[multiplayer spec](docs/CROSS_PLATFORM_MULTIPLAYER.md) · [prompt for the web project](docs/WEB_INTEGRATION_PROMPT.md)
 
 ## License
 

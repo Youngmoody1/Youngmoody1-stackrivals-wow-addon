@@ -63,7 +63,7 @@ tools/parity/check_web.sh ../stackrivals-practice-arena
 | Same-seed daily run | ✅ **Daily Blitz** | WoW-only. The web's "daily challenges" are XP tasks, not a shared-seed run |
 | Replays from input logs | ◐ data only | Best runs are stored in the web log format; no replay viewer in WoW |
 | vs Bot (5 difficulties) | ❌ not yet | The bot is deterministic TS; could be ported later |
-| Quick Match / Direct Challenge (1v1 score race, shared seed, 3:00 cap) | ❌ planned | WoW guild/party duels; see docs/CROSS_PLATFORM_MULTIPLAYER.md |
+| Quick Match / Direct Challenge (1v1 score race, shared seed, 3:00 cap) | ◐ WoW duels (branch `multiplayer`) | Guild/party/whisper duels; ruleset `r180` = web 1v1 cap + countdown; peer-checked, not server-verified. See docs/CROSS_PLATFORM_MULTIPLAYER.md |
 | Spell Battle (mana, 9 spells) | ❌ | Bigger project; its engine module is separate on the web |
 | Server verification, fraud checks | ❌ | No internet from WoW; local results are labelled unverified |
 | Ratings, ranks, seasons, leaderboards | ❌ | Needs verified results |
