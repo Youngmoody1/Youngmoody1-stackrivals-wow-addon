@@ -208,6 +208,22 @@ describe("Spell Battle duel between two simulated clients", function()
     eq(ma.myScore, mb.theirScore); eq(ma.theirScore, mb.myScore)
   end)
 
+  it("disconnect right after casting (spell still on its way): the one who stays wins, nothing breaks", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    play(net, a, b, 2400)
+    -- Bob casts, then his connection dies before the spell lands
+    local sb = b.ns.App.session
+    sb.spell.me.mana = 20
+    sb:press("spell3"); net.step(2)
+    b.online = false
+    play(net, a, b, 10800, nil, function() end)
+    finishBoth(net, a, b)
+    eq(ma.state, "done")
+    ok(ma.endReason == "rival_disconnected" or ma.endReason == "rival_offline" or ma.endReason == "unchecked", ma.endReason)
+    ok(ma.outcome == "win" or ma.outcome == "void", ma.outcome)
+  end)
+
   it("rematch keeps the Spell Battle rules and asks for spells again", function()
     local net, a, b = pair()
     local ma, mb = startSpellDuel(net, a, b)
