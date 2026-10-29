@@ -69,12 +69,16 @@ S.list = {
   { "1-menu", "Mode menu", function()
     local M, ns = boot(); seedRecords(ns); SlashCmdList.STACKRIVALS(""); M.frames_step(1); return M, ns
   end },
-  { "2-how-to-play", "How to play (first open)", function()
-    local M, ns = boot(); ns.db.seenHelp = false; SlashCmdList.STACKRIVALS(""); M.frames_step(1); return M, ns
+  { "2-how-to-play", "How to play", function()
+    local M, ns = boot(); ns.db.seenHelp = false; SlashCmdList.STACKRIVALS(""); ns.UI:ShowSheet("help"); M.frames_step(1); return M, ns
+  end },
+  { "2b-first-run", "First run - countdown shows the controls", function()
+    local M, ns = boot(); ns.db.seenHelp = false; SlashCmdList.STACKRIVALS(""); ns.UI.modeButtons.blitz:Click(); M.frames_step(70); return M, ns
   end },
   { "3-classic", "Classic - mid game", function()
     local M, ns = boot(); seedRecords(ns); play(M, ns, "classic")
-    ns.UI:Callout("DOUBLE", "COMBO x2", nil); M.frames_step(1); return M, ns
+    ns.UI.callout2:SetTextColor(ns.T.C.redLight[1], ns.T.C.redLight[2], ns.T.C.redLight[3])
+    ns.UI:Callout("DOUBLE", "COMBO x2", nil, 950); M.frames_step(1); return M, ns
   end },
   { "4-blitz", "Blitz 2:00 - timer", function()
     local M, ns = boot(); seedRecords(ns); play(M, ns, "blitz"); M.frames_step(1); return M, ns

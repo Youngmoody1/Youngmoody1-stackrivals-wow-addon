@@ -11,7 +11,9 @@ from PIL import Image, ImageDraw, ImageFont
 SCALE = 2  # render at 2x for crisp text
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed.ttf"
 FONT_B = "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf"
-BANNER = "DEVELOPER PREVIEW - generated from the addon layout code, not an in-game screenshot"
+BANNER = "SIMULATED PREVIEW - addon layout code in a WoW API mock. NOT a screenshot from a WoW client."
+BANNER2 = "Brand font + textures are the real files; WoW's font is approximated. Animations: visible frame."
+ADDON_FONTS = "StackRivals/Media/Fonts"
 
 
 def load_tex(media, path):
@@ -27,7 +29,7 @@ def render(dump, media, out_png):
     rows = [l.rstrip("\n").split("\t") for l in open(dump, encoding="utf-8")]
     _, w, h, title = rows[0]
     w, h = int(w), int(h)
-    pad, top = 24, 56
+    pad, top = 24, 68
     img = Image.new("RGBA", ((w + pad * 2) * SCALE, (h + pad * 2 + top) * SCALE), (36, 30, 26, 255))
     d = ImageDraw.Draw(img, "RGBA")
     # backdrop that hints "game world" behind the window
@@ -65,10 +67,13 @@ def render(dump, media, out_png):
             d = ImageDraw.Draw(img, "RGBA")
         elif kind == "TEXT":
             l, b, r, t, cr, cg, cb, a = map(float, row[1:9])
-            size, justify, flags, text = int(row[9]), row[10], row[11], row[12]
+            size, justify, flags, fname, text = int(row[9]), row[10], row[11], row[12], row[13]
             if a <= 0.02:
                 continue
-            font = ImageFont.truetype(FONT_B if size >= 14 else FONT, int(size * SCALE * 1.02))
+            if fname.startswith("ChakraPetch"):  # the addon's bundled display font: the real file
+                font = ImageFont.truetype(os.path.join(ADDON_FONTS, fname + ".ttf"), int(size * SCALE))
+            else:  # WoW's own font is not available here: approximation
+                font = ImageFont.truetype(FONT_B if size >= 14 else FONT, int(size * SCALE * 1.02))
             color = (int(cr * 255), int(cg * 255), int(cb * 255), int(a * 255))
             lines = text.split("\\n")
             x0, y0, x1, y1 = box(l, b, r, t)
@@ -92,9 +97,11 @@ def render(dump, media, out_png):
     # banner
     bf = ImageFont.truetype(FONT_B, 13 * SCALE)
     sf = ImageFont.truetype(FONT, 12 * SCALE)
-    d.rectangle((0, 0, img.size[0], 44 * SCALE), fill=(242, 207, 107, 255))
-    d.text((12 * SCALE, 6 * SCALE), title, font=bf, fill=(10, 14, 26, 255))
-    d.text((12 * SCALE, 24 * SCALE), BANNER, font=sf, fill=(60, 50, 20, 255))
+    sf2 = ImageFont.truetype(FONT, 10 * SCALE)
+    d.rectangle((0, 0, img.size[0], 56 * SCALE), fill=(242, 207, 107, 255))
+    d.text((12 * SCALE, 5 * SCALE), title, font=bf, fill=(10, 14, 26, 255))
+    d.text((12 * SCALE, 23 * SCALE), BANNER, font=sf2, fill=(110, 20, 26, 255))
+    d.text((12 * SCALE, 39 * SCALE), BANNER2, font=sf2, fill=(60, 50, 20, 255))
     img.convert("RGB").save(out_png, optimize=True)
     return img
 

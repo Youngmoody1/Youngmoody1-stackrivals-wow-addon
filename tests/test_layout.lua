@@ -53,7 +53,7 @@ describe("layout of every screen", function()
       for _, b in ipairs(buttons) do
         if b.fs and type(b.fs._text) == "string" and b.fs._text ~= "" then
           local br, size = R.rect(b), b.fs._font[2]
-          local lw = L.textWidth(b.fs._text, size)
+          local lw = L.textWidth(b.fs._text, size, b.fs._font[1])
           if not b.noPress and lw > (br.r - br.l) - 4 then
             problems[#problems + 1] = string.format("label too wide for button: %s (%.0f > %.0f)", name(b.fs), lw, br.r - br.l - 4)
           end

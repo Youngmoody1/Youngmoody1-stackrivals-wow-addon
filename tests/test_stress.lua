@@ -50,7 +50,8 @@ local function rng(seed)
   local x = seed
   return function(n)
     x = (x * 1103515245 + 12345) % 2147483648
-    return (x % n) + 1
+    -- use the high bits: the low bits of this LCG repeat with a very short period
+    return (math.floor(x / 65536) % n) + 1
   end
 end
 

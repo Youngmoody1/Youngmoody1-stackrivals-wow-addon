@@ -47,7 +47,8 @@ for dp, _, fs in os.walk(addon):
         if fn.startswith("."): err(f"hidden file in addon: {rel}")
         if fn.endswith(".lua") and rel not in listed: err(f"{rel} is not in the TOC (orphan)")
         ext = os.path.splitext(fn)[1].lower()
-        if ext not in (".lua", ".toc", ".tga", ".blp", ".ogg", ".mp3", ".ttf", ".xml"):
+        license_text = ext == ".txt" and os.path.basename(rel).startswith("OFL-")  # bundled font licenses
+        if ext not in (".lua", ".toc", ".tga", ".blp", ".ogg", ".mp3", ".ttf", ".xml") and not license_text:
             err(f"unexpected file type in addon: {rel}")
 
 # source readable & not byte-code / obfuscated
@@ -82,6 +83,10 @@ for m in re.finditer(r'T\.MEDIA \.\. "([A-Za-z0-9_\\]+)"', code):
     if base.endswith("/"): continue
     if not any(os.path.isfile(os.path.join(addon, "Media", base + e)) for e in ("", ".tga", ".blp")):
         err(f"code references missing media Media/{base}")
+for font in re.findall(r'T\.MEDIA \.\. "Fonts\\\\([\w.\-]+\.ttf)"', code):
+    if not os.path.isfile(os.path.join(addon, "Media", "Fonts", font)): err(f"missing font Media/Fonts/{font}")
+    lic = os.path.join(addon, "Media", "Fonts", "OFL-ChakraPetch.txt")
+    if "ChakraPetch" in font and not os.path.isfile(lic): err("Chakra Petch is bundled without its OFL license text")
 for snd in re.findall(r'Sound\.play\("(\w+)"\)', code):
     if not os.path.isfile(os.path.join(addon, "Media", "Sounds", snd + ".ogg")): err(f"missing sound {snd}.ogg")
 for n in range(1, 5):
