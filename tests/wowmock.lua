@@ -63,6 +63,7 @@ local function newFontString()
     SetShadowOffset = function() end,
     SetJustifyH = function() end,
     SetJustifyV = function() end,
+    SetSpacing = function() end,
   }), "FontString")
 end
 
@@ -138,6 +139,7 @@ function M.install()
     return newFrame(ftype, name, parent)
   end
   _G.UIParent = newFrame("Frame", "UIParent")
+  UIParent:SetSize(1366, 768) -- a small laptop screen at default UI scale
   _G.Minimap = newFrame("Frame", "Minimap")
   Minimap:SetSize(140, 140)
   _G.GameTooltip = setmetatable({}, { __index = function() return function() end end })

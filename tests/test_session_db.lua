@@ -73,6 +73,25 @@ describe("session", function()
   end)
 end)
 
+describe("daily seed", function()
+  it("is the same for every timezone (run under TZ=UTC+14, UTC-11, Copenhagen, UTC)", function()
+    local lua = arg and arg[-1] or "lua5.1"
+    local outs = {}
+    for _, tz in ipairs({ "UTC", "Pacific/Kiritimati", "Pacific/Pago_Pago", "Europe/Copenhagen", "America/Los_Angeles" }) do
+      local p = io.popen("TZ=" .. tz .. " " .. lua .. " tests/tz_print.lua")
+      outs[#outs + 1] = p:read("*l"); p:close()
+    end
+    ok(outs[1] and outs[1]:find("^2026%-11%-04 srwow%-daily%-2026%-11%-04 ") ~= nil, "UTC date used: " .. tostring(outs[1]))
+    for i = 2, #outs do eq(outs[i], outs[1], "timezone " .. i) end
+  end)
+  it("dailyDate() recovers the date only from real daily seeds", function()
+    eq(S.dailyDate(S.dailySeed("2026-11-04")), "2026-11-04")
+    eq(S.dailyDate("abc123"), nil)
+    local s = S.new("daily", S.dailySeed("2026-11-04"), "2026-11-05")
+    eq(s.date, "2026-11-04", "seed date wins")
+  end)
+end)
+
 describe("db", function()
   it("sanitize(nil) gives full defaults", function()
     local db = DB.sanitize(nil)
@@ -90,6 +109,26 @@ describe("db", function()
     DB.recordRun(db, "daily", { score = 50, lines = 0, level = 1, clears = { quad = 0 } }, 1, "2026-11-05", nil)
     eq(db.records.dailyToday.date, "2026-11-05"); eq(db.records.dailyToday.best, 50)
     eq(db.records.daily.best, 1200, "all-time daily best kept")
+  end)
+  it("a Daily that finishes after midnight UTC counts for the day of its pieces, not today", function()
+    local db = DB.sanitize(nil)
+    DB.recordRun(db, "daily", { score = 500, lines = 4, level = 1, clears = { quad = 0 } }, 120, "2026-11-04", nil, "2026-11-04")
+    local r = DB.recordRun(db, "daily", { score = 900, lines = 6, level = 1, clears = { quad = 0 } }, 120, "2026-11-04", nil, "2026-11-05")
+    eq(r.newTodayBest, nil, "not counted as today's (Nov 5) best")
+    eq(db.records.dailyToday.date, "2026-11-04"); eq(db.records.dailyToday.best, 500)
+    eq(db.records.daily.top[1].d, "2026-11-04"); eq(db.records.daily.best, 900)
+  end)
+  it("keeps a sorted top 5 and reports the rank", function()
+    local db = DB.sanitize(nil)
+    local ranks = {}
+    for i, sc in ipairs({ 300, 900, 100, 500, 700, 800, 50 }) do
+      ranks[i] = DB.recordRun(db, "blitz", { score = sc, lines = 1, level = 1, clears = { quad = 0 } }, 1, "2026-11-04").rank
+    end
+    eq(ranks[2], 1); eq(ranks[6], 2); eq(ranks[7], nil, "50 doesn't make the top 5")
+    local top = db.records.blitz.top
+    eq(#top, 5); eq(top[1].s, 900); eq(top[5].s, 300)
+    local again = DB.sanitize({ records = { blitz = { top = { { s = 5 }, "bad", { s = 99, d = "2026-11-01" }, { s = "x" } } } } })
+    eq(#again.records.blitz.top, 2); eq(again.records.blitz.top[1].s, 99)
   end)
   it("key lookup: custom binding beats a fixed alternate key", function()
     local db = DB.sanitize(nil)

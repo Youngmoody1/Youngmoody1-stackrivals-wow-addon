@@ -29,8 +29,9 @@ local function defaultSettings()
 end
 
 local function emptyRecord()
-  return { best = 0, bestLines = 0, bestLevel = 0, games = 0, totalLines = 0, quads = 0, playSeconds = 0, bestDate = nil, bestLog = nil }
+  return { best = 0, bestLines = 0, bestLevel = 0, games = 0, totalLines = 0, quads = 0, playSeconds = 0, bestDate = nil, bestLog = nil, top = {} }
 end
+DB.TOP_N = 5
 
 local function num(v, default, lo, hi)
   if type(v) ~= "number" or v ~= v then return default end -- also rejects NaN
@@ -53,6 +54,15 @@ local function cleanRecord(r)
   out.playSeconds = num(r.playSeconds, 0, 0, 1e12)
   out.bestDate = str(r.bestDate, 32)
   out.bestLog = str(r.bestLog, 400000)
+  if type(r.top) == "table" then
+    for i = 1, DB.TOP_N do
+      local e = r.top[i]
+      if type(e) == "table" and type(e.s) == "number" and e.s >= 0 then
+        out.top[#out.top + 1] = { s = math.floor(num(e.s, 0, 0, 1e12)), l = math.floor(num(e.l, 0, 0, 1e9)), v = math.floor(num(e.v, 1, 1, 1e6)), d = str(e.d, 16) }
+      end
+    end
+    table.sort(out.top, function(a, b) return a.s > b.s end)
+  end
   return out
 end
 
@@ -98,6 +108,7 @@ function DB.sanitize(raw)
     x = num(w.x, nil, -10000, 10000), y = num(w.y, nil, -10000, 10000),
   }
   db.seenIntro = bool(raw.seenIntro, false)
+  db.seenHelp = bool(raw.seenHelp, false)
 
   -- An unfinished run saved at logout / reload (mode + web-compatible input log).
   local su = raw.suspended
@@ -135,8 +146,20 @@ function DB.resetBindings(db)
   for a, k in pairs(DB.DEFAULT_BINDINGS) do db.bindings[a] = k end
 end
 
---- Record a finished run. `today` is the UTC date string. Returns { newBest = bool, prevBest = n }.
-function DB.recordRun(db, modeKey, state, playSeconds, today, logStr)
+--- Insert into a top list; returns the 1-based rank or nil if it didn't make the list.
+local function insertTop(top, entry)
+  local rank = #top + 1
+  for i, e in ipairs(top) do if entry.s > e.s then rank = i; break end end
+  if rank > DB.TOP_N then return nil end
+  table.insert(top, rank, entry)
+  while #top > DB.TOP_N do table.remove(top) end
+  return rank
+end
+
+--- Record a finished run. `runDate` = UTC date the run started, `today` = UTC date now
+--- (defaults to runDate). Returns { newBest, prevBest, newTodayBest, rank }.
+function DB.recordRun(db, modeKey, state, playSeconds, runDate, logStr, today)
+  today = today or runDate
   local r = db.records[modeKey]
   if not r then return { newBest = false, prevBest = 0 } end
   local prev = r.best
@@ -149,18 +172,20 @@ function DB.recordRun(db, modeKey, state, playSeconds, today, logStr)
   local newBest = state.score > prev
   if newBest then
     r.best = state.score
-    r.bestDate = today
+    r.bestDate = runDate
     if logStr and #logStr <= 400000 then r.bestLog = logStr end
   end
+  local rank = nil
+  if state.score > 0 then rank = insertTop(r.top, { s = state.score, l = state.lines, v = state.level, d = runDate }) end
   local todayBest = nil
-  if modeKey == "daily" then
+  if modeKey == "daily" and runDate == today then
     local d = db.records.dailyToday
     if d.date ~= today then d.date, d.best, d.tries = today, 0, 0 end
     d.tries = d.tries + 1
     todayBest = state.score > d.best
     if todayBest then d.best = state.score end
   end
-  return { newBest = newBest and state.score > 0, prevBest = prev, newTodayBest = todayBest }
+  return { newBest = newBest and state.score > 0, prevBest = prev, newTodayBest = todayBest, rank = rank }
 end
 
 function DB.resetRecords(db)

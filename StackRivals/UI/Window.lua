@@ -151,7 +151,8 @@ function UI:Create()
   F:SetScript("OnHide", function() UI:OnHide() end)
   F:SetScript("OnUpdate", function(_, elapsed) UI:OnUpdate(elapsed) end)
 
-  F:SetScale(db.settings.scale)
+  self.W, self.H = W, H
+  self:ApplyScale()
   self:RestorePosition()
   self:UpdateHint()
   return F
@@ -198,7 +199,11 @@ function UI:CreateOverlays()
   self.continueBtn = T.button(menu, "Continue last run", 171, 26, "primary", function() ns.App:ContinueSuspended() end)
   self.continueBtn:SetPoint("TOP", menu, "TOP", 0, y - 4)
   self.continueBtn.tip = "Your unfinished run from before /reload or logout, restored exactly."
-  self.statsLine = T.text(menu, 10, C.label); self.statsLine:SetPoint("BOTTOM", 0, 14)
+  local howBtn = T.button(menu, "How to play", 82, 22, "frame", function() UI:ShowSheet("help") end)
+  howBtn:SetPoint("BOTTOMLEFT", menu, "BOTTOM", -85, 34)
+  local recBtn = T.button(menu, "Records", 82, 22, "frame", function() UI:ShowSheet("records") end)
+  recBtn:SetPoint("BOTTOMRIGHT", menu, "BOTTOM", 85, 34)
+  self.statsLine = T.text(menu, 10, C.label); self.statsLine:SetPoint("BOTTOM", 0, 12)
   self.statsLine:SetWidth(175)
 
   -- Countdown number
@@ -338,18 +343,20 @@ end
 function UI:ShowSettings(show)
   if show then
     ns.App:Pause("settings")
+    if self.help then self.help:Hide(); self.records:Hide() end
     self:RefreshSettings()
     self.settings:Show()
   else
     self:EndBind()
     self.settings:Hide()
+    self:RefreshPhase()
   end
 end
 
 function UI:SetScale(v)
   v = math.max(0.6, math.min(1.6, math.floor(v * 10 + 0.5) / 10))
   ns.db.settings.scale = v
-  self.frame:SetScale(v)
+  self:ApplyScale()
   self:RefreshSettings()
 end
 
@@ -410,6 +417,17 @@ function UI:OnKeyDown(f, key)
     return
   end
   local sess = ns.App.session
+  if sess and sess.phase == "paused" then
+    -- the pause key (not Esc: Esc keeps closing windows) resumes; everything else goes to WoW
+    if key ~= "ESCAPE" and DB.actionForKey(ns.db, key) == "pause" and not inCombat() then
+      setPropagate(f, false)
+      self.down[key] = true
+      ns.App:Resume()
+    else
+      setPropagate(f, true)
+    end
+    return
+  end
   if not sess or not sess:isActive() then setPropagate(f, true); return end
   if PAUSE_AND_PASS[key] then
     setPropagate(f, true) -- decide propagation before the keyboard is released by the pause
@@ -443,7 +461,13 @@ end
 -- Show / hide / position
 ------------------------------------------------------------------------------------------------
 function UI:OnShow()
+  self:ApplyScale()
   if not ns.App.session then ns.App:ShowMenu() end
+  -- first visit: explain the game once (only on the menu, never on top of a run)
+  if not ns.db.seenHelp and (not ns.App.session or ns.App.inMenu) then
+    ns.db.seenHelp = true
+    self:ShowSheet("help")
+  end
   self:RefreshMenu()
   self.dirty = true
   self:RefreshPhase()
@@ -452,6 +476,7 @@ end
 
 function UI:OnHide()
   if self.settings and self.settings:IsShown() then self.settings:Hide() end
+  if self.help then self.help:Hide(); self.records:Hide() end
   ns.App:Pause("hidden")
   self:EndBind()
   self:SetKeyboard(false)
@@ -498,11 +523,10 @@ end
 function UI:OnUpdate(elapsed)
   local App = ns.App
   local sess = App.session
-  if sess and sess:isActive() then
-    if sess:update(elapsed) then self.dirty = true end
-    local events = sess:takeEvents()
-    if #events > 0 then
-      for _, ev in ipairs(events) do self:OnEvent(ev) end
+  if sess then
+    if sess:isActive() and sess:update(elapsed) then self.dirty = true end
+    if #sess.events > 0 then
+      for _, ev in ipairs(sess:takeEvents()) do self:OnEvent(ev) end
     end
   end
   -- effects
@@ -608,7 +632,10 @@ function UI:RefreshPhase()
     if inCombat() then self.resumeBtn:Disable(); self.resumeBtn:SetLabel("In combat...") else self.resumeBtn:Enable(); self.resumeBtn:SetLabel("Resume") end
   end
   local live = sess and (phase == "countdown" or phase == "playing")
-  if not self.binding then self:SetKeyboard(live and self.frame:IsShown()) end
+  -- While paused (out of combat, no sheet open) we listen too, but only to take the pause key
+  -- back; every other key is handed straight to WoW.
+  local pausedListen = phase == "paused" and not inCombat() and not self:SheetOpen()
+  if not self.binding then self:SetKeyboard((live or pausedListen) and self.frame:IsShown()) end
   self.dirty = true
 end
 
@@ -648,8 +675,134 @@ function UI:ShowOver(info)
     self.overBadge:SetText("Best: " .. T.commas(ns.App:BestFor(info.mode)))
   end
   local c = s.clears
-  self.overDetail:SetText(string.format("%d lines  -  level %d  -  %d quads\n%s", s.lines, s.level, c.quad, info.modeName))
+  local rankTxt = info.rank and ("#" .. info.rank .. " in your top 5  -  ") or ""
+  self.overDetail:SetText(string.format("%d lines  -  level %d  -  %d quads\n%s%s", s.lines, s.level, c.quad, rankTxt, info.modeName))
   self.shareGuild:SetShown(IsInGuild and IsInGuild() or false)
   self.shareGroup:SetShown(IsInGroup and IsInGroup() or false)
+  self:RefreshPhase()
+end
+
+------------------------------------------------------------------------------------------------
+-- Scale that always fits the screen
+------------------------------------------------------------------------------------------------
+--- Use the chosen size, but never larger than the screen (any resolution / UI scale).
+function UI:ApplyScale()
+  local F = self.frame
+  if not F then return end
+  local want = ns.db.settings.scale
+  local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
+  if sw and sh and sw > 0 and sh > 0 then
+    local fit = math.min((sw - 24) / self.W, (sh - 24) / self.H)
+    if fit < want then want = math.max(0.5, fit) end
+  end
+  F:SetScale(want)
+  self.appliedScale = want
+end
+
+------------------------------------------------------------------------------------------------
+-- Full-window sheets: How to play, Records
+------------------------------------------------------------------------------------------------
+local function makeSheet(self, titleText)
+  local F = self.frame
+  local s = CreateFrame("Frame", nil, F)
+  s:SetPoint("TOPLEFT", F, "TOPLEFT", 1, -HEADER + 6)
+  s:SetPoint("BOTTOMRIGHT", F, "BOTTOMRIGHT", -1, 1)
+  s:SetFrameLevel(F:GetFrameLevel() + 40)
+  local bg = T.tex(s, "BACKGROUND", C.navy, 0.985); bg:SetAllPoints()
+  s:EnableMouse(true)
+  s:Hide()
+  local title = T.text(s, 15, C.paper); title:SetPoint("TOPLEFT", 20, -12); title:SetText(titleText)
+  local done = T.button(s, "Got it", 120, 28, "primary", function() s:Hide(); UI:RefreshPhase() end)
+  done:SetPoint("BOTTOM", 0, 16)
+  s.done = done
+  return s
+end
+
+function UI:CreateHelp()
+  local s = makeSheet(self, "HOW TO PLAY")
+  self.help = s
+  local body = T.text(s, 11, C.body)
+  body:SetPoint("TOPLEFT", 20, -44)
+  body:SetWidth(410); body:SetJustifyH("LEFT"); body:SetSpacing(2)
+  s.body = body
+  s:SetScript("OnShow", function()
+    local b = ns.db.bindings
+    local k = T.keyName
+    body:SetText(table.concat({
+      "|cfff6f4f0Stack the falling pieces to complete full rows.|r Full rows clear and score. Clear more rows at once for more points (4 rows = |cfff2cf6bQUAD|r), and keep clearing for combos. It speeds up every 10 lines and ends when the stack reaches the top.",
+      "",
+      "|cffff4d5aControls|r",
+      k(b.left) .. " / " .. k(b.right) .. "  move (hold to slide)",
+      k(b.rotateCW) .. " / " .. k(b.rotateCCW) .. "  rotate",
+      k(b.softDrop) .. "  soft drop      " .. k(b.hardDrop) .. "  hard drop",
+      k(b.hold) .. "  hold piece      " .. k(b.pause) .. "  pause / resume",
+      "Enter  pause and open chat",
+      "",
+      "|cff8fc0ddModes|r  Blitz 2:00 for short waits. Daily Blitz gives everyone the same pieces today. Classic is endless.",
+      "",
+      "|cff7be3a0Safe in WoW|r  Keys are only used while you play. Combat pauses the game and gives every key back. /reload never loses a run.",
+      "",
+      "Open with |cffff4d5a/sr|r or the minimap button. Change keys in Settings.",
+    }, "\n"))
+  end)
+end
+
+function UI:CreateRecords()
+  local s = makeSheet(self, "RECORDS")
+  self.records = s
+  s.done:SetLabel("Close")
+  local note = T.text(s, 10, C.label)
+  note:SetPoint("TOPLEFT", 20, -32)
+  note:SetText("Stored on this computer only. Local records are not verified.")
+  s.cols = {}
+  for i, key in ipairs(Session.MODE_ORDER) do
+    local col = CreateFrame("Frame", nil, s)
+    col:SetSize(132, 300)
+    col:SetPoint("TOPLEFT", 20 + (i - 1) * 140, -54)
+    local edgeC = (key == "classic") and C.red or (key == "blitz") and C.steel or C.gold
+    local e = T.tex(col, "ARTWORK", edgeC, 1); e:SetPoint("TOPLEFT"); e:SetPoint("TOPRIGHT"); e:SetHeight(2)
+    local name = T.text(col, 13, C.paper); name:SetPoint("TOPLEFT", 0, -8); name:SetText(Session.MODES[key].name)
+    col.lines = T.text(col, 11, C.body); col.lines:SetPoint("TOPLEFT", 0, -30)
+    col.lines:SetWidth(132); col.lines:SetJustifyH("LEFT")
+    col.key = key
+    s.cols[i] = col
+  end
+  s:SetScript("OnShow", function()
+    local db = ns.db
+    for _, col in ipairs(s.cols) do
+      local r = db.records[col.key]
+      local out = {}
+      if #r.top == 0 then out[#out + 1] = "|cff7f8794No runs yet|r" end
+      for n, e in ipairs(r.top) do
+        out[#out + 1] = string.format("%d.  |cfff6f4f0%s|r  |cff7f8794%s|r", n, T.commas(e.s), e.d and e.d:sub(6) or "")
+      end
+      out[#out + 1] = ""
+      out[#out + 1] = "Runs: " .. T.commas(r.games)
+      out[#out + 1] = "Lines: " .. T.commas(r.totalLines)
+      out[#out + 1] = "Quads: " .. T.commas(r.quads)
+      out[#out + 1] = "Best level: " .. r.bestLevel
+      out[#out + 1] = "Played: " .. T.clock(r.playSeconds)
+      if col.key == "daily" then
+        local d = db.records.dailyToday
+        if d.date == ns.App:Today() and d.tries > 0 then
+          out[#out + 1] = ""
+          out[#out + 1] = "|cfff2cf6bToday: " .. T.commas(d.best) .. "|r (" .. d.tries .. " tries)"
+        end
+      end
+      col.lines:SetText(table.concat(out, "\n"))
+    end
+  end)
+end
+
+function UI:SheetOpen()
+  return (self.help and self.help:IsShown()) or (self.records and self.records:IsShown()) or (self.settings and self.settings:IsShown()) or false
+end
+
+function UI:ShowSheet(which)
+  if not self.help then self:CreateHelp(); self:CreateRecords() end
+  ns.App:Pause("settings")
+  self.help:SetShown(which == "help")
+  self.records:SetShown(which == "records")
+  if self.settings:IsShown() then self:ShowSettings(false) end
   self:RefreshPhase()
 end

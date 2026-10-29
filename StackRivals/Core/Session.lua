@@ -13,7 +13,8 @@ Session.__index = Session
 local STEP = 1 / 60
 local MAX_STEPS_PER_FRAME = 8
 local MAX_DT = 0.25
-local COUNTDOWN_TICKS = 180 -- 3 s
+local COUNTDOWN_TICKS = 180 -- 3 s before a new run
+local RESUME_TICKS = 120 -- 2 s when resuming
 
 --- Game modes. `limitTicks` ends the run on time; `daily` uses one shared seed per UTC day.
 Session.MODES = {
@@ -25,12 +26,17 @@ Session.MODE_ORDER = { "classic", "blitz", "daily" }
 
 --- Seed shared by every player for a UTC date string "YYYY-MM-DD".
 function Session.dailySeed(dateStr) return "srwow-daily-" .. dateStr end
+--- The UTC date a daily seed belongs to (or nil for non-daily seeds).
+function Session.dailyDate(seed) return type(seed) == "string" and seed:match("^srwow%-daily%-(%d%d%d%d%-%d%d%-%d%d)$") or nil end
 
-function Session.new(modeKey, seed)
+--- `dateStr` = UTC date the run started; records are filed under it (a Daily that ends after
+--- midnight UTC still counts for the day its pieces belong to).
+function Session.new(modeKey, seed, dateStr)
   local mode = Session.MODES[modeKey] or Session.MODES.classic
   local self = setmetatable({
     mode = mode,
     seed = seed,
+    date = Session.dailyDate(seed) or dateStr,
     state = E.createGame(seed, { startLevel = 1 }),
     input = Input.new(),
     phase = "countdown",
@@ -47,12 +53,12 @@ end
 
 --- Rebuild an unfinished run from its saved input log (exact same state), paused.
 --- Returns nil if the log is unreadable or from another engine version.
-function Session.restore(modeKey, logStr, playSeconds)
+function Session.restore(modeKey, logStr, playSeconds, dateStr)
   local d = E.deserializeLog(logStr)
   if not d or d.v ~= E.ENGINE_VERSION then return nil end
   local okRun, state = pcall(E.replay, d.seed, { startLevel = d.startLevel }, d.log, d.ticks)
   if not okRun or state.gameOver then return nil end
-  local self = Session.new(modeKey, d.seed)
+  local self = Session.new(modeKey, d.seed, dateStr)
   self.state = state
   self.events = {}
   self.playSeconds = playSeconds or 0
@@ -106,10 +112,10 @@ function Session:resume()
   if self.phase ~= "paused" then return false end
   -- Always resume through a short countdown so nobody loses a piece to a surprise restart.
   self.phase = "countdown"
-  self.countdown = COUNTDOWN_TICKS
+  self.countdown = RESUME_TICKS
   self.pauseReason = nil
   self.acc = 0
-  self:emit("count", 3)
+  self:emit("count", RESUME_TICKS / 60)
   return true
 end
 

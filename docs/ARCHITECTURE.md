@@ -23,7 +23,12 @@ UI/       textures and font strings only (no XML, no templates, no libraries)
 - **No HTTP.** WoW addons can't reach a web server. Nothing online is claimed. Best runs are kept as
   web-format input logs (`v;seed;startLevel;ticks;t,a …`) so a future import/verification on
   stackrivals.io can replay them server-side.
-- **Daily Blitz** gets fairness without networking: the seed is `srwow-daily-<UTC date>`.
+- **Daily Blitz** gets fairness without networking: the seed is `srwow-daily-<UTC date>` (UTC, so the
+  same in every timezone — tested by running the addon code under five TZ settings).
+- **Records are local and unverified.** SavedVariables are plain text; a player can edit scores or
+  seeds. The addon says so in the Records screen and never presents local scores as a ranking. Each
+  best run keeps its seed + input log, so a future online leaderboard can *verify* a submitted score by
+  replaying it with the same engine (like the web server does) instead of trusting the number.
 - **Own assets only.** Icon (tools/make_icon.py) and sounds (tools/make_sounds.py, same recipes as the
   web game's synthesized Web Audio) are generated from code.
 - **Naming.** Pieces keep StackRivals' own names (bar, cube, tee, hook, jack, zig, zag). The listing

@@ -1,5 +1,18 @@
 # CurseForge listing (draft — not submitted)
 
+## Process (checked 29 Oct 2026, CurseForge support docs)
+
+- A project can be created and its page filled in **without** a file. It is only submitted to
+  moderators when the **first file** is uploaded; that file shows "Under Review" until approved.
+  No review time is published.
+- Title/description must be English; license chosen from the list (or custom); a logo is required
+  (`docs/assets/curseforge-logo.png`, 400×400). Up to 4 extra categories; unrelated ones get sent back.
+- Upload a real `.zip`. Release types: Release / Beta / Alpha — only *Release* files sync to the
+  CurseForge app by default.
+- To avoid waiting for review on launch night: create the page now and (with owner approval) upload
+  0.2.0 as a **Beta** file for *Forever* before 4 Nov, so the project itself is approved in advance;
+  then upload the launch-tested build as **Release**.
+
 **Project name:** StackRivals
 **Game / flavor:** World of Warcraft — flavor "Forever", game version 1.60.1 (interface 16001), as
 other Forever addons list it today. Re-check the game version on launch day before uploading.
@@ -37,10 +50,26 @@ It's the same game as **stackrivals.io**: same pieces, same rotation and wall ki
 ### Commands
 `/sr` (or `/stackrivals`) to open · `/sr blitz` · `/sr daily` · `/sr settings` · `/sr minimap`
 
+### Supported clients
+- **WoW Forever** — supported.
+- Retail, Classic Era / Hardcore, Anniversary and Classic progression — *planned*; they will be added
+  here as each one passes a real in-game test.
+
+### Install
+CurseForge app: search "StackRivals" and install. Manual: unzip into
+`World of Warcraft\<your game folder>\Interface\AddOns\` so that `AddOns\StackRivals\StackRivals.toc`
+exists, then restart the game.
+
 ### Default controls
 ←/→ move · ↑/Z rotate · ↓ soft drop · Space hard drop · C hold · P pause (all rebindable)
 
+Records are stored on your computer and are not verified online.
+
 Free, no ads, no donations, no online accounts. Feedback and bug reports welcome in the comments.
+
+### Version history
+- 0.2.0 – How to play, Records (top 5), pause-key resume, fit-to-screen, review fixes.
+- 0.1.0 – first playable build.
 
 ---
 

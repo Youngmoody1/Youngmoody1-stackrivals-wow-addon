@@ -1,8 +1,8 @@
-## Interface: 16001
+## Interface: 16001, 120105, 50504, 40402, 38002, 30405, 20506, 11509
 ## Title: |cffff4d5aStack|r|cfff6f4f0Rivals|r
 ## Notes: Competitive falling-block puzzle minigame. Classic, Blitz 2:00 and a Daily Blitz with the same pieces for everyone. Pauses itself in combat.
 ## Author: StackRivals
-## Version: 0.1.0
+## Version: 0.2.0
 ## SavedVariables: StackRivalsDB
 ## IconTexture: Interface\AddOns\StackRivals\Media\icon
 ## AddonCompartmentFunc: StackRivals_OnAddonCompartmentClick

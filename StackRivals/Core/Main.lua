@@ -42,7 +42,7 @@ function App:Start(mode)
   if ns.UI.inCombat() then self:Print("Can't start a run in combat."); return end
   ns.UI:Create()
   local seed = (mode == "daily") and Session.dailySeed(self:Today()) or newSeed()
-  self.session = Session.new(mode, seed)
+  self.session = Session.new(mode, seed, self:Today())
   self.lastMode = mode
   self.inMenu = false
   ns.db.suspended = nil
@@ -53,7 +53,7 @@ end
 function App:ContinueSuspended()
   local su = ns.db.suspended
   if not su then return end
-  local sess = Session.restore(su.mode, su.log, su.playSeconds)
+  local sess = Session.restore(su.mode, su.log, su.playSeconds, su.date)
   ns.db.suspended = nil
   if not sess then self:Print("That saved run could not be restored."); ns.UI:RefreshMenu(); return end
   self.session = sess
@@ -92,11 +92,11 @@ function App:OnRunOver(reason)
   if not s or s.recorded then return end
   s.recorded = true
   local mode = s.mode.key
-  local res = DB.recordRun(ns.db, mode, s.state, s.playSeconds, self:Today(), E.serializeLog(s.state))
+  local res = DB.recordRun(ns.db, mode, s.state, s.playSeconds, s.date or self:Today(), E.serializeLog(s.state), self:Today())
   if res.newBest then ns.Sound.play("record") else ns.Sound.play("gameover") end
   ns.UI:ShowOver({
     state = s.state, reason = reason, mode = mode, modeName = s.mode.name,
-    newBest = res.newBest, prevBest = res.prevBest, newTodayBest = res.newTodayBest,
+    newBest = res.newBest, prevBest = res.prevBest, newTodayBest = res.newTodayBest, rank = res.rank,
   })
   ns.UI:RefreshMenu()
 end
@@ -116,7 +116,7 @@ function App:Share(where)
     if IsInRaid and IsInRaid() then channel = "RAID" elseif IsInGroup and IsInGroup() then channel = "PARTY" else return end
   elseif not (IsInGuild and IsInGuild()) then return end
   local st = s.state
-  local extra = (s.mode.key == "daily") and (" (Daily " .. self:Today() .. ")") or ""
+  local extra = (s.mode.key == "daily") and (" (Daily " .. (s.date or self:Today()) .. ")") or ""
   local msg = string.format("[StackRivals] %s points, %d lines in %s%s. Can you beat it?",
     ns.T.commas(st.score), st.lines, s.mode.name, extra)
   local send = (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
@@ -205,7 +205,7 @@ ev:SetScript("OnEvent", function(_, event, arg1)
     local s = App.session
     if s then
       local data = s:suspendData()
-      if data then data.date = App:Today(); ns.db.suspended = data end
+      if data then data.date = s.date or App:Today(); ns.db.suspended = data end
     end
   elseif event == "PLAYER_REGEN_DISABLED" then
     -- Fires before combat lockdown starts: pause and hand every key back to WoW now.

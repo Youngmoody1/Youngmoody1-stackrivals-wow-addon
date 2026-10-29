@@ -4,6 +4,12 @@ A fast, competitive falling-block puzzle minigame inside WoW — the same game a
 [stackrivals.io](https://stackrivals.io), with the same rules, pieces and scoring.
 Built first for **World of Warcraft: Forever** (launch 4 November 2026).
 
+| Client | Status |
+|---|---|
+| WoW Forever | Release target (interface 16001). Real-client test on launch day (beta is closed). |
+| Retail (Midnight) | Listed in the TOC (120105) so it can be tested now; not yet verified in the client. |
+| Classic Era / Hardcore, TBC / Anniversary, Wrath, Cata, Mists Classic | Listed in the TOC; planned, verified one by one after Forever. |
+
 Free, no ads, no payments. Pauses itself the moment you enter combat.
 
 ## Install
@@ -54,7 +60,10 @@ always works.
   It comes back paused after the fight.
 - **Never lose a run.** `/reload`, logout or a disconnect keeps your unfinished run; *Continue last run*
   restores it exactly.
-- **Records** per mode, today's Daily best, lifetime stats, and a one-click *Share to guild / group*.
+- **Records** per mode (top 5), today's Daily best, lifetime stats, and a one-click *Share to guild / group*.
+  Records live in your SavedVariables on your own computer; they are **not verified** (anyone can edit
+  that file), so treat shared scores as friendly bragging, not a ranked ladder.
+- **How to play** on first launch, pause/resume with one key, the window always fits the screen.
 - Every best run is stored as a compact, replayable input log (the web format), ready for future
   verification on stackrivals.io.
 
