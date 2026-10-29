@@ -63,7 +63,10 @@ function Board.createField(parent, width, rows, cell)
     end
   end
   f.width, f.rows = width, rows
-  f.overlay = {} -- reused per render: index -> value*4+mode
+  -- Fixed-size overlay array (0 = none) + list of touched slots: no table churn per frame.
+  f.overlay = {}
+  for i = 1, width * rows do f.overlay[i] = 0 end
+  f.touched, f.nTouched = {}, 0
 
   -- full-board flash for line clears
   f.flash = f:CreateTexture(nil, "OVERLAY")
@@ -77,35 +80,46 @@ end
 function Board.renderField(f, s, showGhost)
   local w, hidden = s.config.width, s.config.hiddenRows
   local rows = f.rows
-  local ov = f.overlay
-  for k in pairs(ov) do ov[k] = nil end
+  local ov, touched = f.overlay, f.touched
+  for k = 1, f.nTouched do ov[touched[k]] = 0 end
+  local nt = 0
   local a = s.active
   if a then
+    local shape, idx = P.SHAPES[a.id][a.rotation + 1], P.INDEX[a.id]
     if showGhost then
-      local g = E.getGhost(s)
-      if g and g.y ~= a.y then
-        for _, c in ipairs(P.SHAPES[g.id][g.rotation + 1]) do
-          local x, y = g.x + c[1], g.y + c[2] - hidden
-          if y >= 0 and y < rows then ov[y * w + x + 1] = P.INDEX[g.id] * 4 + 2 end
+      local gy = E.ghostY(s)
+      if gy and gy ~= a.y then
+        for k = 1, #shape do
+          local c = shape[k]
+          local x, y = a.x + c[1], gy + c[2] - hidden
+          if y >= 0 and y < rows then
+            local i = y * w + x + 1
+            ov[i] = idx * 4 + 2; nt = nt + 1; touched[nt] = i
+          end
         end
       end
     end
-    for _, c in ipairs(P.SHAPES[a.id][a.rotation + 1]) do
+    for k = 1, #shape do
+      local c = shape[k]
       local x, y = a.x + c[1], a.y + c[2] - hidden
-      if y >= 0 and y < rows then ov[y * w + x + 1] = P.INDEX[a.id] * 4 + 1 end
+      if y >= 0 and y < rows then
+        local i = y * w + x + 1
+        ov[i] = idx * 4 + 1; nt = nt + 1; touched[nt] = i
+      end
     end
   end
-  local board = s.board
+  f.nTouched = nt
+  local board, cells = s.board, f.cells
   for y = 0, rows - 1 do
     local by = (y + hidden) * w
     for x = 0, w - 1 do
       local i = y * w + x + 1
       local o = ov[i]
-      if o then
-        paint(f.cells[i], math.floor(o / 4), o % 4)
+      if o ~= 0 then
+        paint(cells[i], math.floor(o / 4), o % 4)
       else
         local v = board[by + x + 1]
-        if v ~= 0 then paint(f.cells[i], v, 1) else paint(f.cells[i], 0, 0) end
+        if v ~= 0 then paint(cells[i], v, 1) else paint(cells[i], 0, 0) end
       end
     end
   end

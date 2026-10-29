@@ -14,6 +14,7 @@ Input.HANDLING = { dasTicks = 10, arrTicks = 2, softDropTicks = 2 }
 function Input.new()
   return setmetatable({
     pending = {},
+    spare = {}, -- second buffer: drain() swaps instead of allocating a table every tick
     heldDir = nil, heldFor = 0,
     softHeld = false, softFor = 0,
     pressed = {},
@@ -51,13 +52,16 @@ function Input:releaseAll()
   self.pressed = {}
   self.heldDir, self.heldFor = nil, 0
   self.softHeld = false
-  self.pending = {}
+  for i = #self.pending, 1, -1 do self.pending[i] = nil end
 end
 
 --- Actions to apply on this tick.
+--- The returned list is only valid until the next drain().
 function Input:drain()
   local out = self.pending
-  self.pending = {}
+  local nxt = self.spare
+  for i = #nxt, 1, -1 do nxt[i] = nil end
+  self.pending, self.spare = nxt, out
   local H = Input.HANDLING
   if self.heldDir then
     self.heldFor = self.heldFor + 1

@@ -24,6 +24,18 @@ local CLEAR_WORD = { "SINGLE", "DOUBLE", "TRIPLE", "QUAD" }
 local ALWAYS_PASS = { PRINTSCREEN = true }
 local PAUSE_AND_PASS = { ENTER = true, SLASH = true, ["/"] = true }
 
+--- SetText only when the value changed (no string building or UI work for unchanged HUD values).
+local function setNum(fs, n, fmt)
+  if fs._n == n then return end
+  fs._n = n
+  fs:SetText(fmt and fmt(n) or tostring(n))
+end
+local function setStr(fs, s)
+  if fs._s == s then return end
+  fs._s = s
+  fs:SetText(s)
+end
+
 local function inCombat()
   if InCombatLockdown and InCombatLockdown() then return true end
   if UnitAffectingCombat then
@@ -252,8 +264,10 @@ function UI:CreateOverlays()
   self.overDetail:SetWidth(175)
   local again = T.button(over, "Play again", 150, 28, "primary", function() ns.App:Start(ns.App.lastMode or "classic") end)
   again:SetPoint("TOP", over, "TOP", 0, -210)
+  self.againHint = T.text(over, 10, C.label); self.againHint:SetPoint("TOP", again, "BOTTOM", 0, -3)
+  self.againBtn = again
   local menuB = T.button(over, "Modes", 150, 24, "frame", function() ns.App:ShowMenu() end)
-  menuB:SetPoint("TOP", again, "BOTTOM", 0, -8)
+  menuB:SetPoint("TOP", again, "BOTTOM", 0, -18)
   self.shareGuild = T.button(over, "Share to guild", 72, 22, "steel", function() ns.App:Share("GUILD") end)
   self.shareGuild:SetPoint("TOPLEFT", menuB, "BOTTOMLEFT", 0, -14)
   self.shareGroup = T.button(over, "Share to group", 72, 22, "steel", function() ns.App:Share("GROUP") end)
@@ -424,6 +438,16 @@ function UI:OnKeyDown(f, key)
     return
   end
   local sess = ns.App.session
+  if sess and sess.phase == "over" and not ns.App.inMenu then
+    -- only the hard-drop key (play again) is ours; everything else goes to WoW
+    if DB.actionForKey(ns.db, key) == "hardDrop" and not self.overReadyAt and not inCombat() then
+      setPropagate(f, false)
+      ns.App:Start(sess.mode.key)
+    else
+      setPropagate(f, true)
+    end
+    return
+  end
   if sess and sess.phase == "paused" then
     -- the pause key (not Esc: Esc keeps closing windows) resumes; everything else goes to WoW
     if key ~= "ESCAPE" and DB.actionForKey(ns.db, key) == "pause" and not inCombat() then
@@ -536,6 +560,11 @@ function UI:OnUpdate(elapsed)
       for _, ev in ipairs(sess:takeEvents()) do self:OnEvent(ev) end
     end
   end
+  if self.overReadyAt and GetTime() >= self.overReadyAt then
+    self.overReadyAt = nil
+    self.againHint:SetAlpha(1)
+    self:RefreshPhase()
+  end
   -- effects
   local fl = self.field.flash
   local a = fl:GetAlpha()
@@ -585,9 +614,9 @@ end
 function UI:Render()
   local sess = ns.App.session
   if not sess then
-    self.scoreText:SetText("0"); self.linesText:SetText("0"); self.levelText:SetText("1")
-    self.timeLabel:SetText("TIME"); self.timeText:SetText("0:00")
-    self.bestText:SetText("-")
+    setNum(self.scoreText, 0); setNum(self.linesText, 0); setNum(self.levelText, 1)
+    setStr(self.timeLabel, "TIME"); setNum(self.timeText, 0, T.clock)
+    setStr(self.bestText, "-"); self.bestText._n = nil
     Board.renderPreview(self.holdPreview, nil)
     for _, p in ipairs(self.nextPreviews) do Board.renderPreview(p, nil) end
     for _, c in ipairs(self.field.cells) do c.base:SetColorTexture(C.cell[1], C.cell[2], C.cell[3], 1); c.hi:Hide(); c.lo:Hide(); c.value = 0 end
@@ -597,22 +626,27 @@ function UI:Render()
   Board.renderField(self.field, s, ns.db.settings.ghost)
   Board.renderPreview(self.holdPreview, s.hold, s.holdUsed)
   for i, p in ipairs(self.nextPreviews) do Board.renderPreview(p, s.queue[i], false) end
-  self.scoreText:SetText(T.commas(s.score))
-  self.linesText:SetText(tostring(s.lines))
-  self.levelText:SetText(tostring(s.level))
+  setNum(self.scoreText, s.score, T.commas)
+  setNum(self.linesText, s.lines)
+  setNum(self.levelText, s.level)
   local left = sess:timeLeftTicks()
   if left then
-    self.timeLabel:SetText("TIME LEFT")
-    self.timeText:SetText(T.clock(math.ceil(left / 60)))
-    if left < 600 then self.timeText:SetTextColor(C.redLight[1], C.redLight[2], C.redLight[3]) else self.timeText:SetTextColor(C.steel[1], C.steel[2], C.steel[3]) end
+    setStr(self.timeLabel, "TIME LEFT")
+    setNum(self.timeText, math.ceil(left / 60), T.clock)
+    local urgent = left < 600
+    if self.timeUrgent ~= urgent then
+      self.timeUrgent = urgent
+      local c = urgent and C.redLight or C.steel
+      self.timeText:SetTextColor(c[1], c[2], c[3])
+    end
   else
-    self.timeLabel:SetText("TIME")
-    self.timeText:SetText(T.clock(s.tick / 60))
-    self.timeText:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
+    setStr(self.timeLabel, "TIME")
+    setNum(self.timeText, math.floor(s.tick / 60), T.clock)
+    if self.timeUrgent ~= false then self.timeUrgent = false; self.timeText:SetTextColor(C.steel[1], C.steel[2], C.steel[3]) end
   end
-  self.bestText:SetText(T.commas(ns.App:BestFor(sess.mode.key)))
+  setNum(self.bestText, ns.App:BestFor(sess.mode.key), T.commas)
   local n = sess:countdownNumber()
-  if n then self.countText:SetText(tostring(n)); self.countText:Show() else self.countText:Hide() end
+  if n then setNum(self.countText, n); self.countText:Show() else self.countText:Hide() end
 end
 
 --- Show the overlay that matches the current phase and take/release the keyboard.
@@ -641,8 +675,10 @@ function UI:RefreshPhase()
   local live = sess and (phase == "countdown" or phase == "playing")
   -- While paused (out of combat, no sheet open) we listen too, but only to take the pause key
   -- back; every other key is handed straight to WoW.
-  local pausedListen = phase == "paused" and not inCombat() and not self:SheetOpen()
-  if not self.binding then self:SetKeyboard((live or pausedListen) and self.frame:IsShown()) end
+  local quiet = not inCombat() and not self:SheetOpen()
+  local pausedListen = phase == "paused" and quiet
+  local overListen = phase == "over" and quiet and not self.overReadyAt
+  if not self.binding then self:SetKeyboard((live or pausedListen or overListen) and self.frame:IsShown()) end
   self.dirty = true
 end
 
@@ -655,7 +691,10 @@ function UI:RefreshMenu()
       local d = db.records.dailyToday
       local today = ns.App:Today()
       local tries = (d.date == today) and d.tries or 0
-      b.best:SetText(best > 0 and ("Today: " .. T.commas(best) .. "  (" .. tries .. " tries)") or ("Today's seed: " .. today))
+      local left = ns.App:SecondsToUtcMidnight()
+      local reset = string.format("new pieces in %dh %02dm", math.floor(left / 3600), math.floor(left % 3600 / 60))
+      b.best:SetText(best > 0 and ("Today: " .. T.commas(best) .. "  -  " .. reset) or ("Same for everyone  -  " .. reset))
+      b.tip = tries > 0 and (tries .. " tries today. Seed " .. today .. " (UTC).") or ("Seed " .. today .. " (UTC). Everyone gets the same pieces today.")
     else
       b.best:SetText(best > 0 and ("Best: " .. T.commas(best)) or "No record yet")
     end
@@ -686,6 +725,11 @@ function UI:ShowOver(info)
   self.overDetail:SetText(string.format("%d lines  -  level %d  -  %d quads\n%s%s", s.lines, s.level, c.quad, rankTxt, info.modeName))
   self.shareGuild:SetShown(IsInGuild and IsInGuild() or false)
   self.shareGroup:SetShown(IsInGroup and IsInGroup() or false)
+  -- "press <hard drop> to play again", accepted after a short grace period so a player who is
+  -- still hammering hard drop at top-out sees the result first
+  self.againHint:SetText("or press " .. T.keyName(ns.db.bindings.hardDrop))
+  self.againHint:SetAlpha(0.35)
+  self.overReadyAt = GetTime() + 1.0
   self:RefreshPhase()
 end
 

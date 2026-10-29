@@ -290,6 +290,15 @@ function E.tick(s)
   end
 end
 
+--- Landing row of the active piece without allocating (or nil). Rendering only.
+function E.ghostY(s)
+  local p = s.active
+  if not p then return nil end
+  local y = p.y
+  while not collidesAt(s, p.id, p.rotation, p.x, y + 1) do y = y + 1 end
+  return y
+end
+
 --- Landing position of the active piece (or nil).
 function E.getGhost(s)
   local p = s.active

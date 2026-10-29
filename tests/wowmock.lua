@@ -47,7 +47,7 @@ end
 
 local function newTexture()
   return strict(newRegion("Texture", {
-    SetColorTexture = function(o, r, g, b, a) assert(type(r) == "number" and type(g) == "number" and type(b) == "number", "SetColorTexture needs numbers"); o._color = { r, g, b, a } end,
+    SetColorTexture = function(o, r, g, b, a) assert(type(r) == "number" and type(g) == "number" and type(b) == "number", "SetColorTexture needs numbers"); o._r, o._g, o._b, o._a = r, g, b, a end,
     SetTexture = function(o, path) o._tex = path end,
     SetDrawLayer = function() end,
   }), "Texture")
@@ -56,7 +56,7 @@ end
 local function newFontString()
   return strict(newRegion("FontString", {
     SetFont = function(o, f, s, fl) assert(type(f) == "string" and type(s) == "number", "SetFont(path, size)"); o._font = { f, s, fl } end,
-    SetText = function(o, t) o._text = t and tostring(t) or "" end,
+    SetText = function(o, t) o._text = t end,
     GetText = function(o) return o._text end,
     SetTextColor = function() end,
     SetShadowColor = function() end,
@@ -70,6 +70,7 @@ end
 local KNOWN_EVENTS = {
   ADDON_LOADED = 1, PLAYER_LOGIN = 1, PLAYER_LOGOUT = 1, PLAYER_REGEN_DISABLED = 1, PLAYER_REGEN_ENABLED = 1,
   LOADING_SCREEN_ENABLED = 1, PLAYER_LEAVING_WORLD = 1, PLAYER_DEAD = 1,
+  DISPLAY_SIZE_CHANGED = 1, UI_SCALE_CHANGED = 1,
 }
 
 local function newFrame(ftype, name, parent)

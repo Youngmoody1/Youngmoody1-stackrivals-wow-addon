@@ -22,6 +22,28 @@ function App:Print(msg) DEFAULT_CHAT_FRAME:AddMessage(PREFIX .. msg) end
 
 function App:Today() return date("!%Y-%m-%d") end
 
+--- Remember which client/interface loaded the addon (visible in SavedVariables after a test).
+function App:RecordDiag()
+  local d = ns.db.diag
+  local version, build, _, interface = GetBuildInfo()
+  local key = tostring(interface or "?")
+  local c = d.clients[key] or { loads = 0 }
+  d.clients[key] = c
+  c.version, c.build, c.interface = tostring(version), tostring(build), tonumber(interface) or 0
+  c.project = tonumber(WOW_PROJECT_ID) or 0
+  c.addon = ns.VERSION
+  c.last = date("!%Y-%m-%d %H:%M")
+  c.loads = (c.loads or 0) + 1
+  d.loads = d.loads + 1
+  d.firstSeen = d.firstSeen or c.last
+end
+
+--- Seconds until the next Daily Blitz seed (00:00 UTC).
+function App:SecondsToUtcMidnight()
+  local t = date("!*t")
+  return 86400 - (t.hour * 3600 + t.min * 60 + t.sec)
+end
+
 function App:BestFor(mode)
   local db = ns.db
   if not db then return 0 end
@@ -186,12 +208,15 @@ reg("PLAYER_REGEN_ENABLED")
 reg("LOADING_SCREEN_ENABLED")
 reg("PLAYER_LEAVING_WORLD")
 reg("PLAYER_DEAD")
+reg("DISPLAY_SIZE_CHANGED")
+reg("UI_SCALE_CHANGED")
 
 ev:SetScript("OnEvent", function(_, event, arg1)
   if event == "ADDON_LOADED" and arg1 == ADDON then
     ns.db = DB.sanitize(StackRivalsDB)
     StackRivalsDB = ns.db
     ns.Sound.enabled = ns.db.settings.sound
+    App:RecordDiag()
     local su = ns.db.suspended
     if su and su.mode == "daily" and su.date and su.date ~= App:Today() then ns.db.suspended = nil end
   elseif event == "PLAYER_LOGIN" then
@@ -229,5 +254,7 @@ ev:SetScript("OnEvent", function(_, event, arg1)
     App:Pause("loading")
   elseif event == "PLAYER_DEAD" then
     App:Pause("manual")
+  elseif event == "DISPLAY_SIZE_CHANGED" or event == "UI_SCALE_CHANGED" then
+    if ns.UI.frame and ns.UI.frame:IsShown() then ns.UI:ApplyScale() end
   end
 end)

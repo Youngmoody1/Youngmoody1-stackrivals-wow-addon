@@ -81,8 +81,10 @@ function Session:emit(kind, a, b)
 end
 
 --- Take all queued events (for sound and visual effects).
+local NO_EVENTS = setmetatable({}, { __newindex = function() error("read-only") end })
 function Session:takeEvents()
   local ev = self.events
+  if #ev == 0 then return NO_EVENTS end
   self.events = {}
   return ev
 end
@@ -135,26 +137,30 @@ function Session:release(action) self.input:release(action) end
 
 local function stepOnce(self)
   local s = self.state
-  local before = { lines = s.lines, level = s.level, pieces = s.piecesPlaced, hold = s.hold }
-  for _, a in ipairs(self.input:drain()) do
+  -- plain locals, not a table: this runs 60 times a second
+  local bLines, bLevel, bPieces = s.lines, s.level, s.piecesPlaced
+  local actions = self.input:drain()
+  for i = 1, #actions do
+    local a = actions[i]
+    local bHoldUsed = s.holdUsed
     if E.applyInput(s, a) then
       if a == "hardDrop" then self:emit("harddrop")
       elseif a == "rotateCW" or a == "rotateCCW" then self:emit("rotate")
-      elseif a == "hold" and s.hold ~= before.hold then self:emit("hold") end
+      elseif a == "hold" and s.holdUsed and not bHoldUsed then self:emit("hold") end
     end
     if s.gameOver then break end
   end
   if not s.gameOver then E.tick(s) end
 
-  if s.piecesPlaced > before.pieces then
-    if s.lines > before.lines and s.lastClear then
+  if s.piecesPlaced > bPieces then
+    if s.lines > bLines and s.lastClear then
       local c = s.lastClear
       self:emit("clear", c.lines, c)
     else
       self:emit("lock")
     end
   end
-  if s.level > before.level then self:emit("level", s.level) end
+  if s.level > bLevel then self:emit("level", s.level) end
   if s.gameOver then
     self:finish("topout")
   elseif self.mode.limitTicks and s.tick >= self.mode.limitTicks then

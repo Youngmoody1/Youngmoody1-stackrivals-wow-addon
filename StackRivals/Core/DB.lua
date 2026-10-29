@@ -8,6 +8,8 @@ ns = ns or {}
 
 local DB = {}
 DB.SCHEMA = 1
+-- Max stored input-log length (chars). ~1.5 MB covers many hours of continuous Classic play.
+DB.MAX_LOG = 1500000
 
 DB.DEFAULT_BINDINGS = {
   left = "LEFT", right = "RIGHT", softDrop = "DOWN", hardDrop = "SPACE",
@@ -53,7 +55,7 @@ local function cleanRecord(r)
   out.quads = math.floor(num(r.quads, 0, 0, 1e9))
   out.playSeconds = num(r.playSeconds, 0, 0, 1e12)
   out.bestDate = str(r.bestDate, 32)
-  out.bestLog = str(r.bestLog, 400000)
+  out.bestLog = str(r.bestLog, DB.MAX_LOG)
   if type(r.top) == "table" then
     for i = 1, DB.TOP_N do
       local e = r.top[i]
@@ -110,9 +112,30 @@ function DB.sanitize(raw)
   db.seenIntro = bool(raw.seenIntro, false)
   db.seenHelp = bool(raw.seenHelp, false)
 
+  -- Diagnostics (written on every load; read back after a test to see what the client reported).
+  local rd = (type(raw.diag) == "table") and raw.diag or {}
+  db.diag = {
+    loads = math.floor(num(rd.loads, 0, 0, 1e9)),
+    firstSeen = str(rd.firstSeen, 32),
+    clients = {},
+  }
+  if type(rd.clients) == "table" then
+    local n = 0
+    for k, v in pairs(rd.clients) do
+      if type(k) == "string" and #k <= 32 and type(v) == "table" and n < 16 then
+        n = n + 1
+        db.diag.clients[k] = {
+          version = str(v.version, 32), build = str(v.build, 32), interface = math.floor(num(v.interface, 0, 0, 1e7)),
+          project = math.floor(num(v.project, 0, 0, 1e4)), addon = str(v.addon, 32), last = str(v.last, 32),
+          loads = math.floor(num(v.loads, 0, 0, 1e9)),
+        }
+      end
+    end
+  end
+
   -- An unfinished run saved at logout / reload (mode + web-compatible input log).
   local su = raw.suspended
-  if type(su) == "table" and ns.Session and ns.Session.MODES[su.mode] and str(su.log, 400000) then
+  if type(su) == "table" and ns.Session and ns.Session.MODES[su.mode] and str(su.log, DB.MAX_LOG) then
     db.suspended = { mode = su.mode, log = su.log, playSeconds = num(su.playSeconds, 0, 0, 1e9), date = str(su.date, 16) }
   end
   return db
@@ -173,7 +196,7 @@ function DB.recordRun(db, modeKey, state, playSeconds, runDate, logStr, today)
   if newBest then
     r.best = state.score
     r.bestDate = runDate
-    if logStr and #logStr <= 400000 then r.bestLog = logStr end
+    if logStr and #logStr <= DB.MAX_LOG then r.bestLog = logStr end
   end
   local rank = nil
   if state.score > 0 then rank = insertTop(r.top, { s = state.score, l = state.lines, v = state.level, d = runDate }) end
