@@ -45,6 +45,30 @@ function Session.new(modeKey, seed)
   return self
 end
 
+--- Rebuild an unfinished run from its saved input log (exact same state), paused.
+--- Returns nil if the log is unreadable or from another engine version.
+function Session.restore(modeKey, logStr, playSeconds)
+  local d = E.deserializeLog(logStr)
+  if not d or d.v ~= E.ENGINE_VERSION then return nil end
+  local okRun, state = pcall(E.replay, d.seed, { startLevel = d.startLevel }, d.log, d.ticks)
+  if not okRun or state.gameOver then return nil end
+  local self = Session.new(modeKey, d.seed)
+  self.state = state
+  self.events = {}
+  self.playSeconds = playSeconds or 0
+  self.phase = "paused"
+  self.resumePhase = "playing"
+  self.pauseReason = "restored"
+  return self
+end
+
+--- Serialize an unfinished run for SavedVariables, or nil if there is nothing to keep.
+function Session:suspendData()
+  if self.phase == "over" or self.state.gameOver then return nil end
+  if self.state.tick == 0 and #self.state.inputLog == 0 then return nil end
+  return { mode = self.mode.key, log = E.serializeLog(self.state), playSeconds = self.playSeconds }
+end
+
 function Session:emit(kind, a, b)
   local ev = self.events
   ev[#ev + 1] = { kind = kind, a = a, b = b }

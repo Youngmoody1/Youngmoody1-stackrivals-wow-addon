@@ -1,0 +1,23 @@
+## Interface: 16001
+## Title: |cffff4d5aStack|r|cfff6f4f0Rivals|r
+## Notes: Competitive falling-block puzzle minigame. Classic, Blitz 2:00 and a Daily Blitz with the same pieces for everyone. Pauses itself in combat.
+## Author: StackRivals
+## Version: 0.1.0
+## SavedVariables: StackRivalsDB
+## IconTexture: Interface\AddOns\StackRivals\Media\icon
+## AddonCompartmentFunc: StackRivals_OnAddonCompartmentClick
+## X-Website: https://stackrivals.io
+## X-License: All Rights Reserved
+
+Engine\Prng.lua
+Engine\Pieces.lua
+Engine\Engine.lua
+Engine\Input.lua
+Core\Session.lua
+Core\DB.lua
+UI\Theme.lua
+Core\Sound.lua
+UI\Board.lua
+UI\Window.lua
+UI\Minimap.lua
+Core\Main.lua

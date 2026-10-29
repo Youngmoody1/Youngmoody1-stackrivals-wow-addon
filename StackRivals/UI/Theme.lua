@@ -131,8 +131,8 @@ function T.button(parent, label, w, h, style, onClick)
     self.bgTex:SetColorTexture(st.bg[1], st.bg[2], st.bg[3], 1)
     if self.tip then GameTooltip:Hide() end
   end)
-  b:SetScript("OnMouseDown", function(self) if self:IsEnabled() then self.fs:SetPoint("CENTER", 1, -1) end end)
-  b:SetScript("OnMouseUp", function(self) self.fs:SetPoint("CENTER", 0, 0) end)
+  b:SetScript("OnMouseDown", function(self) if self:IsEnabled() and not self.noPress then self.fs:SetPoint("CENTER", 1, -1) end end)
+  b:SetScript("OnMouseUp", function(self) if not self.noPress then self.fs:SetPoint("CENTER", 0, 0) end end)
   b:SetScript("OnDisable", function(self) self.fs:SetAlpha(0.4); self.bgTex:SetAlpha(0.5) end)
   b:SetScript("OnEnable", function(self) self.fs:SetAlpha(1); self.bgTex:SetAlpha(1) end)
   if onClick then b:SetScript("OnClick", onClick) end

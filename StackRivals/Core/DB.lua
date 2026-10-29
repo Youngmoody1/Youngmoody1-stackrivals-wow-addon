@@ -98,6 +98,12 @@ function DB.sanitize(raw)
     x = num(w.x, nil, -10000, 10000), y = num(w.y, nil, -10000, 10000),
   }
   db.seenIntro = bool(raw.seenIntro, false)
+
+  -- An unfinished run saved at logout / reload (mode + web-compatible input log).
+  local su = raw.suspended
+  if type(su) == "table" and ns.Session and ns.Session.MODES[su.mode] and str(su.log, 400000) then
+    db.suspended = { mode = su.mode, log = su.log, playSeconds = num(su.playSeconds, 0, 0, 1e9), date = str(su.date, 16) }
+  end
   return db
 end
 
