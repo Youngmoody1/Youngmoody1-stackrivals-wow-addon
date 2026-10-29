@@ -980,7 +980,8 @@ function UI:RefreshMenu()
     total = total + db.records[k].games
     lines = lines + db.records[k].totalLines
   end
-  self.statsLine:SetText(total > 0 and (T.commas(total) .. " runs  -  " .. T.commas(lines) .. " lines cleared") or "Combat pauses the game and gives your keys back.")
+  if inCombat() then self.statsLine:SetText("In combat. Play after the fight.")
+  else self.statsLine:SetText(total > 0 and (T.commas(total) .. " runs  -  " .. T.commas(lines) .. " lines cleared") or "Combat pauses the game and gives your keys back.") end
 end
 
 function UI:ShowOver(info)
