@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.0 — prelaunch candidate (not released yet)
+
+Gameplay & feel
+- Game over: press the hard-drop key (Space) to play again, after a 1 s grace period.
+- Daily Blitz card shows when the pieces change (00:00 UTC) and your score today.
+- Smoother red/steel window backdrop; clearer mode cards; settings show the version.
+
+Stability & performance
+- No per-tick table garbage in the game loop, input or rendering; HUD text only updates on change.
+- Window re-fits after UI-scale or resolution changes.
+- Very long Classic runs (hours) still restore after /reload.
+- Saved data records which client build/interface loaded the addon (helps bug reports).
+
+Quality
+- Automated layout checks and developer previews of every screen; fixed several overlaps.
+- Fuzzing (random keys, clicks, combat, reloads, frame times) on simulated Forever, Retail and
+  Classic APIs; 60-minute memory test; 300 corrupted saved files; Daily golden sequences from the
+  web engine.
+- Reproducible build with validation, checksum and release metadata.
+
 ## 0.2.1 — compatibility pass (not released yet)
 
 - Combat check ignores "secret" values on modern clients (Midnight/Forever) instead of risking an error.

@@ -94,6 +94,22 @@ describe("daily seed", function()
     ok(outs[1] and outs[1]:find("^2026%-11%-04 srwow%-daily%-2026%-11%-04 ") ~= nil, "UTC date used: " .. tostring(outs[1]))
     for i = 2, #outs do eq(outs[i], outs[1], "timezone " .. i) end
   end)
+  it("Daily Blitz pieces for fixed dates match the web engine exactly (golden sequences)", function()
+    local fx = dofile(testdir .. "/fixtures/parity.lua")
+    ok(#fx.dailies >= 5)
+    for _, d in ipairs(fx.dailies) do
+      local s = S.new("daily", S.dailySeed(d.date), d.date)
+      -- what the player sees at the start: current piece + the 5-piece preview
+      local shown = { s.state.active.id }
+      for i = 1, 5 do shown[#shown + 1] = s.state.queue[i] end
+      eq(table.concat(shown, ","), table.concat(d.pieces, ",", 1, 6), d.date .. " start")
+      -- and the full first two bags, dealt by the addon's own PRNG
+      local P = ns.Prng
+      local b1, n1 = P.shuffle(ns.Pieces.IDS, P.hashString(S.dailySeed(d.date)))
+      local b2 = P.shuffle(ns.Pieces.IDS, n1)
+      eq(table.concat(b1, ",") .. "," .. table.concat(b2, ","), table.concat(d.pieces, ","), d.date .. " bags")
+    end
+  end)
   it("dailyDate() recovers the date only from real daily seeds", function()
     eq(S.dailyDate(S.dailySeed("2026-11-04")), "2026-11-04")
     eq(S.dailyDate("abc123"), nil)

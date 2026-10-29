@@ -74,17 +74,31 @@ always works.
 ## Development
 
 ```
-lua5.1 tests/run.lua          # all tests (engine, parity, session/DB, full addon in a WoW API mock)
-tools/build_release.sh        # dist/StackRivals-<version>.zip (addon folder only)
+lua5.1 tests/run.lua                 # all tests: engine + parity, session/DB, addon in a WoW API mock,
+                                     # layout checks, fuzzing/stress (~15 s)
+python3 tools/validate_addon.py StackRivals   # static checks of the addon folder
+tools/build_release.sh               # validate + test + reproducible ZIP + sha256 + metadata in dist/
+lua5.1 tests/dump_screens.lua /tmp/p && python3 tools/render_preview.py /tmp/p StackRivals/Media
+                                     # developer previews of every screen (not in-game screenshots)
 bun tools/parity/gen-fixtures.ts ../stackrivals-practice-arena > tests/fixtures/parity.lua
+                                     # regenerate fixtures from the web engine
 ```
 
 - `StackRivals/Engine` — pure Lua 5.1 game engine (no WoW API): PRNG, pieces, rules, input DAS/ARR.
 - `StackRivals/Core` — session (modes, pause, countdown), saved data, sound, bootstrap/events.
 - `StackRivals/UI` — theme, board renderer, window, minimap button.
-- `tests/` — Lua tests + a strict WoW API mock; `tools/` — fixture generator, icon/sound generators, release script.
+- `tests/` — Lua tests, strict WoW API mock, layout resolver; `tools/` — validator, release build,
+  preview renderer, icon/sound generators, fixture generator. `docs/` — everything else.
 
-Everything in `tests/`, `tools/` and `docs/` stays out of the release ZIP.
+The release ZIP contains only `StackRivals/`. The same commit always builds the same bytes
+(timestamps come from the commit), and CI checks that on every push.
 
-See [docs/TESTING_IN_WOW.md](docs/TESTING_IN_WOW.md) for the in-client test pass and
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design decisions and the multi-client plan.
+Docs: [testing in WoW](docs/TESTING_IN_WOW.md) · [compatibility](docs/COMPATIBILITY.md) ·
+[release plan](docs/RELEASE_PLAN.md) · [launch day](docs/LAUNCH_DAY.md) ·
+[CurseForge listing](docs/CURSEFORGE.md) · [architecture](docs/ARCHITECTURE.md) ·
+[previews](docs/preview/README.md)
+
+## License
+
+All Rights Reserved © StackRivals. The source is included in every download so anyone can read it
+(as Blizzard's add-on policy requires), but it may not be redistributed or reused without permission.

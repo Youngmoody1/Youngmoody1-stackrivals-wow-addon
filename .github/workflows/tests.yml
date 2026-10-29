@@ -1,13 +1,26 @@
 name: tests
 on: [push, pull_request]
 jobs:
-  lua51:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
       - name: Install Lua 5.1 (same language version as WoW)
-        run: sudo apt-get update && sudo apt-get install -y lua5.1
-      - name: Run tests
-        run: lua5.1 tests/run.lua
-      - name: Build release zip
+        run: sudo apt-get update && sudo apt-get install -y lua5.1 zip unzip
+      - name: Validate, test, package, verify
         run: tools/build_release.sh
+      - name: Reproducibility (second build must be byte-identical)
+        run: |
+          cp dist/StackRivals-*.zip /tmp/first.zip
+          tools/build_release.sh > /dev/null
+          cmp dist/StackRivals-*.zip /tmp/first.zip
+      - name: Keep the build
+        uses: actions/upload-artifact@v4
+        with:
+          name: StackRivals-build
+          path: |
+            dist/*.zip
+            dist/*.sha256
+            dist/*.json
