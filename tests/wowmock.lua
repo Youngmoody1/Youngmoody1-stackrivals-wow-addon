@@ -21,7 +21,34 @@ local function strict(obj, kind)
   })
 end
 
+-- AnimationGroup / Animation: only the methods the addon uses (strict like everything else).
+local ANIM_METHODS = {
+  SetDuration = 1, SetStartDelay = 1, SetSmoothing = 1, SetOrder = 1, SetFromAlpha = 1, SetToAlpha = 1,
+  SetScaleFrom = 1, SetScaleTo = 1, SetOrigin = 1, SetOffset = 1,
+}
+local function newAnimationGroup(owner)
+  local g = { _anims = {}, _playing = false, _owner = owner, _scripts = {} }
+  g.CreateAnimation = function(o, kind)
+    assert(kind == "Alpha" or kind == "Scale" or kind == "Translation", "mock: unsupported animation " .. tostring(kind))
+    local a = { _kind = kind }
+    for m in pairs(ANIM_METHODS) do a[m] = function(self, ...) self["_" .. m] = { ... } end end
+    o._anims[#o._anims + 1] = a
+    return strict(a, "Animation(" .. kind .. ")")
+  end
+  -- the mock renders the end state: a played group ends at full alpha unless it fades out
+  -- previews show the moment the animation is visible (a pop/fade-in at full alpha)
+  g.Play = function(o) o._playing = true; M.animPlays = (M.animPlays or 0) + 1; if o._owner.SetAlpha then o._owner:SetAlpha(1) end end
+  g.Stop = function(o) o._playing = false end
+  g.Finish = function(o) o._playing = false end
+  g.IsPlaying = function(o) return o._playing end
+  g.SetToFinalAlpha = function() end
+  g.SetLooping = function() end
+  g.SetScript = function(o, ev, fn) o._scripts[ev] = fn end
+  return strict(g, "AnimationGroup")
+end
+
 local region = {}
+function region.CreateAnimationGroup(o) local g = newAnimationGroup(o); o._groups = o._groups or {}; o._groups[#o._groups + 1] = g; return g end
 function region.SetPoint(o, ...) o._points[#o._points + 1] = { ... } end
 function region.ClearAllPoints(o) o._points = {} end
 function region.SetAllPoints(o, rel) o._points = { "ALL" }; o._allRel = rel end
@@ -60,7 +87,13 @@ end
 local function newFontString(parent, layer)
   return strict(newRegion("FontString", {
     _parent = parent, _layer = layer or "OVERLAY", _sub = 0, _order = nextOrder(),
-    SetFont = function(o, f, s, fl) assert(type(f) == "string" and type(s) == "number", "SetFont(path, size)"); o._font = { f, s, fl } end,
+    SetFont = function(o, f, s, fl)
+      assert(type(f) == "string" and type(s) == "number", "SetFont(path, size)")
+      if M.failFonts and f:find("AddOns", 1, true) then o._font = nil; return false end -- missing font file
+      o._font = { f, s, fl }
+      return true
+    end,
+    GetFont = function(o) if o._font then return o._font[1], o._font[2], o._font[3] end end,
     SetText = function(o, t) o._text = t end,
     GetText = function(o) return o._text end,
     SetTextColor = function(o, r, g, b) o._tr, o._tg, o._tb = r, g, b end,
@@ -164,7 +197,14 @@ function M.install(G)
   G.PlaySoundFile = function(path, channel) M.sounds[#M.sounds + 1] = path; return true end
   G.PlaySound = function() return true end
   G.SOUNDKIT = { IG_MAINMENU_OPEN = 850 }
-  G.C_AddOns = { GetAddOnMetadata = function(_, field) if field == "Version" then return "0.1.0-test" end end }
+  -- metadata straight from the real TOC, so previews and tests show the real version
+  local toc = {}
+  local fh = io.open((M.root or "StackRivals") .. "/StackRivals.toc")
+  if fh then
+    for line in fh:lines() do local k, v = line:match("^## ([%w%-]+):%s*(.-)%s*$"); if k then toc[k] = v end end
+    fh:close()
+  end
+  G.C_AddOns = { GetAddOnMetadata = function(_, field) return toc[field] end }
   G.GetBuildInfo = function() return "1.15.0", "70338", "Oct 2026", 16001 end
   G.date = os.date
   G.tinsert = table.insert

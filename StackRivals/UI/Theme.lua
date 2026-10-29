@@ -1,7 +1,12 @@
 --[[
-  StackRivals - visual identity for WoW (from the web design system, docs/DESIGN.md):
-  navy foundation, red = the player / primary actions, steel = secondary, gold = records,
-  green = success. Built only from flat textures and WoW's own fonts: no external assets.
+  StackRivals - visual identity for WoW, matched to the website's design tokens
+  (stackrivals.io src/styles.css + src/components/brand/BrandMark.tsx):
+    navy background, red = the player / primary actions, steel blue = the rival / secondary,
+    gold = records, green = success. Display type: Chakra Petch (the site's display font, bundled
+    under the SIL Open Font License, Media/Fonts/OFL-ChakraPetch.txt). Body text stays in WoW's
+    own font so every client locale renders it.
+  Flat textures + fonts only; animations are AnimationGroups on frames (run by the client, no
+  per-frame Lua).
 ]]
 local ADDON, ns = ...
 
@@ -13,24 +18,28 @@ local function hex(h)
 end
 T.hex = hex
 
+-- Web tokens (names in comments)
 T.C = {
-  ink = { hex("0B0C10") },
-  navy = { hex("0A0E1A") },
-  surface1 = { hex("171A21") },
-  surface2 = { hex("10121A") },
-  cell = { hex("13161D") },
-  line = { hex("2A3350") },
-  red = { hex("E0242F") },
-  redLight = { hex("FF4D5A") },
-  redDeep = { hex("7E121A") },
-  steel = { hex("8FC0DD") },
-  steelDeep = { hex("3D6A86") },
-  gold = { hex("F2CF6B") },
-  green = { hex("7BE3A0") },
+  ink = { hex("0B0C10") },        -- --brand-ink
+  navy = { hex("0A0E1A") },       -- --background
+  surface1 = { hex("121A2E") },   -- --card
+  surface2 = { hex("10162A") },   -- --surface
+  raised = { hex("182036") },     -- --surface-raised
+  cell = { hex("141B2D") },       -- empty board cell (between --grid and --surface)
+  line = { hex("27324F") },       -- --border on navy, a touch stronger for 1px WoW lines
+  red = { hex("E0242F") },        -- --brand-red
+  redLight = { hex("FF4D5A") },   -- --brand-red-text (small red text)
+  redDeep = { hex("7E121A") },    -- --brand-red-deep
+  steel = { hex("4FA8FF") },      -- --brand-steel (rival)
+  steelDeep = { hex("1D4E80") },  -- steel button fill
+  gold = { hex("F2CF6B") },       -- --brand-gold (records)
+  goldDeep = { hex("4A3A12") },
+  green = { hex("7BE3A0") },      -- --brand-green
   violet = { hex("B98CF0") },
-  paper = { hex("F6F4F0") },
-  body = { hex("B6BCC7") },
-  label = { hex("7F8794") },
+  paper = { hex("F6F4F0") },      -- --foreground
+  body = { hex("CDD2DC") },
+  label = { hex("A3ABBA") },      -- --muted-foreground
+  dim = { hex("6E7789") },
 }
 
 -- "Circuit" block skin (the web default), converted from its oklch values to sRGB.
@@ -48,36 +57,45 @@ T.PIECE = {
 
 T.FONT = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
 T.MEDIA = "Interface\\AddOns\\" .. ADDON .. "\\Media\\"
+T.DISPLAY = T.MEDIA .. "Fonts\\ChakraPetch-Bold.ttf"
+T.DISPLAY_ITALIC = T.MEDIA .. "Fonts\\ChakraPetch-BoldItalic.ttf"
 
---- Solid colour texture.
-function T.tex(parent, layer, c, a, sub)
-  local t = parent:CreateTexture(nil, layer or "ARTWORK", nil, sub)
-  t:SetColorTexture(c[1], c[2], c[3], a or 1)
-  return t
+-- Type scale (window units; the window itself is scaled to the screen, see UI:ApplyScale).
+-- Nothing visible is smaller than `label`.
+T.SIZE = { hero = 36, display = 26, title = 19, heading = 16, big = 15, body = 13, small = 12, label = 11 }
+
+--- Set a font, falling back to WoW's font if the file can't be loaded (never invisible text).
+function T.setFont(fs, path, size, flags)
+  fs:SetFont(path, size, flags or "")
+  if path ~= T.FONT and not fs:GetFont() then fs:SetFont(T.FONT, size, flags or "") end
 end
 
---- Font string with the addon's type settings.
-function T.text(parent, size, c, flags, layer)
+--- Font string. kind: nil = body font, "display" = Chakra Petch Bold, "italic" = Bold Italic.
+function T.text(parent, size, c, flags, layer, kind)
   local fs = parent:CreateFontString(nil, layer or "OVERLAY")
-  fs:SetFont(T.FONT, size or 12, flags or "")
+  local path = (kind == "display" and T.DISPLAY) or (kind == "italic" and T.DISPLAY_ITALIC) or T.FONT
+  T.setFont(fs, path, size or T.SIZE.body, flags)
   c = c or T.C.paper
   fs:SetTextColor(c[1], c[2], c[3], 1)
-  fs:SetShadowColor(0, 0, 0, 0.8)
+  fs:SetShadowColor(0, 0, 0, 0.85)
   fs:SetShadowOffset(1, -1)
   return fs
 end
 
---- Uppercase mono-style label (letter-spaced feel via spaces is avoided: keep it readable).
+--- Display-font shortcut (headings, numbers, buttons).
+function T.display(parent, size, c, flags, layer) return T.text(parent, size, c, flags, layer, "display") end
+
+--- Small uppercase label (muted).
 function T.label(parent, txt, size)
-  local fs = T.text(parent, size or 10, T.C.label)
+  local fs = T.display(parent, size or T.SIZE.label, T.C.label)
   fs:SetText(txt)
   return fs
 end
 
---- Panel: dark surface, 1px hairline border, optional coloured top edge-light.
+--- Panel: card surface, 1px hairline border, optional coloured top edge-light.
 function T.panel(parent, edge, alpha)
   local f = CreateFrame("Frame", nil, parent)
-  local bg = T.tex(f, "BACKGROUND", T.C.surface1, alpha or 0.92)
+  local bg = T.tex(f, "BACKGROUND", T.C.surface1, alpha or 0.94)
   bg:SetAllPoints()
   f.bg = bg
   local function line(p1, p2, w, h)
@@ -99,26 +117,34 @@ function T.panel(parent, edge, alpha)
   return f
 end
 
+--- Solid colour texture.
+function T.tex(parent, layer, c, a, sub)
+  local t = parent:CreateTexture(nil, layer or "ARTWORK", nil, sub)
+  t:SetColorTexture(c[1], c[2], c[3], a or 1)
+  return t
+end
+
 local STYLES = {
   primary = { bg = T.C.red, hover = T.C.redLight, text = T.C.paper, border = T.C.red },
-  steel = { bg = T.C.steelDeep, hover = T.C.steel, text = T.C.paper, border = T.C.steel },
-  frame = { bg = T.C.surface2, hover = T.C.surface1, text = T.C.paper, border = T.C.line },
-  gold = { bg = { 0.35, 0.28, 0.08 }, hover = { 0.5, 0.4, 0.12 }, text = T.C.gold, border = T.C.gold },
+  steel = { bg = T.C.steelDeep, hover = { hex("2A69A8") }, text = T.C.paper, border = T.C.steel },
+  frame = { bg = T.C.surface2, hover = T.C.raised, text = T.C.paper, border = T.C.line },
+  gold = { bg = T.C.goldDeep, hover = { hex("5E4A18") }, text = T.C.gold, border = T.C.gold },
 }
+T.STYLES = STYLES
 
 --- Flat brand button. style: primary | steel | frame | gold.
 function T.button(parent, label, w, h, style, onClick)
   local st = STYLES[style or "frame"]
   local b = CreateFrame("Button", nil, parent)
-  b:SetSize(w or 120, h or 26)
+  b:SetSize(w or 120, h or 28)
   local border = T.tex(b, "BACKGROUND", st.border, 1)
   border:SetAllPoints()
   local bg = T.tex(b, "BORDER", st.bg, 1)
   bg:SetPoint("TOPLEFT", 1, -1); bg:SetPoint("BOTTOMRIGHT", -1, 1)
-  local fs = T.text(b, 12, st.text, "")
+  local fs = T.display(b, (h or 28) >= 30 and T.SIZE.big or T.SIZE.small, st.text)
   fs:SetPoint("CENTER", 0, 0)
   fs:SetText(label)
-  b.fs, b.bgTex, b.style = fs, bg, st
+  b.fs, b.bgTex, b.border, b.style = fs, bg, border, st
   b:SetScript("OnEnter", function(self)
     if self:IsEnabled() then self.bgTex:SetColorTexture(st.hover[1], st.hover[2], st.hover[3], 1) end
     if self.tip then
@@ -141,17 +167,17 @@ function T.button(parent, label, w, h, style, onClick)
 end
 
 --- On/off switch row: "[x] Label". Calls onChange(newValue).
-function T.toggle(parent, labelText, onChange)
+function T.toggle(parent, labelText, onChange, width)
   local b = CreateFrame("Button", nil, parent)
-  b:SetSize(220, 20)
+  b:SetSize(width or 230, 24)
   local box = T.tex(b, "BORDER", T.C.line, 1)
-  box:SetSize(14, 14); box:SetPoint("LEFT", 0, 0)
+  box:SetSize(16, 16); box:SetPoint("LEFT", 0, 0)
   local inner = T.tex(b, "ARTWORK", T.C.surface2, 1)
-  inner:SetSize(12, 12); inner:SetPoint("CENTER", box, "CENTER")
+  inner:SetSize(14, 14); inner:SetPoint("CENTER", box, "CENTER")
   local fill = T.tex(b, "OVERLAY", T.C.red, 1)
-  fill:SetSize(8, 8); fill:SetPoint("CENTER", box, "CENTER")
-  local fs = T.text(b, 12, T.C.body)
-  fs:SetPoint("LEFT", box, "RIGHT", 8, 0)
+  fill:SetSize(10, 10); fill:SetPoint("CENTER", box, "CENTER")
+  local fs = T.text(b, T.SIZE.body, T.C.body)
+  fs:SetPoint("LEFT", box, "RIGHT", 9, 0)
   fs:SetText(labelText)
   b.value = false
   function b:SetValue(v) self.value = v and true or false; fill:SetShown(self.value) end
@@ -162,6 +188,73 @@ function T.toggle(parent, labelText, onChange)
   b:SetScript("OnEnter", function() fs:SetTextColor(T.C.paper[1], T.C.paper[2], T.C.paper[3]) end)
   b:SetScript("OnLeave", function() fs:SetTextColor(T.C.body[1], T.C.body[2], T.C.body[3]) end)
   return b
+end
+
+--- A keycap: small framed box with a key name (How to play, controls strip).
+function T.keycap(parent, key, minW)
+  local f = CreateFrame("Frame", nil, parent)
+  local fs = T.display(f, T.SIZE.small, T.C.paper)
+  fs:SetPoint("CENTER", 0, 1)
+  local bg = T.tex(f, "BACKGROUND", T.C.raised, 1); bg:SetPoint("TOPLEFT", 1, -1); bg:SetPoint("BOTTOMRIGHT", -1, 1)
+  local border = T.tex(f, "BORDER", T.C.line, 1, -1); border:SetAllPoints()
+  local base = T.tex(f, "ARTWORK", T.C.line, 1); base:SetPoint("BOTTOMLEFT", 1, 1); base:SetPoint("BOTTOMRIGHT", -1, 1); base:SetHeight(2)
+  f.fs = fs
+  f.minW = minW or 30
+  function f:SetKey(k)
+    self.fs:SetText(k)
+    -- width from the key name (estimated; Chakra Petch caps ~0.62 em)
+    self:SetSize(math.max(self.minW, #k * 7.6 + 14), 22)
+  end
+  f:SetKey(key or "")
+  return f
+end
+
+------------------------------------------------------------------------------------------------
+-- Animations (AnimationGroups: driven by the client, cheap, nothing runs in Lua per frame)
+------------------------------------------------------------------------------------------------
+local function anim(group, kind, dur, order, delay)
+  local a = group:CreateAnimation(kind)
+  a:SetDuration(dur)
+  a:SetOrder(order or 1)
+  if delay then a:SetStartDelay(delay) end
+  a:SetSmoothing("OUT")
+  return a
+end
+
+--- Pop: scale from `from` to 1 while fading in, hold, then fade out (callouts, score pops).
+--- `rise` moves it up while it fades. Returns the AnimationGroup (call :Play()).
+function T.popAnim(frame, from, hold, fade, rise)
+  local g = frame:CreateAnimationGroup()
+  local s = anim(g, "Scale", 0.16, 1)
+  if s.SetScaleFrom then s:SetScaleFrom(from or 1.35, from or 1.35); s:SetScaleTo(1, 1) end
+  local a = anim(g, "Alpha", 0.12, 1)
+  a:SetFromAlpha(0); a:SetToAlpha(1)
+  local out = anim(g, "Alpha", fade or 0.35, 2, hold or 0.7)
+  out:SetFromAlpha(1); out:SetToAlpha(0)
+  if rise then
+    local t = anim(g, "Translation", (hold or 0.7) + (fade or 0.35), 2)
+    t:SetOffset(0, rise)
+  end
+  g:SetToFinalAlpha(true)
+  return g
+end
+
+--- Pulse: quick scale bump and back (score, badges, countdown numbers).
+function T.pulseAnim(frame, amount, dur)
+  local g = frame:CreateAnimationGroup()
+  local up = anim(g, "Scale", (dur or 0.24) * 0.4, 1)
+  if up.SetScaleFrom then up:SetScaleFrom(1, 1); up:SetScaleTo(amount or 1.18, amount or 1.18) end
+  local down = anim(g, "Scale", (dur or 0.24) * 0.6, 2)
+  if down.SetScaleFrom then down:SetScaleFrom(amount or 1.18, amount or 1.18); down:SetScaleTo(1, 1) end
+  return g
+end
+
+--- Fade in (overlays).
+function T.fadeInAnim(frame, dur)
+  local g = frame:CreateAnimationGroup()
+  local a = anim(g, "Alpha", dur or 0.25, 1)
+  a:SetFromAlpha(0); a:SetToAlpha(1)
+  return g
 end
 
 --- 12345678 -> "12,345,678"
@@ -181,7 +274,7 @@ function T.clock(sec)
   return string.format("%d:%02d", math.floor(sec / 60), sec % 60)
 end
 
---- Friendly name for a WoW key code ("LEFT" -> "Left Arrow").
+--- Friendly name for a WoW key code.
 local KEY_NAMES = {
   LEFT = "Left", RIGHT = "Right", UP = "Up", DOWN = "Down", SPACE = "Space", ESCAPE = "Esc",
   LSHIFT = "L-Shift", RSHIFT = "R-Shift", LCTRL = "L-Ctrl", RCTRL = "R-Ctrl", LALT = "L-Alt", RALT = "R-Alt",

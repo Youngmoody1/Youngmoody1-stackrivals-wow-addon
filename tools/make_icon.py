@@ -1,50 +1,82 @@
-"""Draws the StackRivals 'Versus' mark (two red blades crossing in an X, steel diamond at the
-crossing) as WoW-ready TGA textures. Original art, generated from code - no external assets."""
+"""Draws the StackRivals "Versus" mark as WoW-ready TGA textures, from the exact geometry of the
+website's brand mark (src/components/brand/BrandMark.tsx in the web project: MarkE / MarkESmall,
+64x64 viewBox). Cuts and gaps are transparent, so the mark works on any background.
+
+    python3 tools/make_icon.py StackRivals/Media
+
+    mark.tga       128x128  full mark (blades, two horizontal cuts, steel diamond)  - header
+    marksmall.tga   64x64   simplified mark (thicker blades, one gap, no cuts)       - minimap, <32 px
+    icon.tga        64x64   simplified mark on the dark rounded tile (web favicon)   - AddOn list
+"""
 import sys
 from PIL import Image, ImageDraw
 
-RED = (224, 36, 47, 255)
-RED_LIGHT = (240, 80, 90, 255)
-STEEL = (143, 192, 221, 255)
-NAVY = (10, 14, 26, 255)
-NAVY2 = (24, 32, 54, 255)
+RED = (0xE0, 0x24, 0x2F)
+STEEL = (0x4F, 0xA8, 0xFF)
+INK = (0x0B, 0x0C, 0x10)
+SS = 8  # supersampling
 
-def blade(draw, S, flip):
-    # A long chamfered bar from corner to corner, drawn as a rotated polygon.
-    import math
-    cx = cy = S / 2
-    L, W = S * 0.46, S * 0.085
-    ang = math.radians(-45 if flip else 45)
-    ca, sa = math.cos(ang), math.sin(ang)
-    pts = [(-L, -W), (L - W, -W), (L, 0), (L - W, W), (-L, W), (-L + W * 0.6, 0)]
-    poly = [(cx + x * ca - y * sa, cy + x * sa + y * ca) for x, y in pts]
-    draw.polygon(poly, fill=RED)
-    # stacked horizontal cuts (the "stack" motif) drawn in the background colour later
-    return ang
 
-def mark(S, bg):
-    img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    if bg:
-        c = S * 0.14  # chamfered tile: top-left and bottom-right cut
-        d.polygon([(c, 0), (S, 0), (S, S - c), (S - c, S), (0, S), (0, c)], fill=NAVY)
-        d.polygon([(c, 0), (S, 0), (S, S * 0.04), (c * 0.96, S * 0.04)], fill=RED)
-    blade(d, S, False)
-    blade(d, S, True)
-    # cuts across the blades
-    cut = NAVY if bg else (0, 0, 0, 0)
-    for k in (-0.2, -0.08, 0.08, 0.2):
-        y = S / 2 + k * S
-        d.rectangle([S * 0.08, y - S * 0.012, S * 0.92, y + S * 0.012], fill=cut)
-    # steel diamond at the crossing
-    r = S * 0.075
-    d.polygon([(S / 2, S / 2 - r), (S / 2 + r, S / 2), (S / 2, S / 2 + r), (S / 2 - r, S / 2)], fill=STEEL)
-    return img
+def poly(d, pts, k, fill, ox=0.0, oy=0.0, s=1.0):
+    d.polygon([((ox + x * s) * k, (oy + y * s) * k) for x, y in pts], fill=fill)
 
-def save(img, size, path):
-    img.resize((size, size), Image.LANCZOS).save(path, compression=None)
 
-out = sys.argv[1]
-save(mark(512, True), 64, f"{out}/icon.tga")        # AddOn list / compartment icon
-save(mark(512, False), 64, f"{out}/mark.tga")       # transparent mark for minimap + header
-print("ok")
+def stroke(d, pts, k, width, fill, ox=0.0, oy=0.0, s=1.0):
+    p = [((ox + x * s) * k, (oy + y * s) * k) for x, y in pts]
+    d.line(p + [p[0], p[1]], fill=fill, width=max(1, int(round(width * s * k))), joint="curve")
+
+
+def full_mark(size):
+    """MarkE: polygons 5,5 20,5 59,59 44,59 / 44,5 59,5 20,59 5,59 (stroke 3.5 in the cut colour),
+    cut rects y=19..22 and y=42..45, steel diamond 32,28 35.5,32 32,36 28.5,32."""
+    k = size * SS / 64.0
+    red = Image.new("L", (size * SS, size * SS), 0)
+    d = ImageDraw.Draw(red)
+    a = [(5, 5), (20, 5), (59, 59), (44, 59)]
+    b = [(44, 5), (59, 5), (20, 59), (5, 59)]
+    poly(d, a, k, 255)
+    stroke(d, b, k, 3.5, 0)           # the gap where blade b crosses blade a
+    poly(d, b, k, 255)
+    d.rectangle([0, 19 * k, 64 * k, 22 * k], fill=0)
+    d.rectangle([0, 42 * k, 64 * k, 45 * k], fill=0)
+    steel = Image.new("L", red.size, 0)
+    poly(ImageDraw.Draw(steel), [(32, 28), (35.5, 32), (32, 36), (28.5, 32)], k, 255)
+    return compose(size, [(red, RED), (steel, STEEL)])
+
+
+def small_mark(size, ox=0.0, oy=0.0, s=1.0, tile=False):
+    """MarkESmall: 2,4 22,4 62,60 42,60 / 42,4 62,4 22,60 2,60 with a 6-wide gap stroke."""
+    k = size * SS / 64.0
+    red = Image.new("L", (size * SS, size * SS), 0)
+    d = ImageDraw.Draw(red)
+    a = [(2, 4), (22, 4), (62, 60), (42, 60)]
+    b = [(42, 4), (62, 4), (22, 60), (2, 60)]
+    poly(d, a, k, 255, ox, oy, s)
+    stroke(d, b, k, 6, 0, ox, oy, s)
+    poly(d, b, k, 255, ox, oy, s)
+    layers = [(red, RED)]
+    if tile:  # favicon: rounded ink tile rx=12 behind the mark
+        bg = Image.new("L", red.size, 0)
+        ImageDraw.Draw(bg).rounded_rectangle([0, 0, size * SS - 1, size * SS - 1], radius=12 * k, fill=255)
+        layers.insert(0, (bg, INK))
+    return compose(size, layers)
+
+
+def compose(size, layers):
+    out = Image.new("RGBA", layers[0][0].size, (0, 0, 0, 0))
+    for mask, rgb in layers:
+        out.paste(Image.new("RGBA", out.size, rgb + (255,)), (0, 0), mask)
+    return out.resize((size, size), Image.LANCZOS)
+
+
+def save(img, path):
+    img.save(path, compression=None)  # uncompressed TGA (WoW reads it on every client)
+
+
+if __name__ == "__main__":
+    out = sys.argv[1]
+    save(full_mark(128), f"{out}/mark.tga")
+    save(small_mark(64), f"{out}/marksmall.tga")
+    # favicon.svg: <rect rx=12 fill=#0b0c10/> + MarkESmall at translate(6 6) scale(0.8125)
+    save(small_mark(64, ox=6, oy=6, s=0.8125, tile=True), f"{out}/icon.tga")
+    print("ok")

@@ -64,6 +64,25 @@
 - Tests: 220 Lua tests + 77 cross-implementation vector checks + a 4,000-code Lua/TS differential fuzz.
 
 ## Unreleased (main)
+## 0.3.2 — design pass (branch `design`, not released)
+
+- Brand matched to stackrivals.io: the exact "Versus" mark (blades, cuts, steel diamond) from the
+  site's SVG, the STACKRIVALS wordmark and display type in Chakra Petch (bundled, SIL OFL), the
+  site's colour tokens (navy, card surfaces, brand red/steel/gold, muted text #A3ABBA).
+- Readable at any resolution: the window is fitted to ~62% of the screen height at every
+  resolution and UI scale (Settings: 70-140% of that); larger type, nothing under 11 units.
+- Mode menu uses the whole window: three big cards with the best score, one click to play. How
+  to play is offered ("New? How to play"), no longer forced on first open; the first runs show the
+  controls on the board during the countdown.
+- How to play: goal, points table and keycaps for your own key bindings, "Play Blitz 2:00" button.
+  Records: a card per mode with the best score, top 5 and stats. Settings: grouped sections.
+- Game feel: callouts pop in (Chakra Petch italic), the points you scored float up, the score
+  pulses, countdown numbers pulse, "GO!", hard drops flash the board rim, pause/game over fade in,
+  a new best pops. All AnimationGroups (run by the client, no Lua per frame).
+- Gameplay rules unchanged (engine untouched; parity tests identical).
+- Tests: fuzz RNG uses high bits (ported from the multiplayer branch: full state coverage again).
+
+## Unreleased
 
 - Web sync: fixtures now record the web commit they came from (5d2a9fd) and a full rules
   fingerprint; `tools/parity/check_web.sh` compares any newer web version and names each differing

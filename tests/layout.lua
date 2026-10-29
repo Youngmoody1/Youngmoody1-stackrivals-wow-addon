@@ -22,8 +22,22 @@ local function stripCodes(s)
 end
 L.stripCodes = stripCodes
 
---- Estimated pixel width of one line of text at `size` (Friz Quadrata-like proportions).
-function L.textWidth(line, size)
+-- Exact advance widths for the bundled display fonts (tools/font_metrics.py).
+local METRICS = (function()
+  local ok, m = pcall(dofile, "tests/fontmetrics.lua")
+  return ok and m or {}
+end)()
+
+--- Pixel width of one line of text at `size`: exact for the bundled Chakra Petch fonts,
+--- estimated (Friz Quadrata-like proportions) for WoW's own font.
+function L.textWidth(line, size, path)
+  local key = path and path:match("(ChakraPetch%-%w+)%.ttf")
+  local m = key and METRICS[key]
+  if m then
+    local w = 0
+    for ch in stripCodes(line):gmatch(".") do w = w + (m[ch:byte()] or 0.6) * size end
+    return w
+  end
   local w = 0
   for ch in stripCodes(line):gmatch(".") do
     local f
@@ -41,6 +55,7 @@ local function textLines(fs)
   local txt = fs._text
   if type(txt) ~= "string" or txt == "" then return {}, 0 end
   local size = fs._font and fs._font[2] or 12
+  local path = fs._font and fs._font[1]
   local lines, maxw = {}, 0
   for raw in (txt .. "\n"):gmatch("(.-)\n") do
     if fs._w and fs._w > 0 then
@@ -48,7 +63,7 @@ local function textLines(fs)
       local cur = ""
       for word in raw:gmatch("%S+") do
         local try = (cur == "") and word or (cur .. " " .. word)
-        if cur ~= "" and L.textWidth(try, size) > fs._w then
+        if cur ~= "" and L.textWidth(try, size, path) > fs._w then
           lines[#lines + 1] = cur; cur = word
         else
           cur = try
@@ -59,7 +74,7 @@ local function textLines(fs)
       lines[#lines + 1] = raw
     end
   end
-  for _, l in ipairs(lines) do maxw = math.max(maxw, L.textWidth(l, size)) end
+  for _, l in ipairs(lines) do maxw = math.max(maxw, L.textWidth(l, size, path)) end
   return lines, maxw
 end
 L.textLines = textLines
@@ -213,8 +228,17 @@ function L.dump(path, root, R, items, title)
       local lines = textLines(o)
       if #lines > 0 then
         local fsz = o._font and o._font[2] or 12
-        fh:write(string.format("TEXT\t%.1f\t%.1f\t%.1f\t%.1f\t%.3f\t%.3f\t%.3f\t%.3f\t%d\t%s\t%s\t%s\n", rc.l, rc.b, rc.r, rc.t,
-          o._tr or 1, o._tg or 1, o._tb or 1, a, fsz, o._justify or "CENTER", (o._font and o._font[3]) or "",
+        local fontName = (o._font and o._font[1] or ""):match("([%w%-]+)%.[tT][tT][fF]$") or ""
+        -- WoW sizes a font string without a set width to its text, so it sits on its anchor: draw
+        -- it from the anchor side instead of centring it in our estimated box
+        local justify = o._justify
+        if not justify then
+          local p = type(o._points[1]) == "table" and o._points[1][1] or "CENTER"
+          justify = p:find("LEFT") and "LEFT" or p:find("RIGHT") and "RIGHT" or "CENTER"
+          if o._w and o._w > 0 then justify = "CENTER" end
+        end
+        fh:write(string.format("TEXT\t%.1f\t%.1f\t%.1f\t%.1f\t%.3f\t%.3f\t%.3f\t%.3f\t%d\t%s\t%s\t%s\t%s\n", rc.l, rc.b, rc.r, rc.t,
+          o._tr or 1, o._tg or 1, o._tb or 1, a, fsz, justify, (o._font and o._font[3]) or "", fontName,
           stripCodes(table.concat(lines, "\\n")):gsub("\t", " ")))
       end
     end
