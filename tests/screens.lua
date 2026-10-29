@@ -69,6 +69,14 @@ S.list = {
   { "1-menu", "Mode menu", function()
     local M, ns = boot(); seedRecords(ns); SlashCmdList.STACKRIVALS(""); M.frames_step(1); return M, ns
   end },
+  { "1b-menu-first-time", "Mode menu - first time", function()
+    local M, ns = boot(); ns.db.seenHelp = false; SlashCmdList.STACKRIVALS(""); M.frames_step(1); return M, ns
+  end },
+  { "1c-menu-continue", "Mode menu - a run to continue", function()
+    local M, ns = boot(); seedRecords(ns)
+    ns.db.suspended = { mode = "classic", log = "", playSeconds = 95, date = ns.App:Today() } -- as left by /reload mid-run
+    SlashCmdList.STACKRIVALS(""); M.frames_step(1); return M, ns
+  end },
   { "2-how-to-play", "How to play", function()
     local M, ns = boot(); ns.db.seenHelp = false; SlashCmdList.STACKRIVALS(""); ns.UI:ShowSheet("help"); M.frames_step(1); return M, ns
   end },
@@ -77,11 +85,20 @@ S.list = {
   end },
   { "3-classic", "Classic - mid game", function()
     local M, ns = boot(); seedRecords(ns); play(M, ns, "classic")
-    ns.UI.callout2:SetTextColor(ns.T.C.redLight[1], ns.T.C.redLight[2], ns.T.C.redLight[3])
-    ns.UI:Callout("DOUBLE", "COMBO x2", nil, 950); M.frames_step(1); return M, ns
+    ns.UI:OnEvent({ kind = "clear", a = 2, b = { points = 950, combo = 1 } }); M.frames_step(1); return M, ns
+  end },
+  { "3b-quad", "Quad, back-to-back - the biggest callout", function()
+    local M, ns = boot(); seedRecords(ns); play(M, ns, "classic")
+    ns.UI:OnEvent({ kind = "clear", a = 4, b = { points = 1800, combo = 2, backToBack = true } }); M.frames_step(3); return M, ns
   end },
   { "4-blitz", "Blitz 2:00 - timer", function()
     local M, ns = boot(); seedRecords(ns); play(M, ns, "blitz"); M.frames_step(1); return M, ns
+  end },
+  { "4b-blitz-last-seconds", "Blitz - last seconds", function()
+    local M, ns = boot(); seedRecords(ns); play(M, ns, "blitz")
+    local sess = ns.App.session
+    sess.state.tick = sess.mode.limitTicks - 4 * 60 + 1 -- the 4-second mark (no play needed)
+    ns.UI.dirty = true; M.frames_step(1); return M, ns
   end },
   { "5-paused-combat", "Paused by combat (window back after the fight)", function()
     local M, ns = boot(); play(M, ns, "classic")

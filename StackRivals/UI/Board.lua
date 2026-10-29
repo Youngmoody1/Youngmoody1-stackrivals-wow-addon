@@ -22,6 +22,13 @@ local function makeCell(parent, size)
   c.lo = parent:CreateTexture(nil, "ARTWORK", nil, 2)
   c.lo:SetPoint("BOTTOMLEFT", c.base, "BOTTOMLEFT"); c.lo:SetPoint("BOTTOMRIGHT", c.base, "BOTTOMRIGHT"); c.lo:SetHeight(hl)
   c.lo:SetColorTexture(0, 0, 0, 0.32)
+  -- ghost outline (left/right edges; top/bottom reuse hi/lo): shown only for the landing preview
+  c.gl = parent:CreateTexture(nil, "ARTWORK", nil, 3)
+  c.gl:SetPoint("TOPLEFT", c.base, "TOPLEFT"); c.gl:SetPoint("BOTTOMLEFT", c.base, "BOTTOMLEFT"); c.gl:SetWidth(1)
+  c.gr = parent:CreateTexture(nil, "ARTWORK", nil, 3)
+  c.gr:SetPoint("TOPRIGHT", c.base, "TOPRIGHT"); c.gr:SetPoint("BOTTOMRIGHT", c.base, "BOTTOMRIGHT"); c.gr:SetWidth(1)
+  c.gl:Hide(); c.gr:Hide()
+  c.hl = hl
   c.value = -1
   return c
 end
@@ -32,13 +39,24 @@ local function paint(c, value, mode)
   local key = value * 4 + mode
   if c.value == key then return end
   c.value = key
+  local wasGhost = c.ghost
+  if wasGhost and mode ~= 2 then
+    -- back from ghost: restore the bevel textures
+    c.ghost = false
+    c.gl:Hide(); c.gr:Hide()
+    c.hi:SetHeight(c.hl); c.lo:SetHeight(c.hl)
+    c.hi:SetColorTexture(1, 1, 1, 0.28); c.lo:SetColorTexture(0, 0, 0, 0.32)
+  end
   if mode == 0 then
     c.base:SetColorTexture(EMPTY[1], EMPTY[2], EMPTY[3], 1)
     c.hi:Hide(); c.lo:Hide()
   elseif mode == 2 then
+    -- landing preview: faint fill + a 1-unit outline in the piece colour (like the web ghost)
     local col = T.PIECE[value]
-    c.base:SetColorTexture(col[1] * 0.55, col[2] * 0.55, col[3] * 0.55, 0.45)
-    c.hi:Hide(); c.lo:Hide()
+    c.base:SetColorTexture(EMPTY[1] + (col[1] - EMPTY[1]) * 0.16, EMPTY[2] + (col[2] - EMPTY[2]) * 0.16, EMPTY[3] + (col[3] - EMPTY[3]) * 0.16, 1)
+    c.ghost = true
+    for _, e in ipairs({ c.hi, c.lo, c.gl, c.gr }) do e:SetColorTexture(col[1], col[2], col[3], 0.75); e:Show() end
+    c.hi:SetHeight(1); c.lo:SetHeight(1)
   else
     local col = T.PIECE[value] or T.PIECE[8]
     c.base:SetColorTexture(col[1], col[2], col[3], 1)
@@ -159,7 +177,7 @@ function Board.renderPreview(f, id, dim)
     local cell = f.cells[i]
     cell.base:ClearAllPoints()
     cell.base:SetPoint("TOPLEFT", f, "TOPLEFT", ox + (c[1] - minx) * cs, -(oy + (c[2] - miny) * cs))
-    local m = dim and 0.35 or 1
+    local m = dim and 0.5 or 1
     cell.base:SetColorTexture(col[1] * m, col[2] * m, col[3] * m, 1)
     cell.base:Show()
     if not dim then cell.hi:Show(); cell.lo:Show() end

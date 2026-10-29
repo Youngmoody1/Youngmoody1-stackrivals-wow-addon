@@ -17,7 +17,7 @@ ns.VERSION = meta("Version") or "dev"
 local App = { session = nil, inMenu = true, lastMode = "classic" }
 ns.App = App
 
-local PREFIX = "|cffff4d5aStack|r|cfff6f4f0Rivals|r: "
+local PREFIX = "|cfff6f4f0Stack|r|cffe0242fRivals|r: "
 function App:Print(msg) DEFAULT_CHAT_FRAME:AddMessage(PREFIX .. msg) end
 
 function App:Today() return date("!%Y-%m-%d") end

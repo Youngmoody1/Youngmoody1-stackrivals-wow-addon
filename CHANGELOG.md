@@ -5,8 +5,11 @@
 - Brand matched to stackrivals.io: the exact "Versus" mark (blades, cuts, steel diamond) from the
   site's SVG, the STACKRIVALS wordmark and display type in Chakra Petch (bundled, SIL OFL), the
   site's colour tokens (navy, card surfaces, brand red/steel/gold, muted text #A3ABBA).
-- Readable at any resolution: the window is fitted to ~62% of the screen height at every
-  resolution and UI scale (Settings: 70-140% of that); larger type, nothing under 11 units.
+- Readable at any resolution: the window is fitted to ~58% of the screen height at every
+  resolution and UI scale, never below 1:1 (Settings: 70-140% of that); larger type, nothing
+  under 11 units. Board cells snap to whole physical pixels; the simplified mark is used when the
+  header mark would be under 32 px. The window opens right of centre (your character stays
+  visible) and its centre is remembered, so resizing never moves it (0.3.1 positions still load).
 - Mode menu uses the whole window: three big cards with the best score, one click to play. How
   to play is offered ("New? How to play"), no longer forced on first open; the first runs show the
   controls on the board during the countdown.
@@ -15,6 +18,15 @@
 - Game feel: callouts pop in (Chakra Petch italic), the points you scored float up, the score
   pulses, countdown numbers pulse, "GO!", hard drops flash the board rim, pause/game over fade in,
   a new best pops. All AnimationGroups (run by the client, no Lua per frame).
+- Independent design review applied: callouts in tiers (single small and quiet, double/triple
+  big, quad biggest in gold with the rim, BACK-TO-BACK above, COMBO ×n counted like the site),
+  hard drop gives a 2 px board thump, the last 5 seconds of Blitz pulse, Classic's elapsed time is
+  quieter than Blitz's countdown, the ghost piece is an outline with a faint fill, a soft red halo
+  behind the window, the controls strip leaves the board at GO, "Start here" on Blitz for a new
+  player, "Continue your <mode> run", in-combat notes in the menu and on the pause screen, share
+  buttons centred, zero quads not mentioned, Settings hides its own button. After game over Space
+  plays again only for 6 s and only with the cursor on the window; then it's WoW's again.
+- Chat prefix and AddOn list title now read Stack (white) Rivals (red), like the wordmark.
 - Gameplay rules unchanged (engine untouched; parity tests identical).
 - Tests: fuzz RNG uses high bits (ported from the multiplayer branch: full state coverage again).
 

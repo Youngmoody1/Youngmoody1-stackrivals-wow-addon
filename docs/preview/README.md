@@ -7,7 +7,7 @@ addon version (from the TOC), the branch and the commit it was drawn from.
 What is real: positions and sizes of every element, colours, the bundled Chakra Petch font and the
 addon's own textures (mark, icon). What is approximate: WoW's own body font (drawn with DejaVu),
 Blizzard textures, and animations (each shows its visible moment). The window is drawn at its base
-size; in WoW it is scaled to ~62% of the screen height.
+size; in WoW it is scaled to ~58% of the screen height (never below 1:1).
 
 Final visual decisions wait for real in-client screenshots.
 

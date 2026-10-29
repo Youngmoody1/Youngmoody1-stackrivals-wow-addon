@@ -97,6 +97,7 @@ local function newFontString(parent, layer)
     SetText = function(o, t) o._text = t end,
     GetText = function(o) return o._text end,
     SetTextColor = function(o, r, g, b) o._tr, o._tg, o._tb = r, g, b end,
+    GetTextColor = function(o) return o._tr or 1, o._tg or 1, o._tb or 1, 1 end,
     SetShadowColor = function() end,
     SetShadowOffset = function() end,
     SetJustifyH = function(o, j) o._justify = j end,
@@ -131,8 +132,10 @@ local function newFrame(ftype, name, parent)
     StartMoving = function() end,
     StopMovingOrSizing = function() end,
     SetScale = function(o, s) o._scale = s end,
+    GetScale = function(o) return o._scale or 1 end,
     GetEffectiveScale = function(o) return o._scale end,
     GetCenter = function() return 100, 100 end,
+    IsMouseOver = function() return M.mouseOver ~= false end,
     CreateTexture = function(o, _, layer, _, sub) local t = newTexture(o, layer, sub); M.regions[#M.regions + 1] = t; return t end,
     CreateFontString = function(o, _, layer) local t = newFontString(o, layer); M.regions[#M.regions + 1] = t; return t end,
     EnableKeyboard = function(o, v)

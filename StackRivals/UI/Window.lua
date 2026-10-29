@@ -72,7 +72,7 @@ function UI:Create()
   local F = CreateFrame("Frame", "StackRivalsFrame", UIParent)
   self.frame = F
   F:SetSize(W, H)
-  F:SetFrameStrata("HIGH")
+  F:SetFrameStrata("MEDIUM") -- with Toplevel: above the world UI, below bags / mail / dialogs
   F:SetToplevel(true)
   F:SetClampedToScreen(true)
   F:SetMovable(true)
@@ -111,16 +111,15 @@ function UI:Create()
   mark:SetTexture(T.MEDIA .. "mark")
   mark:SetSize(32, 32)
   mark:SetPoint("TOPLEFT", PAD - 3, -9)
-  local t1 = T.text(F, 22, C.paper, "", nil, "italic")
-  t1:SetPoint("LEFT", mark, "RIGHT", 6, 0)
-  t1:SetText("STACK")
-  local t2 = T.text(F, 22, C.red, "", nil, "italic")
-  t2:SetPoint("LEFT", t1, "RIGHT", 0, 0)
-  t2:SetText("RIVALS")
+  self.mark = mark
+  -- one run of text like the site's wordmark: STACK in paper, RIVALS in brand red, no gap
+  local word = T.text(F, 22, C.paper, "", nil, "italic")
+  word:SetPoint("LEFT", mark, "RIGHT", 6, 0)
+  word:SetText("STACK|cffe0242fRIVALS|r")
   self.modeText = T.display(F, SZ.label, C.label)
-  self.modeText:SetPoint("LEFT", t2, "RIGHT", 12, -1)
+  self.modeText:SetPoint("LEFT", word, "RIGHT", 12, -1)
 
-  local close = T.button(F, "X", 30, 26, "frame", function() F:Hide() end)
+  local close = T.button(F, "\195\151", 30, 26, "frame", function() F:Hide() end) -- U+00D7, not the logo's X
   close:SetPoint("TOPRIGHT", -PAD + 4, -12)
   close.tip = "Close (your run pauses)"
   local settings = T.button(F, "Settings", 84, 26, "frame", function() UI:ShowSettings(true) end)
@@ -131,8 +130,15 @@ function UI:Create()
   local field = Board.createField(F, 10, 20, CELL)
   field:SetPoint("TOP", F, "TOP", 0, -HEADER)
   self.field = field
-  local frameEdge = T.tex(F, "BORDER", C.red, 0.85)
-  frameEdge:SetPoint("TOPLEFT", field, "TOPLEFT", -2, 2); frameEdge:SetPoint("BOTTOMRIGHT", field, "BOTTOMRIGHT", 2, -2)
+  -- board frame like the site's: a soft red halo and a 3-step edge (deep red, brand red, light)
+  local halo = F:CreateTexture(nil, "BACKGROUND", nil, 2)
+  halo:SetTexture(T.MEDIA .. "glow")
+  halo:SetPoint("TOPLEFT", field, "TOPLEFT", -56, 56); halo:SetPoint("BOTTOMRIGHT", field, "BOTTOMRIGHT", 56, -56)
+  halo:SetAlpha(0.32)
+  for k, c in ipairs({ { T.hex("8A1018") }, C.red, { T.hex("FF5A66") } }) do
+    local e = T.tex(F, "BORDER", c, k == 3 and 0.7 or 1, k - 1)
+    e:SetPoint("TOPLEFT", field, "TOPLEFT", -(4 - k), 4 - k); e:SetPoint("BOTTOMRIGHT", field, "BOTTOMRIGHT", 4 - k, -(4 - k))
+  end
   -- hard-drop impact: a bright rim that flashes and fades (AnimationGroup, no Lua per frame)
   local rim = CreateFrame("Frame", nil, F)
   rim:SetPoint("TOPLEFT", field, "TOPLEFT", -2, 2); rim:SetPoint("BOTTOMRIGHT", field, "BOTTOMRIGHT", 2, -2)
@@ -144,8 +150,9 @@ function UI:Create()
   end
   rim:SetAlpha(0)
   local rg = rim:CreateAnimationGroup()
-  local ra = rg:CreateAnimation("Alpha"); ra:SetFromAlpha(0.55); ra:SetToAlpha(0); ra:SetDuration(0.18); ra:SetOrder(1); ra:SetSmoothing("OUT")
-  self.rimAnim = rg
+  local ra = rg:CreateAnimation("Alpha"); ra:SetFromAlpha(0.35); ra:SetToAlpha(0); ra:SetDuration(0.35); ra:SetOrder(1); ra:SetSmoothing("OUT")
+  self.rimAnim = rg -- quads only (a full-board flash on every drop is too much in a WoW corner)
+  self.thump = T.thumpAnim(field, 2) -- hard-drop impact: the board nudges down 2 units and back
 
   -- left column: hold + stats
   local hold = T.panel(F, C.red)
@@ -165,7 +172,7 @@ function UI:Create()
   scoreBox:SetSize(COL - 14, 28); scoreBox:SetPoint("TOPLEFT", 8, -24)
   self.scoreText = T.display(scoreBox, 22, C.paper); self.scoreText:SetPoint("LEFT", 2, 0)
   self.scoreText:SetText("0")
-  self.scorePulse = T.pulseAnim(scoreBox, 1.12, 0.22)
+  self.scorePulse = T.pulseAnim(scoreBox, 1.12, 0.22, "LEFT")
   self.bestLabel = label("BEST", 10, -60)
   self.bestText = T.display(stats, SZ.big, C.gold); self.bestText:SetPoint("TOPLEFT", 10, -74)
   local div = T.tex(stats, "ARTWORK", C.line, 1); div:SetPoint("TOPLEFT", 10, -100); div:SetPoint("TOPRIGHT", -10, -100); div:SetHeight(1)
@@ -175,11 +182,14 @@ function UI:Create()
   self.levelText = T.display(stats, SZ.title, C.paper); self.levelText:SetPoint("TOPLEFT", 60, -126)
   -- time sits at the bottom of the panel (steel; red in the last 10 s of a timed run)
   self.timeLabel = T.label(stats, "TIME"); self.timeLabel:SetPoint("BOTTOMLEFT", 10, 40)
-  self.timeText = T.display(stats, 24, C.steel); self.timeText:SetPoint("BOTTOMLEFT", 10, 12)
+  local timeBox = CreateFrame("Frame", nil, stats)
+  timeBox:SetSize(COL - 16, 30); timeBox:SetPoint("BOTTOMLEFT", 8, 8)
+  self.timeText = T.display(timeBox, 24, C.steel); self.timeText:SetPoint("LEFT", 2, 0)
   self.timeText:SetText("0:00")
+  self.timePulse = T.pulseAnim(timeBox, 1.18, 0.3, "LEFT") -- last 5 seconds of a timed run
 
   -- right column: next queue
-  local nextP = T.panel(F, C.steel)
+  local nextP = T.panel(F, C.red) -- your own panels are red; steel means the rival (as on the site)
   nextP:SetSize(COL, fieldH)
   nextP:SetPoint("TOPLEFT", field, "TOPRIGHT", GUTTER, 0)
   self.nextPanel = nextP
@@ -187,10 +197,10 @@ function UI:Create()
   self.nextPreviews = {}
   local y = -26
   for i = 1, 5 do
-    local cs = (i == 1) and 15 or 11
+    local cs = (i == 1) and 15 or 12
     local p = Board.createPreview(nextP, cs)
     p:SetPoint("TOP", nextP, "TOP", 0, y)
-    y = y - (4 * cs + 3) - ((i == 1) and 14 or 8)
+    y = y - (4 * cs + 3) - ((i == 1) and 14 or 10)
     self.nextPreviews[i] = p
   end
 
@@ -210,6 +220,7 @@ function UI:Create()
   self.W, self.H = W, H
   self:ApplyScale()
   self:RestorePosition()
+  self.positioned = true
   self:UpdateHint()
   return F
 end
@@ -244,7 +255,7 @@ function UI:CreateOverlays()
 
   -- Countdown number (pulses on every second)
   local cd = CreateFrame("Frame", nil, field)
-  cd:SetSize(120, 90); cd:SetPoint("CENTER", field, "CENTER", 0, 40)
+  cd:SetSize(120, 90); cd:SetPoint("CENTER", field, "CENTER", 0, -36)
   cd:SetFrameLevel(field:GetFrameLevel() + 6)
   self.countText = T.text(cd, 76, C.redLight, "OUTLINE", nil, "italic")
   self.countText:SetPoint("CENTER")
@@ -253,13 +264,17 @@ function UI:CreateOverlays()
   cd:Hide()
 
   -- First runs: the controls, shown on the board during the countdown
+  -- (upper board: the stack and the ghost stay visible; gone at GO)
   local strip = CreateFrame("Frame", nil, field)
-  strip:SetSize(field:GetWidth() - 16, 70); strip:SetPoint("BOTTOM", field, "BOTTOM", 0, 14)
+  strip:SetSize(field:GetWidth() - 16, 106); strip:SetPoint("TOP", field, "TOP", 0, -20)
   strip:SetFrameLevel(field:GetFrameLevel() + 6)
-  local sbg = T.tex(strip, "BACKGROUND", C.navy, 0.9); sbg:SetAllPoints()
-  local sl = T.tex(strip, "BORDER", C.line, 1); sl:SetPoint("TOPLEFT"); sl:SetPoint("TOPRIGHT"); sl:SetHeight(1)
-  self.controlsText = T.text(strip, SZ.small, C.body)
-  self.controlsText:SetPoint("CENTER", 0, 0); self.controlsText:SetSpacing(4)
+  local sbg = T.tex(strip, "BACKGROUND", C.navy, 0.92); sbg:SetAllPoints()
+  local sl = T.tex(strip, "BORDER", C.red, 1); sl:SetPoint("TOPLEFT"); sl:SetPoint("TOPRIGHT"); sl:SetHeight(2)
+  local sh = T.label(strip, "YOUR KEYS"); sh:SetPoint("TOP", 0, -8)
+  self.controlsKeys = T.display(strip, SZ.small, C.paper); self.controlsKeys:SetPoint("TOPRIGHT", strip, "TOP", -6, -26)
+  self.controlsKeys:SetWidth(82); self.controlsKeys:SetJustifyH("RIGHT"); self.controlsKeys:SetSpacing(3)
+  self.controlsText = T.text(strip, SZ.small, C.label); self.controlsText:SetPoint("TOPLEFT", strip, "TOP", 6, -26)
+  self.controlsText:SetWidth(76); self.controlsText:SetJustifyH("LEFT"); self.controlsText:SetSpacing(3)
   self.controlsStrip = strip
   strip:Hide()
 
@@ -267,18 +282,22 @@ function UI:CreateOverlays()
   local co = CreateFrame("Frame", nil, field)
   co:SetSize(field:GetWidth(), 60); co:SetPoint("TOP", field, "TOP", 0, -64)
   co:SetFrameLevel(field:GetFrameLevel() + 5)
+  co:SetSize(field:GetWidth(), 76)
+  self.calloutTop = T.display(co, SZ.small, C.gold, "OUTLINE") -- BACK-TO-BACK
+  self.calloutTop:SetPoint("TOP", co, "TOP", 0, 0)
   self.callout = T.text(co, 28, C.paper, "OUTLINE", nil, "italic")
-  self.callout:SetPoint("TOP", co, "TOP", 0, 0)
-  self.callout2 = T.display(co, SZ.big, C.redLight, "OUTLINE")
+  self.callout:SetPoint("TOP", co, "TOP", 0, -16)
+  self.callout2 = T.display(co, SZ.big, C.gold, "OUTLINE")
   self.callout2:SetPoint("TOP", self.callout, "BOTTOM", 0, -4)
   self.calloutBox = co
-  self.calloutAnim = T.popAnim(co, 1.45, 0.75, 0.35)
+  self.calloutAnim = T.popAnim(co, 1.3, 0.75, 0.35)     -- doubles and up
+  self.calloutSoft = T.popAnim(co, 1.0, 0.45, 0.3)      -- singles, level-ups: no scale, shorter
   co:SetAlpha(0)
   -- score gained, floating up from the middle of the board
   local sp = CreateFrame("Frame", nil, field)
   sp:SetSize(field:GetWidth(), 24); sp:SetPoint("TOP", co, "BOTTOM", 0, -6)
   sp:SetFrameLevel(field:GetFrameLevel() + 5)
-  self.scorePop = T.display(sp, SZ.title, C.gold, "OUTLINE")
+  self.scorePop = T.display(sp, SZ.title, C.paper, "OUTLINE")
   self.scorePop:SetPoint("CENTER")
   self.scorePopBox = sp
   self.scorePopAnim = T.popAnim(sp, 1.2, 0.55, 0.35, 22)
@@ -310,7 +329,7 @@ function UI:CreateOverlays()
   local badgeBox = CreateFrame("Frame", nil, over)
   badgeBox:SetSize(field:GetWidth(), 22); badgeBox:SetPoint("TOP", scoreBox, "BOTTOM", 0, -2)
   self.overBadge = T.display(badgeBox, SZ.big, C.gold); self.overBadge:SetPoint("CENTER")
-  self.badgePulse = T.popAnim(badgeBox, 1.5, 999, 0.1)
+  self.badgePulse = T.popAnim(badgeBox, 1.5, nil, false) -- pops in and stays
   self.overDetail = T.text(over, SZ.small, C.body); self.overDetail:SetPoint("TOP", badgeBox, "BOTTOM", 0, -10)
   self.overDetail:SetWidth(176); self.overDetail:SetSpacing(2)
   local again = T.button(over, "Play again", 164, 32, "primary", function() UI:PlayAgain() end)
@@ -320,11 +339,11 @@ function UI:CreateOverlays()
   local menuB = T.button(over, "Modes", 164, 28, "frame", function() ns.App:ShowMenu() end)
   menuB:SetPoint("TOP", again, "BOTTOM", 0, -22)
   self.modesBtn = menuB
-  self.shareLabel = T.label(over, "SHARE"); self.shareLabel:SetPoint("TOPLEFT", menuB, "BOTTOMLEFT", 0, -16)
-  self.shareGuild = T.button(over, "Guild", 56, 24, "steel", function() ns.App:Share("GUILD") end)
-  self.shareGuild:SetPoint("TOPRIGHT", menuB, "BOTTOMRIGHT", -60, -10)
-  self.shareGroup = T.button(over, "Group", 56, 24, "steel", function() ns.App:Share("GROUP") end)
-  self.shareGroup:SetPoint("TOPRIGHT", menuB, "BOTTOMRIGHT", 0, -10)
+  self.shareRow = CreateFrame("Frame", nil, over)
+  self.shareRow:SetSize(164, 24); self.shareRow:SetPoint("TOP", menuB, "BOTTOM", 0, -10)
+  self.shareLabel = T.label(self.shareRow, "SHARE")
+  self.shareGuild = T.button(self.shareRow, "Guild", 56, 24, "steel", function() ns.App:Share("GUILD") end)
+  self.shareGroup = T.button(self.shareRow, "Group", 56, 24, "steel", function() ns.App:Share("GROUP") end)
   self.overFade = T.fadeInAnim(over, 0.35)
 end
 
@@ -332,6 +351,7 @@ end
 -- Mode menu: the whole body, three big cards, one click to play
 ------------------------------------------------------------------------------------------------
 local MODE_EDGE = { classic = "red", blitz = "steel", daily = "gold" }
+local MODE_PIECE = { classic = "bar", blitz = "cube", daily = "tee" } -- red, steel-blue, gold pieces
 
 function UI:CreateMenu()
   local menu = self:Body(30, true)
@@ -347,21 +367,29 @@ function UI:CreateMenu()
     local b = T.button(menu, "", cw, CARD, key == "daily" and "gold" or "frame", function() ns.App:Start(key) end)
     b:SetPoint("TOP", menu, "TOP", 0, y)
     b.noPress = true
-    b.fs:ClearAllPoints(); b.fs:SetPoint("TOPLEFT", 18, -14); b.fs:SetJustifyH("LEFT")
+    b.fs:ClearAllPoints(); b.fs:SetPoint("TOPLEFT", 62, -14); b.fs:SetJustifyH("LEFT")
     T.setFont(b.fs, T.DISPLAY, SZ.title)
     b.fs:SetText(mode.name)
-    b.desc = T.text(b, SZ.small, C.body); b.desc:SetPoint("TOPLEFT", 18, -41)
-    b.desc:SetWidth(230); b.desc:SetJustifyH("LEFT")
+    b.desc = T.text(b, SZ.small, C.body); b.desc:SetPoint("TOPLEFT", 62, -41)
+    b.desc:SetWidth(200); b.desc:SetJustifyH("LEFT")
     b.desc:SetText(mode.short)
     b.bestLabel = T.label(b, key == "daily" and "TODAY" or "BEST"); b.bestLabel:SetPoint("TOPRIGHT", -16, -11); b.bestLabel:SetJustifyH("RIGHT")
     b.best = T.display(b, SZ.title, C.gold); b.best:SetPoint("TOPRIGHT", -16, -25); b.best:SetJustifyH("RIGHT")
     b.side = T.text(b, SZ.label, C.label); b.side:SetPoint("TOPRIGHT", -16, -51); b.side:SetJustifyH("RIGHT")
-    local e = T.tex(b, "ARTWORK", C[MODE_EDGE[key]], 1); e:SetPoint("TOPLEFT", 1, -1); e:SetPoint("BOTTOMLEFT", 1, 1); e:SetWidth(4)
+    local edgeC = C[MODE_EDGE[key]]
+    local e = T.tex(b, "ARTWORK", edgeC, 1); e:SetPoint("TOPLEFT", 1, -1); e:SetPoint("BOTTOMLEFT", 1, 1); e:SetWidth(4)
+    -- a piece in the mode colour: the cards read as things to play, not form fields
+    b.icon = Board.createPreview(b, 9)
+    b.icon:SetPoint("LEFT", 14, 0)
+    Board.renderPreview(b.icon, MODE_PIECE[key])
+    -- hover: the border lights up in the mode colour
+    b:HookScript("OnEnter", function(self) self.border:SetColorTexture(edgeC[1], edgeC[2], edgeC[3], 1) end)
+    b:HookScript("OnLeave", function(self) local c = self.style.border; self.border:SetColorTexture(c[1], c[2], c[3], 1) end)
     self.modeButtons[key] = b
-    y = y - CARD - GAP
   end
+  self.cardStep = CARD + GAP
   self.continueBtn = T.button(menu, "Continue last run", cw, 30, "primary", function() ns.App:ContinueSuspended() end)
-  self.continueBtn:SetPoint("TOP", menu, "TOP", 0, y - 2)
+  self.continueBtn:SetPoint("TOP", menu, "TOP", 0, -62) -- above the cards when there is a run to continue
   self.continueBtn.tip = "Your unfinished run from before /reload or logout, restored exactly."
   -- secondary navigation (the multiplayer build adds "Duel" here)
   self.navRow = CreateFrame("Frame", nil, menu)
@@ -393,7 +421,7 @@ function UI:CreateSettings()
   local s = self:Body(40)
   self.settings = s
   local db = ns.db
-  local L, R = 24, 248
+  local L, R = 24, 236
 
   local title = T.display(s, SZ.title, C.paper); title:SetPoint("TOPLEFT", L, -14); title:SetText("SETTINGS")
   local ver = T.text(s, SZ.label, C.label); ver:SetPoint("TOPRIGHT", -20, -18); ver:SetJustifyH("RIGHT")
@@ -411,7 +439,7 @@ function UI:CreateSettings()
   self.toggles = {
     toggle("Sound effects", "sound", L, -66, function(v) ns.Sound.enabled = v end),
     toggle("Show ghost piece", "ghost", L, -92, function() UI.dirty = true end),
-    toggle("Hide window during combat", "hideInCombat", R, -66),
+    toggle("Hide window in combat", "hideInCombat", R, -66),
     toggle("Hide minimap button", "minimapHide", R, -92, function() if ns.Minimap then ns.Minimap:Update() end end),
   }
   local sl = T.text(s, SZ.body, C.body); sl:SetPoint("TOPLEFT", R, -126); sl:SetText("Size")
@@ -470,10 +498,12 @@ function UI:ShowSettings(show)
     if self.help then self.help:Hide(); self.records:Hide() end
     self:RefreshSettings()
     self.settings:Show()
+    self.settingsBtn:Hide() -- the sheet has its own Close
     self:RefreshPhase()
   else
     self:EndBind()
     self.settings:Hide()
+    self.settingsBtn:Show()
     self:RefreshPhase()
   end
 end
@@ -544,7 +574,8 @@ function UI:OnKeyDown(f, key)
   local sess = ns.App.session
   if sess and sess.phase == "over" and not ns.App.inMenu and not self:SheetOpen() then
     -- only the hard-drop key (play again) is ours; everything else goes to WoW
-    if DB.actionForKey(ns.db, key) == "hardDrop" and not self.overReadyAt and not inCombat() then
+    -- and only while the cursor is on the window: Space must not be stolen from a player who moved on
+    if DB.actionForKey(ns.db, key) == "hardDrop" and not self.overReadyAt and not inCombat() and self.frame:IsMouseOver() then
       setPropagate(f, false)
       ns.App:Start(sess.mode.key)
     else
@@ -613,25 +644,34 @@ function UI:OnHide()
   self:SetKeyboard(false)
 end
 
+--- The window's centre is stored in UIParent units, so changing the size never moves it.
 function UI:SavePosition()
-  local p, _, rp, x, y = self.frame:GetPoint(1)
+  local F = self.frame
+  local cx, cy = F:GetCenter()
+  if not cx then return end
+  local s = F:GetScale() or 1
   local w = ns.db.window
-  w.point, w.relPoint, w.x, w.y = p, rp, x, y
+  w.cx, w.cy = cx * s, cy * s
+  w.point, w.relPoint, w.x, w.y = nil, nil, nil, nil
 end
 
 function UI:RestorePosition()
   local F, w = self.frame, ns.db.window
   F:ClearAllPoints()
-  if w.point and w.x and w.y then
+  local s = F:GetScale() or 1
+  if w.cx and w.cy then
+    F:SetPoint("CENTER", UIParent, "BOTTOMLEFT", w.cx / s, w.cy / s)
+  elseif w.point and w.x and w.y then -- position saved by 0.3.1 and older
     F:SetPoint(w.point, UIParent, w.relPoint or w.point, w.x, w.y)
   else
-    F:SetPoint("CENTER", UIParent, "CENTER", 0, 30)
+    -- right of centre: the character in the middle of the screen stays visible
+    F:SetPoint("CENTER", UIParent, "CENTER", (UIParent:GetWidth() or 0) * 0.18 / s, 20 / s)
   end
 end
 
 function UI:ResetPosition()
   local w = ns.db.window
-  w.point, w.relPoint, w.x, w.y = nil, nil, nil, nil
+  w.cx, w.cy, w.point, w.relPoint, w.x, w.y = nil, nil, nil, nil, nil, nil
   self:RestorePosition()
 end
 
@@ -647,13 +687,9 @@ function UI:UpdateHint()
   self.hint:SetText(string.format("%s/%s move  -  %s/%s rotate  -  %s drop  -  %s hold  -  %s pause",
     k(b.left), k(b.right), k(b.rotateCW), k(b.rotateCCW), k(b.hardDrop), k(b.hold), k(b.pause)))
   if self.controlsText then
-    local w, e = hexColor(C.paper), "|r"
-    self.controlsText:SetText(table.concat({
-      w .. k(b.left) .. " / " .. k(b.right) .. e .. "   move",
-      w .. k(b.rotateCW) .. " / " .. k(b.rotateCCW) .. e .. "   rotate",
-      w .. k(b.hardDrop) .. e .. "   drop      " .. w .. k(b.hold) .. e .. "   hold",
-      w .. k(b.pause) .. e .. "   pause     " .. w .. "Enter" .. e .. "   chat",
-    }, "\n"))
+    self.controlsKeys:SetText(table.concat({ k(b.left) .. " / " .. k(b.right), k(b.rotateCW) .. " / " .. k(b.rotateCCW),
+      k(b.softDrop), k(b.hardDrop), k(b.hold), k(b.pause) }, "\n"))
+    self.controlsText:SetText(table.concat({ "move", "rotate", "soft drop", "hard drop", "hold", "pause" }, "\n"))
   end
 end
 
@@ -685,7 +721,6 @@ function UI:OnUpdate(elapsed)
     self:RefreshPhase() -- listening window over: Space is a jump again
   end
   if self.goUntil and now >= self.goUntil then self.goUntil = nil; self.countBox:Hide() end
-  if self.stripUntil and now >= self.stripUntil then self.stripUntil = nil; self.controlsStrip:Hide() end
   if self.forfeitArmedAt and now - self.forfeitArmedAt >= 3 then self.forfeitArmedAt = nil; self:RefreshPhase() end
   if self.menu:IsShown() then
     self.menuClock = (self.menuClock or 0) + elapsed
@@ -702,12 +737,17 @@ function UI:OnUpdate(elapsed)
   end
 end
 
-function UI:Callout(main, sub, color, points)
+--- tier: "soft" (single, level up: smaller, gentler), "big" (double/triple), "huge" (quad)
+function UI:Callout(main, sub, color, points, tier, top)
   color = color or C.paper
+  local size = (tier == "soft") and SZ.title or (tier == "huge") and 34 or 28
+  if self.calloutSize ~= size then self.calloutSize = size; T.setFont(self.callout, T.DISPLAY_ITALIC, size, "OUTLINE") end
   self.callout:SetTextColor(color[1], color[2], color[3])
   self.callout:SetText(main or "")
   self.callout2:SetText(sub or "")
-  self.calloutAnim:Stop(); self.calloutAnim:Play()
+  self.calloutTop:SetText(top or "")
+  self.calloutAnim:Stop(); self.calloutSoft:Stop()
+  if tier == "soft" then self.calloutSoft:Play() else self.calloutAnim:Play() end
   if points and points > 0 then
     self.scorePop:SetText("+" .. T.commas(points))
     self.scorePopAnim:Stop(); self.scorePopAnim:Play()
@@ -722,24 +762,26 @@ function UI:OnEvent(ev)
     local quad = ev.a >= 4
     local fl = self.field.flash
     if quad then fl:SetColorTexture(C.gold[1], C.gold[2], C.gold[3], 1) else fl:SetColorTexture(1, 1, 1, 1) end
-    fl:SetAlpha(quad and 0.42 or 0.14 + 0.05 * ev.a)
-    local sub = {}
-    if c.backToBack then sub[#sub + 1] = "BACK-TO-BACK" end
-    if c.combo and c.combo >= 1 then sub[#sub + 1] = "COMBO x" .. c.combo end
-    self.callout2:SetTextColor((c.backToBack and C.gold or C.redLight)[1], (c.backToBack and C.gold or C.redLight)[2], (c.backToBack and C.gold or C.redLight)[3])
-    self:Callout(CLEAR_WORD[ev.a] or "CLEAR", table.concat(sub, "  "), quad and C.gold or C.paper, c.points)
+    fl:SetAlpha(quad and 0.26 or 0.08 + 0.05 * ev.a)
+    -- combo shown like the site: the 2nd clear in a row is x2 (engine combo + 1)
+    local sub = (c.combo and c.combo >= 1) and ("COMBO \195\151" .. (c.combo + 1)) or ""
+    self.callout2:SetTextColor(C.gold[1], C.gold[2], C.gold[3])
+    local tier = quad and "huge" or (ev.a == 1 and "soft" or "big")
+    self:Callout(CLEAR_WORD[ev.a] or "CLEAR", sub, quad and C.gold or (ev.a == 1 and C.body or C.paper), c.points, tier,
+      c.backToBack and "BACK-TO-BACK" or nil)
     self.scorePulse:Stop(); self.scorePulse:Play()
+    if quad then self.rimAnim:Stop(); self.rimAnim:Play() end
   elseif k == "level" then
     self.callout2:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
-    self:Callout("LEVEL " .. ev.a, "speed up", C.steel)
+    self:Callout("LEVEL " .. ev.a, "SPEED UP", C.steel, nil, "soft")
   elseif k == "harddrop" then
-    self.rimAnim:Stop(); self.rimAnim:Play()
+    self.thump:Stop(); self.thump:Play()
   elseif k == "count" or k == "go" then
     if k == "go" then
       setStr(self.countText, "GO!")
       self.countBox:Show(); self.countPulse:Stop(); self.countPulse:Play()
       self.goUntil = GetTime() + 0.7
-      if self.controlsStrip:IsShown() then self.stripUntil = GetTime() + 3 end
+      self.controlsStrip:Hide() -- the board is yours from GO
     end
     self:RefreshPhase()
   elseif k == "over" then
@@ -762,13 +804,24 @@ function UI:Render()
   Board.renderField(self.field, s, ns.db.settings.ghost)
   Board.renderPreview(self.holdPreview, s.hold, s.holdUsed)
   for i, p in ipairs(self.nextPreviews) do Board.renderPreview(p, s.queue[i], false) end
+  local big = s.score >= 1000000 -- 7 digits: a size down so it stays inside the panel
+  if self.scoreBig ~= big then self.scoreBig = big; T.setFont(self.scoreText, T.DISPLAY, big and SZ.title or 22) end
   setNum(self.scoreText, s.score, T.commas)
   setNum(self.linesText, s.lines)
   setNum(self.levelText, s.level)
   local left = sess:timeLeftTicks()
+  local timed = left ~= nil
+  if self.timeTimed ~= timed then
+    -- a countdown is a headline in Blitz; Classic's elapsed time is just information
+    self.timeTimed = timed
+    T.setFont(self.timeText, T.DISPLAY, timed and 24 or SZ.big)
+    self.timeUrgent = nil
+  end
   if left then
     setStr(self.timeLabel, "TIME LEFT")
-    setNum(self.timeText, math.ceil(left / 60), T.clock)
+    local secs = math.ceil(left / 60)
+    if secs <= 5 and secs > 0 and self.timeText._n ~= secs then self.timePulse:Stop(); self.timePulse:Play() end
+    setNum(self.timeText, secs, T.clock)
     local urgent = left < 600
     if self.timeUrgent ~= urgent then
       self.timeUrgent = urgent
@@ -778,7 +831,7 @@ function UI:Render()
   else
     setStr(self.timeLabel, "TIME")
     setNum(self.timeText, math.floor(s.tick / 60), T.clock)
-    if self.timeUrgent ~= false then self.timeUrgent = false; self.timeText:SetTextColor(C.steel[1], C.steel[2], C.steel[3]) end
+    if self.timeUrgent ~= false then self.timeUrgent = false; self.timeText:SetTextColor(C.label[1], C.label[2], C.label[3]) end
   end
   local best = ns.App:BestFor(sess.mode.key)
   if best > 0 then setNum(self.bestText, best, T.commas) else setStr(self.bestText, "-") end
@@ -809,14 +862,14 @@ function UI:RefreshPhase()
   if phase == "countdown" then
     self.countBox:Show()
     if self:FirstRuns() and not self.controlsStrip:IsShown() then self.controlsStrip:Show() end
-  elseif phase ~= "playing" then
-    self.controlsStrip:Hide(); self.stripUntil = nil
-    if not self.goUntil then self.countBox:Hide() end
+  else
+    self.controlsStrip:Hide()
+    if phase ~= "playing" and not self.goUntil then self.countBox:Hide() end
   end
   self.modeText:SetText(sess and not App.inMenu and string.upper(sess.mode.name) or "")
   if phase == "paused" then
     local r = sess.pauseReason
-    local txt = (r == "combat") and "You entered combat. Finish the fight, then resume."
+    local txt = (r == "combat") and (inCombat() and "You entered combat. Finish the fight, then resume." or "Combat's over. Resume when ready.")
       or (r == "hidden") and "Window was closed. Your run is saved here."
       or (r == "chat") and "Paused so you can type. Resume when ready."
       or (r == "settings") and "Settings were open."
@@ -862,7 +915,25 @@ function UI:RefreshMenu()
     end
     if inCombat() then b:Disable() else b:Enable() end
   end
-  self.continueBtn:SetShown(db.suspended ~= nil)
+  -- Continue (if any) sits above the cards; the cards move down to make room
+  local su = db.suspended
+  self.continueBtn:SetShown(su ~= nil)
+  if su then
+    local m = Session.MODES[su.mode]
+    self.continueBtn:SetLabel("Continue your " .. (m and m.name or "last") .. " run")
+  end
+  local y = su and -100 or -62
+  for _, key in ipairs(Session.MODE_ORDER) do
+    local b = self.modeButtons[key]
+    b:ClearAllPoints(); b:SetPoint("TOP", self.menu, "TOP", 0, y)
+    y = y - self.cardStep
+  end
+  -- a brand-new player gets a default: Blitz is the short, forgiving way in
+  local fresh = true
+  for _, k in ipairs(Session.MODE_ORDER) do if db.records[k].games > 0 then fresh = false end end
+  local blitz = self.modeButtons.blitz
+  if fresh then blitz.bestLabel:SetText(""); blitz.best:SetText("Start here"); blitz.best:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
+  else blitz.bestLabel:SetText("BEST"); blitz.best:SetTextColor(C.gold[1], C.gold[2], C.gold[3]) end
   -- first visit: point at the how-to-play sheet without forcing it (play is one click away)
   if not db.seenHelp then self.howBtn:SetLabel("New? How to play") else self.howBtn:SetLabel("How to play") end
   local total, lines = 0, 0
@@ -889,14 +960,24 @@ function UI:ShowOver(info)
   end
   local c = s.clears
   local rankTxt = info.rank and ("#" .. info.rank .. " in your top 5  -  ") or ""
-  self.overDetail:SetText(string.format("%d lines  -  level %d  -  %d quads\n%s%s", s.lines, s.level, c.quad, rankTxt, info.modeName))
+  local quads = (c.quad > 0) and string.format("  -  %d %s", c.quad, c.quad == 1 and "quad" or "quads") or ""
+  self.overDetail:SetText(string.format("%d lines  -  level %d%s\n%s%s", s.lines, s.level, quads, rankTxt, info.modeName))
   local g, p = IsInGuild and IsInGuild() or false, IsInGroup and IsInGroup() or false
   self.shareGuild:SetShown(g); self.shareGroup:SetShown(p); self.shareLabel:SetShown(g or p)
+  -- centre whatever is visible: SHARE [Guild] [Group]
+  local items, widths, total = { self.shareLabel }, { 40 }, 40
+  if g then items[#items + 1] = self.shareGuild end
+  if p then items[#items + 1] = self.shareGroup end
+  for i = 2, #items do widths[i] = items[i]:GetWidth(); total = total + 6 + widths[i] end
+  local x = -total / 2
+  for i, o in ipairs(items) do
+    o:ClearAllPoints(); o:SetPoint("LEFT", self.shareRow, "CENTER", x, 0); x = x + widths[i] + 6
+  end
   self.overFade:Play()
   -- "press <hard drop> to play again", accepted after a short grace period so a player who is
   -- still hammering hard drop at top-out sees the result first
   self.overReadyAt = GetTime() + 1.0
-  self.overListenUntil = GetTime() + 16.0
+  self.overListenUntil = GetTime() + 6.0 -- then Space is a jump again
   self:RefreshPhase()
 end
 
@@ -907,25 +988,39 @@ end
 ------------------------------------------------------------------------------------------------
 -- Size: fitted to the screen, then the player's own factor
 ------------------------------------------------------------------------------------------------
-UI.SCREEN_SHARE = 0.62 -- the window's height as a share of the screen at "100%"
+UI.SCREEN_SHARE = 0.58 -- the window's height as a share of the screen at "100%"
 
---- 100% = the window takes ~62% of the screen height at ANY resolution and WoW UI scale
+--- 100% = the window takes ~58% of the screen height at ANY resolution and WoW UI scale
 --- (UIParent's height in UI units is 768 / UI scale, so this is resolution-independent).
---- The player's factor (70-130%) multiplies it; the result never exceeds the screen.
+--- The player's factor (70-140%) multiplies it; the result never exceeds the screen.
 function UI:ApplyScale()
   local F = self.frame
   if not F then return end
   local sw, sh = UIParent:GetWidth(), UIParent:GetHeight()
   local auto = 1
-  if sh and sh > 0 then auto = math.max(0.8, math.min(3.2, sh * UI.SCREEN_SHARE / self.H)) end -- 4K at a small UI scale needs ~3x
+  if sh and sh > 0 then auto = math.max(1.0, math.min(3.2, sh * UI.SCREEN_SHARE / self.H)) end -- floor 1:1 keeps labels at 11 px; 4K at a small UI scale needs ~3x
   local want = auto * (ns.db.settings.scale or 1)
   if sw and sh and sw > 0 and sh > 0 then
     local fit = math.min((sw - 24) / self.W, (sh - 24) / self.H)
     if fit < want then want = math.max(0.5, fit) end
   end
+  -- crisp grid: one board cell (18 + 1 units) becomes a whole number of physical pixels
+  local ppu
+  if GetPhysicalScreenSize then
+    local _, physH = GetPhysicalScreenSize()
+    local es = UIParent:GetEffectiveScale() or 1
+    if physH and physH > 0 then
+      ppu = es * physH / 768
+      local pitch = 19 * want * ppu
+      if pitch > 4 then want = want * math.floor(pitch + 0.5) / pitch end
+    end
+  end
   F:SetScale(want)
   self.appliedScale = want
   self.autoScale = auto
+  -- the full mark (cuts + diamond) needs 32 px; smaller than that the simplified mark (web brand rule)
+  if self.mark and ppu then self.mark:SetTexture(T.MEDIA .. ((32 * want * ppu < 32) and "marksmall" or "mark")) end
+  if self.positioned then self:RestorePosition() end -- the centre stays where the player put it
 end
 
 ------------------------------------------------------------------------------------------------
@@ -972,8 +1067,8 @@ function UI:CreateHelp()
     local y = -66 - (i - 1) * 28
     local caps = {}
     for j = 1, #a[1] do caps[j] = T.keycap(s, "") end
-    local lbl = T.text(s, SZ.body, C.body); lbl:SetPoint("TOPLEFT", R + 112, y - 4); lbl:SetText(a[2])
-    s.keyRows[i] = { keys = a[1], caps = caps, y = y }
+    local lbl = T.text(s, SZ.body, C.body); lbl:SetText(a[2])
+    s.keyRows[i] = { keys = a[1], caps = caps, y = y, lbl = lbl }
   end
   -- safety strip
   local strip = T.panel(s, C.green)
@@ -999,6 +1094,8 @@ function UI:CreateHelp()
         cap:ClearAllPoints(); cap:SetPoint("TOPLEFT", s, "TOPLEFT", x, row.y)
         x = x + cap:GetWidth() + 4
       end
+      -- the action name follows the keys (long rebinds push it right instead of overlapping)
+      row.lbl:ClearAllPoints(); row.lbl:SetPoint("TOPLEFT", s, "TOPLEFT", math.max(R + 112, x + 6), row.y - 4)
     end
   end)
 end
@@ -1022,7 +1119,7 @@ function UI:CreateRecords()
     card.top = {}
     for n = 1, 5 do
       local y = -100 - (n - 1) * 17
-      local rank = T.display(card, SZ.label, C.dim); rank:SetPoint("TOPLEFT", 10, y); rank:SetText(n .. ".")
+      local rank = T.display(card, SZ.label, C.label); rank:SetPoint("TOPLEFT", 10, y); rank:SetText(n .. ".")
       local sc = T.display(card, SZ.small, C.paper); sc:SetPoint("TOPLEFT", 26, y)
       local dt = T.text(card, SZ.label, C.label); dt:SetPoint("TOPRIGHT", -10, y); dt:SetJustifyH("RIGHT")
       card.top[n] = { sc = sc, dt = dt, rank = rank }
@@ -1050,12 +1147,12 @@ function UI:CreateRecords()
         row.sc:SetText(e and T.commas(e.s) or (n == 1 and "No runs yet" or ""))
         row.dt:SetText(e and e.d and e.d:sub(6) or "")
         row.rank:SetShown(e ~= nil)
-        if not e and n == 1 then row.sc:SetTextColor(C.dim[1], C.dim[2], C.dim[3]) else row.sc:SetTextColor(C.paper[1], C.paper[2], C.paper[3]) end
+        if not e and n == 1 then row.sc:SetTextColor(C.label[1], C.label[2], C.label[3]) else row.sc:SetTextColor(C.paper[1], C.paper[2], C.paper[3]) end
       end
-      local vals = { T.commas(r.games), T.commas(r.totalLines), T.commas(r.quads), tostring(r.bestLevel), T.clock(r.playSeconds) }
+      local vals = { T.commas(r.games), T.commas(r.totalLines), T.commas(r.quads), tostring(r.bestLevel), T.duration(r.playSeconds) }
       if card.key == "daily" then
         local d = db.records.dailyToday
-        vals[6] = (d.date == ns.App:Today() and d.tries > 0) and (T.commas(d.best) .. " (" .. T.plural(d.tries, "try", "tries") .. ")") or "-"
+        vals[6] = (d.date == ns.App:Today() and d.tries > 0) and (T.commas(d.best) .. " \195\151" .. d.tries) or "-"
       end
       for n, v in ipairs(vals) do card.stats[n]:SetText(v) end
     end

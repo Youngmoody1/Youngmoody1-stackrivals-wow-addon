@@ -125,10 +125,10 @@ function T.tex(parent, layer, c, a, sub)
 end
 
 local STYLES = {
-  primary = { bg = T.C.red, hover = T.C.redLight, text = T.C.paper, border = T.C.red },
+  primary = { bg = T.C.red, hover = { hex("EA3A44") }, text = T.C.paper, border = T.C.red }, -- hover keeps text contrast
   steel = { bg = T.C.steelDeep, hover = { hex("2A69A8") }, text = T.C.paper, border = T.C.steel },
   frame = { bg = T.C.surface2, hover = T.C.raised, text = T.C.paper, border = T.C.line },
-  gold = { bg = T.C.goldDeep, hover = { hex("5E4A18") }, text = T.C.gold, border = T.C.gold },
+  gold = { bg = T.C.goldDeep, hover = { hex("54421A") }, text = T.C.gold, border = T.C.gold },
 }
 T.STYLES = STYLES
 
@@ -222,13 +222,14 @@ local function anim(group, kind, dur, order, delay)
 end
 
 --- Pop: scale from `from` to 1 while fading in, hold, then fade out (callouts, score pops).
---- `rise` moves it up while it fades. Returns the AnimationGroup (call :Play()).
+--- `rise` moves it up while it fades; fade = false keeps it on screen. Returns the AnimationGroup.
 function T.popAnim(frame, from, hold, fade, rise)
   local g = frame:CreateAnimationGroup()
   local s = anim(g, "Scale", 0.16, 1)
   if s.SetScaleFrom then s:SetScaleFrom(from or 1.35, from or 1.35); s:SetScaleTo(1, 1) end
   local a = anim(g, "Alpha", 0.12, 1)
   a:SetFromAlpha(0); a:SetToAlpha(1)
+  if fade == false then g:SetToFinalAlpha(true); return g end
   local out = anim(g, "Alpha", fade or 0.35, 2, hold or 0.7)
   out:SetFromAlpha(1); out:SetToAlpha(0)
   if rise then
@@ -239,13 +240,23 @@ function T.popAnim(frame, from, hold, fade, rise)
   return g
 end
 
---- Pulse: quick scale bump and back (score, badges, countdown numbers).
-function T.pulseAnim(frame, amount, dur)
+--- Pulse: quick scale bump and back (score, timer). `origin` keeps an edge still ("LEFT" for
+--- left-aligned numbers, so they don't slide sideways).
+function T.pulseAnim(frame, amount, dur, origin)
   local g = frame:CreateAnimationGroup()
   local up = anim(g, "Scale", (dur or 0.24) * 0.4, 1)
   if up.SetScaleFrom then up:SetScaleFrom(1, 1); up:SetScaleTo(amount or 1.18, amount or 1.18) end
   local down = anim(g, "Scale", (dur or 0.24) * 0.6, 2)
   if down.SetScaleFrom then down:SetScaleFrom(amount or 1.18, amount or 1.18); down:SetScaleTo(1, 1) end
+  if origin then up:SetOrigin(origin, 0, 0); down:SetOrigin(origin, 0, 0) end
+  return g
+end
+
+--- Thump: a short downward nudge and back (hard-drop impact on the board).
+function T.thumpAnim(frame, px)
+  local g = frame:CreateAnimationGroup()
+  local d = anim(g, "Translation", 0.05, 1); d:SetOffset(0, -(px or 2))
+  local u = anim(g, "Translation", 0.08, 2); u:SetOffset(0, px or 2)
   return g
 end
 
@@ -267,6 +278,13 @@ end
 
 --- 1 -> "1 try", 3 -> "3 tries"
 function T.plural(n, one, many) return n .. " " .. (n == 1 and one or many) end
+
+--- seconds -> "m:ss" under an hour, "1h 05m" from an hour on (lifetime play time)
+function T.duration(sec)
+  sec = math.max(0, math.floor(sec or 0))
+  if sec < 3600 then return T.clock(sec) end
+  return string.format("%dh %02dm", math.floor(sec / 3600), math.floor(sec % 3600 / 60))
+end
 
 --- seconds -> "m:ss"
 function T.clock(sec)
