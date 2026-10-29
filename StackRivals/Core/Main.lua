@@ -106,6 +106,11 @@ function App:Share(where)
   local s = self.session
   if not s or s.phase ~= "over" then return end
   if ns.UI.inCombat() then return end
+  -- Modern clients lock addon chat during encounters / M+ / rated PvP even out of combat.
+  if C_ChatInfo and C_ChatInfo.InChatMessagingLockdown and C_ChatInfo.InChatMessagingLockdown() then
+    self:Print("Chat is locked here right now. Share after the encounter.")
+    return
+  end
   local channel = where
   if where == "GROUP" then
     if IsInRaid and IsInRaid() then channel = "RAID" elseif IsInGroup and IsInGroup() then channel = "PARTY" else return end

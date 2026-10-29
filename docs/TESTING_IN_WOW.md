@@ -4,7 +4,8 @@ Automated tests cover the engine, parity with the web game, saved data and a ful
 session against a WoW API mock. They **cannot** prove rendering, real keyboard focus or real
 combat behaviour. This pass does. Do it on every new client build (beta, launch day, patches).
 
-Before you start: enable Lua error display — `/console scriptErrors 1` — so errors pop up instead
+Before you start: **fully restart the game client** after installing or updating (WoW only picks up new
+addon files on a full restart, not on `/reload`). Then enable Lua error display — `/console scriptErrors 1` — so errors pop up instead
 of being swallowed. Note any red error text exactly (a screenshot is perfect).
 
 | # | Step | Expected | ✔ |

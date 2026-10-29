@@ -47,6 +47,7 @@ function UI:Create()
   F:SetToplevel(true)
   F:SetClampedToScreen(true)
   F:SetMovable(true)
+  if F.SetDontSavePosition then F:SetDontSavePosition(true) end -- we save the position ourselves
   F:EnableMouse(true)
   F:RegisterForDrag("LeftButton")
   F:SetScript("OnDragStart", function(f) f:StartMoving() end)
@@ -68,7 +69,7 @@ function UI:Create()
   local edge = T.tex(F, "ARTWORK", C.red, 1)
   edge:SetPoint("TOPLEFT"); edge:SetPoint("TOPRIGHT"); edge:SetHeight(2)
 
-  -- header (drag handle is the whole frame; header just carries the brand)
+  -- header (drag the window by its border, header or side panels)
   local mark = F:CreateTexture(nil, "ARTWORK")
   mark:SetTexture(T.MEDIA .. "mark")
   mark:SetSize(28, 28)
@@ -115,7 +116,7 @@ function UI:Create()
     v:SetText("0")
     return v
   end
-  self.scoreText = stat("SCORE", -10, 18, C.paper)
+  self.scoreText = stat("SCORE", -10, 16, C.paper)
   self.bestText = stat("BEST", -56, 13, C.gold)
   self.linesText = stat("LINES", -96, 15)
   self.levelText = stat("LEVEL", -138, 15)
@@ -188,7 +189,7 @@ function UI:CreateOverlays()
     b.desc = T.text(b, 10, C.body); b.desc:SetPoint("TOPLEFT", b.fs, "BOTTOMLEFT", 0, -4)
     b.desc:SetWidth(152); b.desc:SetJustifyH("LEFT")
     b.desc:SetText(mode.short)
-    b.best = T.text(b, 10, C.gold); b.best:SetPoint("BOTTOMLEFT", 10, 8)
+    b.best = T.text(b, 10, C.gold); b.best:SetPoint("BOTTOMLEFT", 10, 6)
     local edgeC = (key == "classic") and C.red or (key == "blitz") and C.steel or C.gold
     local e = T.tex(b, "ARTWORK", edgeC, 1); e:SetPoint("TOPLEFT", 1, -1); e:SetPoint("BOTTOMLEFT", 1, 1); e:SetWidth(3)
     self.modeButtons[key] = b
@@ -303,22 +304,22 @@ function UI:CreateSettings()
   y = y - 4 * 26 - 4
   local alt = T.text(s, 10, C.label); alt:SetPoint("TOPLEFT", 20, y)
   alt:SetWidth(390); alt:SetJustifyH("LEFT")
-  alt:SetText("Also always: A/D move, S soft drop, W/X rotate, L-Ctrl rotate left, Shift hold, Esc pause.\nKeys are only captured while a run is live. Paused or in combat, WoW gets every key.")
-  y = y - 36
+  alt:SetText("Also: A/D move, S soft drop, W/X rotate, L-Ctrl rotate left, Shift hold, Esc pause.\nKeys are only captured while a run is live.")
+  y = y - 40
   local rb = T.button(s, "Default controls", 130, 22, "frame", function() DB.resetBindings(db); UI:RefreshSettings() end)
   rb:SetPoint("TOPLEFT", 20, y)
-  self.resetRecords = T.button(s, "Reset records", 130, 22, "frame", function(btn)
+  self.resetRecords = T.button(s, "Reset records", 160, 22, "frame", function(btn)
     if btn.armed then
       DB.resetRecords(db); btn.armed = false; btn:SetLabel("Records reset"); UI:RefreshMenu()
     else
-      btn.armed = true; btn:SetLabel("Click again to confirm")
+      btn.armed = true; btn:SetLabel("Click again to reset")
     end
   end)
   self.resetRecords:SetPoint("LEFT", rb, "RIGHT", 10, 0)
 
   local done = T.button(s, "Done", 120, 28, "primary", function() UI:ShowSettings(false) end)
   done:SetPoint("BOTTOM", 0, 16)
-  local ver = T.text(s, 9, C.label); ver:SetPoint("BOTTOMRIGHT", -12, 10)
+  local ver = T.text(s, 9, C.label); ver:SetPoint("BOTTOMLEFT", 20, 10)
   ver:SetText("StackRivals " .. (ns.VERSION or "") .. "  -  free, no ads, open source")
 end
 
@@ -378,10 +379,11 @@ function UI:CreateKeyboard()
   local k = CreateFrame("Frame", nil, self.frame)
   k:SetAllPoints(self.frame)
   self.keys = k
+  self.down = {}
   -- New frames start with keyboard off and propagation off; nothing to call here, which also
   -- keeps creation safe if the window is first opened during combat.
   k:SetScript("OnKeyDown", function(f, key) UI:OnKeyDown(f, key) end)
-  k:SetScript("OnKeyUp", function(_, key) UI:OnKeyUp(key) end)
+  k:SetScript("OnKeyUp", function(f, key) UI:OnKeyUp(f, key) end)
 end
 
 --- Take or release the keyboard. During combat lockdown nothing is called at all: the keyboard
@@ -390,6 +392,7 @@ function UI:SetKeyboard(on)
   if not self.keys then return end
   on = on and not inCombat() and true or false
   if InCombatLockdown and InCombatLockdown() then return end
+  if not on then self.down = {} end
   if self.keyboardOn == on then return end
   self.keys:EnableKeyboard(on)
   self.keyboardOn = on
@@ -409,17 +412,28 @@ function UI:OnKeyDown(f, key)
   local sess = ns.App.session
   if not sess or not sess:isActive() then setPropagate(f, true); return end
   if PAUSE_AND_PASS[key] then
+    setPropagate(f, true) -- decide propagation before the keyboard is released by the pause
     ns.App:Pause("chat")
-    setPropagate(f, true)
     return
   end
   setPropagate(f, false)
+  -- Ignore auto-repeat while a key is held: DAS/ARR is ours, like the web game.
+  if self.down[key] then return end
+  self.down[key] = true
   local action = DB.actionForKey(ns.db, key)
   if action == "pause" then ns.App:Pause("manual")
   elseif action then sess:press(action) end
 end
 
-function UI:OnKeyUp(key)
+function UI:OnKeyUp(f, key)
+  if not self.down[key] then
+    -- We never took this key's press (e.g. you were already running when the run started):
+    -- hand the release to WoW so the character doesn't keep moving.
+    setPropagate(f, true)
+    return
+  end
+  self.down[key] = nil
+  setPropagate(f, false)
   local sess = ns.App.session
   local action = DB.actionForKey(ns.db, key)
   if sess and action and action ~= "pause" then sess:release(action) end
@@ -437,6 +451,7 @@ function UI:OnShow()
 end
 
 function UI:OnHide()
+  if self.settings and self.settings:IsShown() then self.settings:Hide() end
   ns.App:Pause("hidden")
   self:EndBind()
   self:SetKeyboard(false)
@@ -540,6 +555,11 @@ function UI:Render()
   local sess = ns.App.session
   if not sess then
     self.scoreText:SetText("0"); self.linesText:SetText("0"); self.levelText:SetText("1")
+    self.timeLabel:SetText("TIME"); self.timeText:SetText("0:00")
+    self.bestText:SetText("-")
+    Board.renderPreview(self.holdPreview, nil)
+    for _, p in ipairs(self.nextPreviews) do Board.renderPreview(p, nil) end
+    for _, c in ipairs(self.field.cells) do c.base:SetColorTexture(C.cell[1], C.cell[2], C.cell[3], 1); c.hi:Hide(); c.lo:Hide(); c.value = 0 end
     return
   end
   local s = sess.state

@@ -83,6 +83,7 @@ local function newFrame(ftype, name, parent)
     SetFrameLevel = function(o, l) o._level = l end,
     GetFrameLevel = function(o) return o._level end,
     SetToplevel = function() end,
+    SetDontSavePosition = function() end,
     SetClampedToScreen = function() end,
     SetMovable = function() end,
     EnableMouse = function() end,
