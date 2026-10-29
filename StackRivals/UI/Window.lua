@@ -27,12 +27,12 @@ local PAUSE_AND_PASS = { ENTER = true, SLASH = true, ["/"] = true }
 --- SetText only when the value changed (no string building or UI work for unchanged HUD values).
 local function setNum(fs, n, fmt)
   if fs._n == n then return end
-  fs._n = n
+  fs._n, fs._s = n, nil
   fs:SetText(fmt and fmt(n) or tostring(n))
 end
 local function setStr(fs, s)
   if fs._s == s then return end
-  fs._s = s
+  fs._s, fs._n = s, nil
   fs:SetText(s)
 end
 
@@ -78,7 +78,8 @@ function UI:Create()
   local bg = T.tex(F, "BACKGROUND", C.navy, 0.97); bg:SetAllPoints()
   -- "Rival split" backdrop: red fading in from the left, steel from the right. Built from thin
   -- strips (works on every client; no gradient API needed).
-  local STRIPS, span = 12, W * 0.5
+  local STRIPS = 12
+  local span = math.floor(W * 0.5 / STRIPS) * STRIPS -- whole-pixel strips: no seams
   for i = 1, STRIPS do
     local a = 0.22 * (1 - (i - 1) / STRIPS)
     local l = T.tex(F, "BACKGROUND", C.redDeep, a, 1)
@@ -376,6 +377,7 @@ function UI:ShowSettings(show)
     if self.help then self.help:Hide(); self.records:Hide() end
     self:RefreshSettings()
     self.settings:Show()
+    self:RefreshPhase()
   else
     self:EndBind()
     self.settings:Hide()
@@ -447,7 +449,7 @@ function UI:OnKeyDown(f, key)
     return
   end
   local sess = ns.App.session
-  if sess and sess.phase == "over" and not ns.App.inMenu then
+  if sess and sess.phase == "over" and not ns.App.inMenu and not self:SheetOpen() then
     -- only the hard-drop key (play again) is ours; everything else goes to WoW
     if DB.actionForKey(ns.db, key) == "hardDrop" and not self.overReadyAt and not inCombat() then
       setPropagate(f, false)
@@ -515,6 +517,7 @@ function UI:OnShow()
 end
 
 function UI:OnHide()
+  self.overListenUntil = 0 -- after closing the window, "play again" is only by click
   if self.settings and self.settings:IsShown() then self.settings:Hide() end
   if self.help then self.help:Hide(); self.records:Hide() end
   ns.App:Pause("hidden")
@@ -571,9 +574,16 @@ function UI:OnUpdate(elapsed)
   end
   if self.overReadyAt and GetTime() >= self.overReadyAt then
     self.overReadyAt = nil
-    self.againHint:SetAlpha(1)
     self:RefreshPhase()
+  elseif self.keyboardOn and self.overListenUntil and GetTime() >= self.overListenUntil
+      and sess and sess.phase == "over" then
+    self:RefreshPhase() -- listening window over: Space is a jump again
   end
+  if self.menu:IsShown() then
+    self.menuClock = (self.menuClock or 0) + elapsed
+    if self.menuClock >= 20 then self.menuClock = 0; self:RefreshMenu() end -- daily countdown
+  end
+  if self.rescale then self.rescale = nil; self:ApplyScale() end
   -- effects
   local fl = self.field.flash
   local a = fl:GetAlpha()
@@ -686,7 +696,14 @@ function UI:RefreshPhase()
   -- back; every other key is handed straight to WoW.
   local quiet = not inCombat() and not self:SheetOpen()
   local pausedListen = phase == "paused" and quiet
+  -- Game over: the hard-drop key restarts for 15 s after the result appears (then it's a
+  -- normal WoW key again, so a player who walks away can jump).
   local overListen = phase == "over" and quiet and not self.overReadyAt
+    and (self.overListenUntil or 0) > GetTime()
+  if phase == "over" and self.againHint then
+    self.againHint:SetText("or press " .. T.keyName(ns.db.bindings.hardDrop))
+    self.againHint:SetAlpha(overListen and 1 or 0)
+  end
   if not self.binding then self:SetKeyboard((live or pausedListen or overListen) and self.frame:IsShown()) end
   self.dirty = true
 end
@@ -738,9 +755,8 @@ function UI:ShowOver(info)
   self.shareGroup:SetShown(IsInGroup and IsInGroup() or false)
   -- "press <hard drop> to play again", accepted after a short grace period so a player who is
   -- still hammering hard drop at top-out sees the result first
-  self.againHint:SetText("or press " .. T.keyName(ns.db.bindings.hardDrop))
-  self.againHint:SetAlpha(0.35)
   self.overReadyAt = GetTime() + 1.0
+  self.overListenUntil = GetTime() + 16.0
   self:RefreshPhase()
 end
 

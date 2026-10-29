@@ -255,6 +255,7 @@ ev:SetScript("OnEvent", function(_, event, arg1)
   elseif event == "PLAYER_DEAD" then
     App:Pause("manual")
   elseif event == "DISPLAY_SIZE_CHANGED" or event == "UI_SCALE_CHANGED" then
-    if ns.UI.frame and ns.UI.frame:IsShown() then ns.UI:ApplyScale() end
+    -- apply on the next frame: UIParent may not have its new size yet when the event fires
+    if ns.UI.frame then ns.UI.rescale = true end
   end
 end)

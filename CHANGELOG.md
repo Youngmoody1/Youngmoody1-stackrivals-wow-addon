@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1 — prelaunch candidate (not released yet)
+
+Fixes from an independent code review of 0.3.0:
+- Game over: Space restarts only for 15 s after the result, never after closing/reopening the window
+  and never while Settings is open (so Space is a jump again when you walk away).
+- The BEST value no longer keeps an old score after "Quit to menu".
+- The "or press <key>" hint follows a rebound hard-drop key.
+- Daily countdown on the menu updates while the menu stays open.
+- Rescale after UI-scale/resolution change waits one frame for the new screen size.
+- Backdrop strips are whole pixels (no seams).
+
 ## 0.3.0 — prelaunch candidate (not released yet)
 
 Gameplay & feel
