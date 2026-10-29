@@ -76,10 +76,18 @@ function UI:Create()
 
   -- body
   local bg = T.tex(F, "BACKGROUND", C.navy, 0.97); bg:SetAllPoints()
-  local glow = T.tex(F, "BACKGROUND", C.redDeep, 0.18, 1)
-  glow:SetPoint("TOPLEFT"); glow:SetPoint("BOTTOMLEFT"); glow:SetWidth(W * 0.45)
-  local glow2 = T.tex(F, "BACKGROUND", C.steelDeep, 0.14, 1)
-  glow2:SetPoint("TOPRIGHT"); glow2:SetPoint("BOTTOMRIGHT"); glow2:SetWidth(W * 0.45)
+  -- "Rival split" backdrop: red fading in from the left, steel from the right. Built from thin
+  -- strips (works on every client; no gradient API needed).
+  local STRIPS, span = 12, W * 0.5
+  for i = 1, STRIPS do
+    local a = 0.22 * (1 - (i - 1) / STRIPS)
+    local l = T.tex(F, "BACKGROUND", C.redDeep, a, 1)
+    l:SetPoint("TOPLEFT", F, "TOPLEFT", (i - 1) * span / STRIPS, 0); l:SetPoint("BOTTOMLEFT", F, "BOTTOMLEFT", (i - 1) * span / STRIPS, 0)
+    l:SetWidth(span / STRIPS)
+    local r = T.tex(F, "BACKGROUND", C.steelDeep, a * 0.8, 1)
+    r:SetPoint("TOPRIGHT", F, "TOPRIGHT", -(i - 1) * span / STRIPS, 0); r:SetPoint("BOTTOMRIGHT", F, "BOTTOMRIGHT", -(i - 1) * span / STRIPS, 0)
+    r:SetWidth(span / STRIPS)
+  end
   for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", nil, 1 }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, 1 }, { "TOPLEFT", "BOTTOMLEFT", 1, nil }, { "TOPRIGHT", "BOTTOMRIGHT", 1, nil } }) do
     local l = T.tex(F, "BORDER", C.line, 1)
     l:SetPoint(side[1]); l:SetPoint(side[2])
@@ -200,20 +208,21 @@ function UI:CreateOverlays()
   local y = -62
   for _, key in ipairs(Session.MODE_ORDER) do
     local mode = Session.MODES[key]
-    local b = T.button(menu, "", 171, 66, key == "daily" and "gold" or "frame", function() ns.App:Start(key) end)
+    local b = T.button(menu, "", 171, 68, key == "daily" and "gold" or "frame", function() ns.App:Start(key) end)
     b:SetPoint("TOP", menu, "TOP", 0, y)
     b.noPress = true
     b.fs:ClearAllPoints(); b.fs:SetPoint("TOPLEFT", 10, -9); b.fs:SetJustifyH("LEFT")
     b.fs:SetFont(T.FONT, 14, "")
     b.fs:SetText(mode.name)
     b.desc = T.text(b, 10, C.body); b.desc:SetPoint("TOPLEFT", b.fs, "BOTTOMLEFT", 0, -4)
-    b.desc:SetWidth(152); b.desc:SetJustifyH("LEFT")
+    b.desc:SetWidth(156); b.desc:SetJustifyH("LEFT")
     b.desc:SetText(mode.short)
-    b.best = T.text(b, 10, C.gold); b.best:SetPoint("BOTTOMLEFT", 10, 6)
+    b.best = T.text(b, 10, C.gold); b.best:SetPoint("BOTTOMLEFT", 10, 7); b.best:SetJustifyH("LEFT")
+    b.side = T.text(b, 9, C.label); b.side:SetPoint("BOTTOMRIGHT", -7, 8); b.side:SetJustifyH("RIGHT")
     local edgeC = (key == "classic") and C.red or (key == "blitz") and C.steel or C.gold
     local e = T.tex(b, "ARTWORK", edgeC, 1); e:SetPoint("TOPLEFT", 1, -1); e:SetPoint("BOTTOMLEFT", 1, 1); e:SetWidth(3)
     self.modeButtons[key] = b
-    y = y - 74
+    y = y - 75
   end
   self.continueBtn = T.button(menu, "Continue last run", 171, 26, "primary", function() ns.App:ContinueSuspended() end)
   self.continueBtn:SetPoint("TOP", menu, "TOP", 0, y - 4)
@@ -284,7 +293,7 @@ function UI:CreateSettings()
   s:SetPoint("TOPLEFT", F, "TOPLEFT", 1, -HEADER + 6)
   s:SetPoint("BOTTOMRIGHT", F, "BOTTOMRIGHT", -1, 1)
   s:SetFrameLevel(F:GetFrameLevel() + 40)
-  local bg = T.tex(s, "BACKGROUND", C.navy, 0.985); bg:SetAllPoints()
+  local bg = T.tex(s, "BACKGROUND", C.navy, 1); bg:SetAllPoints()
   s:EnableMouse(true)
   s:Hide()
   self.settings = s
@@ -345,8 +354,8 @@ function UI:CreateSettings()
 
   local done = T.button(s, "Done", 120, 28, "primary", function() UI:ShowSettings(false) end)
   done:SetPoint("BOTTOM", 0, 16)
-  local ver = T.text(s, 9, C.label); ver:SetPoint("BOTTOMLEFT", 20, 10)
-  ver:SetText("StackRivals " .. (ns.VERSION or "") .. "  -  free, no ads, open source")
+  local ver = T.text(s, 9, C.label); ver:SetPoint("TOPRIGHT", -16, -16); ver:SetJustifyH("RIGHT")
+  ver:SetText("v" .. (ns.VERSION or "") .. "  -  free, no ads")
 end
 
 function UI:RefreshSettings()
@@ -692,11 +701,13 @@ function UI:RefreshMenu()
       local today = ns.App:Today()
       local tries = (d.date == today) and d.tries or 0
       local left = ns.App:SecondsToUtcMidnight()
-      local reset = string.format("new pieces in %dh %02dm", math.floor(left / 3600), math.floor(left % 3600 / 60))
-      b.best:SetText(best > 0 and ("Today: " .. T.commas(best) .. "  -  " .. reset) or ("Same for everyone  -  " .. reset))
-      b.tip = tries > 0 and (tries .. " tries today. Seed " .. today .. " (UTC).") or ("Seed " .. today .. " (UTC). Everyone gets the same pieces today.")
+      b.best:SetText(best > 0 and ("Today: " .. T.commas(best)) or "Not played today")
+      b.side:SetText(string.format("new in %dh %02dm", math.floor(left / 3600), math.floor(left % 3600 / 60)))
+      b.tip = (tries > 0 and (T.plural(tries, "try", "tries") .. " today. ") or "")
+        .. "Everyone gets the same pieces until 00:00 UTC (seed " .. today .. ")."
     else
       b.best:SetText(best > 0 and ("Best: " .. T.commas(best)) or "No record yet")
+      b.side:SetText("")
     end
     if inCombat() then b:Disable() else b:Enable() end
   end
@@ -706,7 +717,7 @@ function UI:RefreshMenu()
     total = total + db.records[k].games
     lines = lines + db.records[k].totalLines
   end
-  self.statsLine:SetText(total > 0 and (T.commas(total) .. " runs  -  " .. T.commas(lines) .. " lines cleared") or "Press a mode to start. Combat pauses the game.")
+  self.statsLine:SetText(total > 0 and (T.commas(total) .. " runs  -  " .. T.commas(lines) .. " lines cleared") or "Pick a mode. Combat pauses it.")
 end
 
 function UI:ShowOver(info)
@@ -759,7 +770,7 @@ local function makeSheet(self, titleText)
   s:SetPoint("TOPLEFT", F, "TOPLEFT", 1, -HEADER + 6)
   s:SetPoint("BOTTOMRIGHT", F, "BOTTOMRIGHT", -1, 1)
   s:SetFrameLevel(F:GetFrameLevel() + 40)
-  local bg = T.tex(s, "BACKGROUND", C.navy, 0.985); bg:SetAllPoints()
+  local bg = T.tex(s, "BACKGROUND", C.navy, 1); bg:SetAllPoints()
   s:EnableMouse(true)
   s:Hide()
   local title = T.text(s, 15, C.paper); title:SetPoint("TOPLEFT", 20, -12); title:SetText(titleText)
@@ -837,7 +848,7 @@ function UI:CreateRecords()
         local d = db.records.dailyToday
         if d.date == ns.App:Today() and d.tries > 0 then
           out[#out + 1] = ""
-          out[#out + 1] = "|cfff2cf6bToday: " .. T.commas(d.best) .. "|r (" .. d.tries .. " tries)"
+          out[#out + 1] = "|cfff2cf6bToday: " .. T.commas(d.best) .. "|r (" .. T.plural(d.tries, "try", "tries") .. ")"
         end
       end
       col.lines:SetText(table.concat(out, "\n"))

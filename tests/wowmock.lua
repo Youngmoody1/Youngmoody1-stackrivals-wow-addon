@@ -6,7 +6,7 @@
   typo or an API we never verified shows up here instead of as a Lua error in the client.
   It does NOT prove the addon works in WoW (rendering, real API quirks) - that needs the client.
 ]]
-local M = { events = {}, frames = {}, log = {}, combat = false, time = 0, blocked = {} }
+local M = { events = {}, frames = {}, regions = {}, log = {}, combat = false, time = 0, blocked = {} }
 
 local function strict(obj, kind)
   return setmetatable(obj, {
@@ -24,7 +24,7 @@ end
 local region = {}
 function region.SetPoint(o, ...) o._points[#o._points + 1] = { ... } end
 function region.ClearAllPoints(o) o._points = {} end
-function region.SetAllPoints(o) o._points = { "ALL" } end
+function region.SetAllPoints(o, rel) o._points = { "ALL" }; o._allRel = rel end
 function region.GetPoint(o, i) local p = o._points[i or 1]; if type(p) == "table" then return p[1], p[2], p[3] or p[1], p[4] or 0, p[5] or 0 end return "CENTER", nil, "CENTER", 0, 0 end
 function region.SetSize(o, w, h) o._w, o._h = w, h end
 function region.SetWidth(o, w) o._w = w end
@@ -45,23 +45,28 @@ local function newRegion(kind, extra)
   return o
 end
 
-local function newTexture()
+local order = 0
+local function nextOrder() order = order + 1; return order end
+
+local function newTexture(parent, layer, sub)
   return strict(newRegion("Texture", {
+    _parent = parent, _layer = layer or "ARTWORK", _sub = sub or 0, _order = nextOrder(),
     SetColorTexture = function(o, r, g, b, a) assert(type(r) == "number" and type(g) == "number" and type(b) == "number", "SetColorTexture needs numbers"); o._r, o._g, o._b, o._a = r, g, b, a end,
     SetTexture = function(o, path) o._tex = path end,
     SetDrawLayer = function() end,
   }), "Texture")
 end
 
-local function newFontString()
+local function newFontString(parent, layer)
   return strict(newRegion("FontString", {
+    _parent = parent, _layer = layer or "OVERLAY", _sub = 0, _order = nextOrder(),
     SetFont = function(o, f, s, fl) assert(type(f) == "string" and type(s) == "number", "SetFont(path, size)"); o._font = { f, s, fl } end,
     SetText = function(o, t) o._text = t end,
     GetText = function(o) return o._text end,
-    SetTextColor = function() end,
+    SetTextColor = function(o, r, g, b) o._tr, o._tg, o._tb = r, g, b end,
     SetShadowColor = function() end,
     SetShadowOffset = function() end,
-    SetJustifyH = function() end,
+    SetJustifyH = function(o, j) o._justify = j end,
     SetJustifyV = function() end,
     SetSpacing = function() end,
   }), "FontString")
@@ -77,7 +82,7 @@ local function newFrame(ftype, name, parent)
   local f
   f = newRegion(ftype, {
     _scripts = {}, _parent = parent, _level = parent and (parent._level or 0) + 1 or 0, _kb = false, _prop = false,
-    _scale = 1, _enabled = true,
+    _scale = 1, _enabled = true, _order = nextOrder(), _name = name,
     SetScript = function(o, ev, fn) o._scripts[ev] = fn end,
     GetScript = function(o, ev) return o._scripts[ev] end,
     HookScript = function(o, ev, fn) local old = o._scripts[ev]; o._scripts[ev] = function(...) if old then old(...) end fn(...) end end,
@@ -95,8 +100,8 @@ local function newFrame(ftype, name, parent)
     SetScale = function(o, s) o._scale = s end,
     GetEffectiveScale = function(o) return o._scale end,
     GetCenter = function() return 100, 100 end,
-    CreateTexture = function() return newTexture() end,
-    CreateFontString = function() return newFontString() end,
+    CreateTexture = function(o, _, layer, _, sub) local t = newTexture(o, layer, sub); M.regions[#M.regions + 1] = t; return t end,
+    CreateFontString = function(o, _, layer) local t = newFontString(o, layer); M.regions[#M.regions + 1] = t; return t end,
     EnableKeyboard = function(o, v)
       if M.combat then M.blocked[#M.blocked + 1] = "EnableKeyboard"; error("ADDON_ACTION_BLOCKED EnableKeyboard") end
       o._kb = v and true or false

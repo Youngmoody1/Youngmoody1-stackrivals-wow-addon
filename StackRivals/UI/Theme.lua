@@ -172,6 +172,9 @@ function T.commas(n)
   return out
 end
 
+--- 1 -> "1 try", 3 -> "3 tries"
+function T.plural(n, one, many) return n .. " " .. (n == 1 and one or many) end
+
 --- seconds -> "m:ss"
 function T.clock(sec)
   sec = math.max(0, math.floor(sec + 0.0001))

@@ -18,9 +18,9 @@ local RESUME_TICKS = 120 -- 2 s when resuming
 
 --- Game modes. `limitTicks` ends the run on time; `daily` uses one shared seed per UTC day.
 Session.MODES = {
-  classic = { key = "classic", name = "Classic", short = "Endless - levels speed up every 10 lines" },
-  blitz = { key = "blitz", name = "Blitz 2:00", short = "Highest score in two minutes", limitTicks = 7200 },
-  daily = { key = "daily", name = "Daily Blitz", short = "Same pieces for every player today", limitTicks = 7200, daily = true },
+  classic = { key = "classic", name = "Classic", short = "Endless. Faster as you go" },
+  blitz = { key = "blitz", name = "Blitz 2:00", short = "Top score in two minutes", limitTicks = 7200 },
+  daily = { key = "daily", name = "Daily Blitz", short = "Same pieces for everyone", limitTicks = 7200, daily = true },
 }
 Session.MODE_ORDER = { "classic", "blitz", "daily" }
 
