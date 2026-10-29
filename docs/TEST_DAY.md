@@ -1,7 +1,7 @@
 # Testdag – den første rigtige WoW-test (dansk, til ejeren)
 
-StackRivals **0.3.0** er allerede installeret i dine klienter: **Retail**, **Classic Era** og
-**Anniversary** (`Interface\AddOns\StackRivals`). 0.2.1 er gemt som backup i
+StackRivals **0.3.1** er allerede installeret i dine klienter: **Retail**, **Classic Era** og
+**Anniversary** (`Interface\AddOns\StackRivals`). 0.2.1 og 0.3.0 er gemt som backup i
 `World of Warcraft\StackRivals-backups\`. Du skal ikke installere noget selv.
 
 Vælg **én** klient. Retail eller Classic Era er bedst. Forever findes først fra 5. nov. kl. 00.00.

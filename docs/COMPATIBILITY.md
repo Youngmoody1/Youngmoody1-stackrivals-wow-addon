@@ -10,9 +10,9 @@ Status levels — used strictly:
 | Client | Game type / TOC suffix | Interface in TOC | Status | Notes |
 |---|---|---|---|---|
 | WoW Forever | forever / `_Forever` (family `_Mainline`) | 16001 (beta number; live number unknown until launch) | SIMULATED | Beta closed 23 Oct. Real test on launch night (5 Nov 00:00 CET). |
-| Retail (Midnight) | standard / `_Standard`, `_Mainline` | 120105 | SIMULATED — 0.3.0 **installed on the owner's PC**, awaiting test | Secret-value guard for `UnitAffectingCombat`; chat-lockdown guard. |
-| Classic Era (incl. Hardcore realms) | vanilla / `_Vanilla`, `_Classic` | 11509 | SIMULATED — 0.3.0 **installed on the owner's PC**, awaiting test | Falls back to global `SendChatMessage` / `GetAddOnMetadata` (tested). No addon compartment (TOC line ignored). |
-| Anniversary | tbc / `_TBC` (Warcraft Wiki: Anniversary runs on the TBC game type) | 20506 | SIMULATED (Classic API variant) — 0.3.0 **installed on the owner's PC** | Same API family as Classic Era for everything we call. |
+| Retail (Midnight) | standard / `_Standard`, `_Mainline` | 120105 | SIMULATED — 0.3.1 **installed on the owner's PC**, awaiting test | Secret-value guard for `UnitAffectingCombat`; chat-lockdown guard. |
+| Classic Era (incl. Hardcore realms) | vanilla / `_Vanilla`, `_Classic` | 11509 | SIMULATED — 0.3.1 **installed on the owner's PC**, awaiting test | Falls back to global `SendChatMessage` / `GetAddOnMetadata` (tested). No addon compartment (TOC line ignored). |
+| Anniversary | tbc / `_TBC` (Warcraft Wiki: Anniversary runs on the TBC game type) | 20506 | SIMULATED (Classic API variant) — 0.3.1 **installed on the owner's PC** | Same API family as Classic Era for everything we call. |
 | TBC / Wrath / Titan Reforged / Cata / Mists Classic | `_TBC` / `_Wrath` / `_Cata` / `_Mists` | 20506, 38002, 30405, 40402, 50504 | UNTESTED | Listed so the addon isn't marked "out of date"; test before claiming support. |
 
 Interface numbers: Warcraft Wiki TOC page (edited 17 Oct 2026). Forever's release value is blank there.
