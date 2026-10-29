@@ -1,0 +1,9 @@
+# CurseForge packager config (used only if the GitHub webhook packager is enabled later).
+package-as: StackRivals
+ignore:
+  - tests
+  - tools
+  - docs
+  - .github
+  - README.md
+  - CHANGELOG.md

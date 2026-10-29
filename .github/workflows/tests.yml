@@ -1,0 +1,13 @@
+name: tests
+on: [push, pull_request]
+jobs:
+  lua51:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua 5.1 (same language version as WoW)
+        run: sudo apt-get update && sudo apt-get install -y lua5.1
+      - name: Run tests
+        run: lua5.1 tests/run.lua
+      - name: Build release zip
+        run: tools/build_release.sh

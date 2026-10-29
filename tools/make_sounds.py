@@ -50,10 +50,11 @@ class Mix:
         w = np.tanh(2 * osc("sine", f, f1, d)); self.add(w * env(len(w), a), at)
     def boom(self, f=120, d=0.9, a=0.5, at=0.0):
         self.sub(f, 30, d, a, at); self.noise(min(0.3, d * 0.4), a * 0.8, at, 3000, 200); self.noise(d, a * 0.6, at + 0.03, 500, 60)
-    def write(self, path, gain=1.0):
-        x = self.buf * gain
+    def write(self, path, peak_db=-6.0):
+        # normalise every sound to a deliberate peak so the set sits evenly next to WoW's own SFX
+        x = self.buf
         peak = np.max(np.abs(x)) or 1
-        if peak > 0.95: x = x / peak * 0.95
+        x = x / peak * (10 ** (peak_db / 20))
         nz = np.nonzero(np.abs(x) > 1e-4)[0]
         x = x[: (nz[-1] + 1 if len(nz) else len(x))]
         pcm = (x * 32767).astype(np.int16).tobytes()
@@ -61,8 +62,10 @@ class Mix:
                         "-c:a", "libvorbis", "-q:a", "4", path], input=pcm, check=True)
 
 out = sys.argv[1]; os.makedirs(out, exist_ok=True)
-def mk(name, d, fn, gain=1.0):
-    m = Mix(d); fn(m); m.write(f"{out}/{name}.ogg", gain)
+LEVEL = {"rotate": -16, "lock": -14, "hold": -12, "count": -10, "harddrop": -9, "combo": -10, "levelup": -9,
+         "go": -8, "clear1": -8, "clear2": -7, "clear3": -6, "clear4": -4, "gameover": -5, "record": -5}
+def mk(name, d, fn, gain=None):
+    m = Mix(d); fn(m); m.write(f"{out}/{name}.ogg", LEVEL.get(name, -8))
 
 mk("rotate", 0.08, lambda m: m.tone(360, 0.04, 520, "sine", 0.05))
 mk("hold", 0.12, lambda m: m.tone(330, 0.09, 220, "sine", 0.12))

@@ -376,6 +376,7 @@ end
 
 function UI:CreateKeyboard()
   local k = CreateFrame("Frame", nil, self.frame)
+  k:SetAllPoints(self.frame)
   self.keys = k
   -- New frames start with keyboard off and propagation off; nothing to call here, which also
   -- keeps creation safe if the window is first opened during combat.
