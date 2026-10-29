@@ -98,21 +98,28 @@ end)
 
 describe("hygiene", function()
   it("creates no accidental globals (only the documented ones)", function()
+    -- a fresh, isolated client environment, so names left over by other tests can't hide a leak
+    local NS = assert(loadfile(testdir .. "/netsim.lua"))(root, testdir)
+    local net = NS.new({ seed = 3 })
+    local before = {}
+    local c = net.add({ name = "Hygiene", guild = "G" })
     local allowed = { StackRivalsDB = 1, StackRivalsFrame = 1, StackRivalsMinimapButton = 1, SLASH_STACKRIVALS1 = 1,
       SLASH_STACKRIVALS2 = 1, StackRivals_OnAddonCompartmentClick = 1 }
+    -- everything the mock itself installs
+    local M2 = dofile(testdir .. "/wowmock.lua")
+    local mockEnv = {}
+    M2.install(mockEnv)
+    for k in pairs(mockEnv) do before[k] = true end
+    c.env.SlashCmdList.STACKRIVALS(""); c.ns.App:Start("classic"); net.step(400)
+    c.ns.Duel.findPlayers(); net.step(60)
+    c.M.fire("PLAYER_REGEN_DISABLED"); c.M.fire("PLAYER_LOGOUT")
     local leaked = {}
-    local M = dofile(testdir .. "/wowmock.lua"); M.install()
-    setmetatable(_G, { __newindex = function(t, k, v) if not allowed[k] then leaked[#leaked + 1] = tostring(k) end rawset(t, k, v) end })
-    local okRun, err = pcall(function()
-      local ns = {}
-      for _, f in ipairs(tocFiles()) do assert(loadfile(root .. "/" .. f))("StackRivals", ns) end
-      M.fire("ADDON_LOADED", "StackRivals"); M.fire("PLAYER_LOGIN")
-      SlashCmdList.STACKRIVALS(""); ns.App:Start("classic"); M.frames_step(400)
-      ns.UI.keys:GetScript("OnKeyDown")(ns.UI.keys, "SPACE"); M.frames_step(10)
-      M.fire("PLAYER_REGEN_DISABLED"); M.fire("PLAYER_LOGOUT")
-    end)
-    setmetatable(_G, nil)
-    ok(okRun, tostring(err))
+    for k in pairs(c.env) do
+      if not before[k] and not allowed[k] and k ~= "math" and k ~= "IsInGuild" and k ~= "IsInGroup" and k ~= "IsInRaid" then
+        leaked[#leaked + 1] = tostring(k)
+      end
+    end
+    table.sort(leaked)
     eq(table.concat(leaked, ","), "")
   end)
 end)

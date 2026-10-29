@@ -8,6 +8,7 @@ ns = ns or {}
 
 local DB = {}
 DB.SCHEMA = 1
+DB.DUEL_HISTORY = 20
 -- Max stored input-log length (chars). ~1.5 MB covers many hours of continuous Classic play.
 DB.MAX_LOG = 1500000
 
@@ -135,6 +136,25 @@ function DB.sanitize(raw)
   db.seenIntro = bool(raw.seenIntro, false)
   db.seenHelp = bool(raw.seenHelp, false)
 
+  -- Duel results (local; "checked" = the rival's log replayed to the same score on this PC).
+  local rdu = (type(raw.duels) == "table") and raw.duels or {}
+  db.duels = {
+    wins = math.floor(num(rdu.wins, 0, 0, 1e9)), losses = math.floor(num(rdu.losses, 0, 0, 1e9)),
+    draws = math.floor(num(rdu.draws, 0, 0, 1e9)), voids = math.floor(num(rdu.voids, 0, 0, 1e9)),
+    history = {},
+  }
+  if type(rdu.history) == "table" then
+    for i = 1, math.min(#rdu.history, DB.DUEL_HISTORY) do
+      local h = rdu.history[i]
+      if type(h) == "table" and str(h.rival, 64) then
+        db.duels.history[#db.duels.history + 1] = {
+          rival = h.rival, me = math.floor(num(h.me, 0, 0, 1e12)), them = math.floor(num(h.them, 0, 0, 1e12)),
+          res = str(h.res, 8) or "void", how = str(h.how, 24) or "", rs = str(h.rs, 8) or "b120", d = str(h.d, 16),
+        }
+      end
+    end
+  end
+
   -- Diagnostics (written on every load; read back after a test to see what the client reported).
   local rd = (type(raw.diag) == "table") and raw.diag or {}
   db.diag = {
@@ -232,6 +252,18 @@ function DB.recordRun(db, modeKey, state, playSeconds, runDate, logStr, today)
     if todayBest then d.best = state.score end
   end
   return { newBest = newBest and state.score > 0, prevBest = prev, newTodayBest = todayBest, rank = rank }
+end
+
+--- Store a finished duel (match table from Core/Duel.lua).
+function DB.recordDuel(db, m, today)
+  local d = db.duels
+  local res = m.outcome or "void"
+  if res == "win" then d.wins = d.wins + 1
+  elseif res == "loss" then d.losses = d.losses + 1
+  elseif res == "draw" then d.draws = d.draws + 1
+  else d.voids = d.voids + 1 end
+  table.insert(d.history, 1, { rival = m.rival, me = m.myScore or 0, them = m.theirScore or 0, res = res, how = m.endReason or "", rs = m.rulesetId, d = today })
+  while #d.history > DB.DUEL_HISTORY do table.remove(d.history) end
 end
 
 function DB.resetRecords(db)

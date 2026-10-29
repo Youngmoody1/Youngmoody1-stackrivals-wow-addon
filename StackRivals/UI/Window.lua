@@ -142,6 +142,7 @@ function UI:Create()
     local v = T.text(stats, size or 15, color or C.paper)
     v:SetPoint("TOPLEFT", l, "BOTTOMLEFT", 0, -3)
     v:SetText("0")
+    v.label = l
     return v
   end
   self.scoreText = stat("SCORE", -10, 16, C.paper)
@@ -174,6 +175,7 @@ function UI:Create()
   self:CreateOverlays()
   self:CreateSettings()
   self:CreateKeyboard()
+  if ns.Duel and self.CreateDuel then self:CreateDuel() end
 
   F:SetScript("OnShow", function() UI:OnShow() end)
   F:SetScript("OnHide", function() UI:OnHide() end)
@@ -228,10 +230,13 @@ function UI:CreateOverlays()
   self.continueBtn = T.button(menu, "Continue last run", 171, 26, "primary", function() ns.App:ContinueSuspended() end)
   self.continueBtn:SetPoint("TOP", menu, "TOP", 0, y - 4)
   self.continueBtn.tip = "Your unfinished run from before /reload or logout, restored exactly."
-  local howBtn = T.button(menu, "How to play", 82, 22, "frame", function() UI:ShowSheet("help") end)
-  howBtn:SetPoint("BOTTOMLEFT", menu, "BOTTOM", -85, 34)
-  local recBtn = T.button(menu, "Records", 82, 22, "frame", function() UI:ShowSheet("records") end)
-  recBtn:SetPoint("BOTTOMRIGHT", menu, "BOTTOM", 85, 34)
+  local howBtn = T.button(menu, "Help", 54, 22, "frame", function() UI:ShowSheet("help") end)
+  howBtn:SetPoint("BOTTOMLEFT", menu, "BOTTOM", -86, 34)
+  local duelBtn = T.button(menu, "Duel", 58, 22, "steel", function() UI:ShowSheet("duel") end)
+  duelBtn:SetPoint("BOTTOM", menu, "BOTTOM", 0, 34)
+  duelBtn.tip = "Challenge a guild or group member to a 1v1 score race."
+  local recBtn = T.button(menu, "Records", 54, 22, "frame", function() UI:ShowSheet("records") end)
+  recBtn:SetPoint("BOTTOMRIGHT", menu, "BOTTOM", 86, 34)
   self.statsLine = T.text(menu, 10, C.label); self.statsLine:SetPoint("BOTTOM", 0, 12)
   self.statsLine:SetWidth(175)
 
@@ -272,7 +277,7 @@ function UI:CreateOverlays()
   self.overBadge = T.text(over, 13, C.gold, "OUTLINE"); self.overBadge:SetPoint("TOP", self.overScore, "BOTTOM", 0, -6)
   self.overDetail = T.text(over, 11, C.body); self.overDetail:SetPoint("TOP", self.overBadge, "BOTTOM", 0, -10)
   self.overDetail:SetWidth(175)
-  local again = T.button(over, "Play again", 150, 28, "primary", function() ns.App:Start(ns.App.lastMode or "classic") end)
+  local again = T.button(over, "Play again", 150, 28, "primary", function() UI:PlayAgain() end)
   again:SetPoint("TOP", over, "TOP", 0, -210)
   self.againHint = T.text(over, 10, C.label); self.againHint:SetPoint("TOP", again, "BOTTOM", 0, -3)
   self.againBtn = again
@@ -453,7 +458,7 @@ function UI:OnKeyDown(f, key)
     -- only the hard-drop key (play again) is ours; everything else goes to WoW
     if DB.actionForKey(ns.db, key) == "hardDrop" and not self.overReadyAt and not inCombat() then
       setPropagate(f, false)
-      ns.App:Start(sess.mode.key)
+      if sess.duel then UI:PlayAgain() else ns.App:Start(sess.mode.key) end
     else
       setPropagate(f, true)
     end
@@ -520,6 +525,7 @@ function UI:OnHide()
   self.overListenUntil = 0 -- after closing the window, "play again" is only by click
   if self.settings and self.settings:IsShown() then self.settings:Hide() end
   if self.help then self.help:Hide(); self.records:Hide() end
+  if self.duelSheet then self.duelSheet:Hide() end
   ns.App:Pause("hidden")
   self:EndBind()
   self:SetKeyboard(false)
@@ -663,9 +669,21 @@ function UI:Render()
     setNum(self.timeText, math.floor(s.tick / 60), T.clock)
     if self.timeUrgent ~= false then self.timeUrgent = false; self.timeText:SetTextColor(C.steel[1], C.steel[2], C.steel[3]) end
   end
-  setNum(self.bestText, ns.App:BestFor(sess.mode.key), T.commas)
+  if sess.duel then
+    -- duel: show the lead over the rival instead of a personal best
+    local lead = s.score - (sess.duel.rival_.score or 0)
+    setStr(self.bestText.label, "LEAD")
+    setStr(self.bestText, (lead > 0 and "+" or (lead < 0 and "-" or "")) .. T.commas(math.abs(lead)))
+    local c = lead >= 0 and C.green or C.redLight
+    if self.bestText._c ~= c then self.bestText._c = c; self.bestText:SetTextColor(c[1], c[2], c[3]) end
+  else
+    setStr(self.bestText.label, "BEST")
+    if self.bestText._c ~= C.gold then self.bestText._c = C.gold; self.bestText:SetTextColor(C.gold[1], C.gold[2], C.gold[3]) end
+    setNum(self.bestText, ns.App:BestFor(sess.mode.key), T.commas)
+  end
   local n = sess:countdownNumber()
   if n then setNum(self.countText, n); self.countText:Show() else self.countText:Hide() end
+  if sess.duel and self.RenderRival then self:RenderRival() end
 end
 
 --- Show the overlay that matches the current phase and take/release the keyboard.
@@ -680,6 +698,7 @@ function UI:RefreshPhase()
   self.over:SetShown(phase == "over")
   self.countText:SetShown(phase == "countdown")
   self.modeText:SetText(sess and not App.inMenu and string.upper(sess.mode.name) or "")
+  if self.RefreshDuel and self:RefreshDuel(phase) then phase = "lobby" end
   if phase == "paused" then
     local r = sess.pauseReason
     local txt = (r == "combat") and "You entered combat. Finish the fight, then resume."
@@ -700,8 +719,9 @@ function UI:RefreshPhase()
   -- normal WoW key again, so a player who walks away can jump).
   local overListen = phase == "over" and quiet and not self.overReadyAt
     and (self.overListenUntil or 0) > GetTime()
+  if sess and sess.duel then overListen = false end -- a duel needs a deliberate click
   if phase == "over" and self.againHint then
-    self.againHint:SetText("or press " .. T.keyName(ns.db.bindings.hardDrop))
+    self.againHint:SetText((sess and sess.duel) and "" or ("or press " .. T.keyName(ns.db.bindings.hardDrop)))
     self.againHint:SetAlpha(overListen and 1 or 0)
   end
   if not self.binding then self:SetKeyboard((live or pausedListen or overListen) and self.frame:IsShown()) end
@@ -739,6 +759,14 @@ end
 
 function UI:ShowOver(info)
   local s = info.state
+  self.overTitle:SetTextColor(C.paper[1], C.paper[2], C.paper[3])
+  self.againBtn:SetLabel("Play again")
+  if info.duel then
+    self.overReadyAt, self.overListenUntil = nil, 0
+    self:ShowDuelOver(info.duel)
+    self:RefreshPhase()
+    return
+  end
   self.overTitle:SetText(info.reason == "time" and "TIME!" or "GAME OVER")
   self.overScore:SetText(T.commas(s.score))
   if info.newBest then
@@ -873,7 +901,14 @@ function UI:CreateRecords()
 end
 
 function UI:SheetOpen()
-  return (self.help and self.help:IsShown()) or (self.records and self.records:IsShown()) or (self.settings and self.settings:IsShown()) or false
+  return (self.help and self.help:IsShown()) or (self.records and self.records:IsShown()) or (self.settings and self.settings:IsShown())
+    or (self.duelSheet and self.duelSheet:IsShown()) or false
+end
+
+function UI:HideSheets()
+  if self.help then self.help:Hide(); self.records:Hide() end
+  if self.duelSheet then self.duelSheet:Hide() end
+  if self.settings and self.settings:IsShown() then self:ShowSettings(false) end
 end
 
 function UI:ShowSheet(which)
@@ -881,6 +916,7 @@ function UI:ShowSheet(which)
   ns.App:Pause("settings")
   self.help:SetShown(which == "help")
   self.records:SetShown(which == "records")
+  if self.duelSheet then self.duelSheet:SetShown(which == "duel") end
   if self.settings:IsShown() then self:ShowSettings(false) end
   self:RefreshPhase()
 end

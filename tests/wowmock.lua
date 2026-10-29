@@ -73,7 +73,7 @@ local function newFontString(parent, layer)
 end
 
 local KNOWN_EVENTS = {
-  ADDON_LOADED = 1, PLAYER_LOGIN = 1, PLAYER_LOGOUT = 1, PLAYER_REGEN_DISABLED = 1, PLAYER_REGEN_ENABLED = 1,
+  CHAT_MSG_ADDON = 1, ADDON_LOADED = 1, PLAYER_LOGIN = 1, PLAYER_LOGOUT = 1, PLAYER_REGEN_DISABLED = 1, PLAYER_REGEN_ENABLED = 1,
   LOADING_SCREEN_ENABLED = 1, PLAYER_LEAVING_WORLD = 1, PLAYER_DEAD = 1,
   DISPLAY_SIZE_CHANGED = 1, UI_SCALE_CHANGED = 1,
 }
@@ -135,41 +135,58 @@ local function newFrame(ftype, name, parent)
   end
   f = strict(f, ftype .. "(" .. tostring(name) .. ")")
   M.frames[#M.frames + 1] = f
-  if name then _G[name] = f end
+  if name then M.G[name] = f end
   return f
 end
 
-function M.install()
-  _G.CreateFrame = function(ftype, name, parent, template)
+--- Install the API into `G` (default _G). A separate table per simulated client lets two
+--- complete addon instances run side by side in one Lua process (see tests/netsim.lua).
+function M.install(G)
+  G = G or _G
+  M.G = G
+  G.CreateFrame = function(ftype, name, parent, template)
     assert(ftype == "Frame" or ftype == "Button", "mock: unsupported frame type " .. tostring(ftype))
     return newFrame(ftype, name, parent)
   end
-  _G.UIParent = newFrame("Frame", "UIParent")
-  UIParent:SetSize(1366, 768) -- a small laptop screen at default UI scale
-  _G.Minimap = newFrame("Frame", "Minimap")
-  Minimap:SetSize(140, 140)
-  _G.GameTooltip = setmetatable({}, { __index = function() return function() end end })
-  _G.DEFAULT_CHAT_FRAME = { AddMessage = function(_, msg) M.log[#M.log + 1] = msg end }
-  _G.UISpecialFrames = {}
-  _G.SlashCmdList = {}
-  _G.STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
-  _G.GetTime = function() return M.time end
-  _G.InCombatLockdown = function() return M.combat end
-  _G.UnitAffectingCombat = function() return M.combat end
+  G.UIParent = newFrame("Frame", "UIParent")
+  G.UIParent:SetSize(1366, 768) -- a small laptop screen at default UI scale
+  G.Minimap = newFrame("Frame", "Minimap")
+  G.Minimap:SetSize(140, 140)
+  G.GameTooltip = setmetatable({}, { __index = function() return function() end end })
+  G.DEFAULT_CHAT_FRAME = { AddMessage = function(_, msg) M.log[#M.log + 1] = msg end }
+  G.UISpecialFrames = {}
+  G.SlashCmdList = {}
+  G.STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
+  G.GetTime = function() return M.time end
+  G.InCombatLockdown = function() return M.combat end
+  G.UnitAffectingCombat = function() return M.combat end
   M.sounds = {}
-  _G.PlaySoundFile = function(path, channel) M.sounds[#M.sounds + 1] = path; return true end
-  _G.PlaySound = function() return true end
-  _G.SOUNDKIT = { IG_MAINMENU_OPEN = 850 }
-  _G.C_AddOns = { GetAddOnMetadata = function(_, field) if field == "Version" then return "0.1.0-test" end end }
-  _G.GetBuildInfo = function() return "1.15.0", "70338", "Oct 2026", 16001 end
-  _G.date = os.date
-  _G.tinsert = table.insert
-  _G.IsInGuild = function() return M.inGuild or false end
-  _G.IsInGroup = function() return false end
-  _G.IsInRaid = function() return false end
+  G.PlaySoundFile = function(path, channel) M.sounds[#M.sounds + 1] = path; return true end
+  G.PlaySound = function() return true end
+  G.SOUNDKIT = { IG_MAINMENU_OPEN = 850 }
+  G.C_AddOns = { GetAddOnMetadata = function(_, field) if field == "Version" then return "0.1.0-test" end end }
+  G.GetBuildInfo = function() return "1.15.0", "70338", "Oct 2026", 16001 end
+  G.date = os.date
+  G.tinsert = table.insert
+  G.IsInGuild = function() return M.inGuild or false end
+  G.IsInGroup = function() return false end
+  G.IsInRaid = function() return false end
+  G.IsInInstance = function() return M.inInstance or false, M.inInstance and "party" or "none" end
   M.chat = {}
-  _G.C_ChatInfo = { SendChatMessage = function(msg, channel) M.chat[#M.chat + 1] = { msg, channel } end }
-  _G.GetCursorPosition = function() return 0, 0 end
+  G.C_ChatInfo = { SendChatMessage = function(msg, channel) M.chat[#M.chat + 1] = { msg, channel } end }
+  G.GetCursorPosition = function() return 0, 0 end
+  G.UnitName = function() return M.playerName or "Tester" end
+  G.GetNormalizedRealmName = function() return M.realm or "Realm" end
+  G.GetRealmName = function() return M.realm or "Realm" end
+  -- addon messages: recorded; tests/netsim.lua replaces SendAddonMessage with a network bus
+  M.addonOut = {}
+  M.prefixes = {}
+  G.C_ChatInfo.RegisterAddonMessagePrefix = function(p) assert(#p <= 16, "prefix too long"); M.prefixes[p] = true; return true end
+  G.C_ChatInfo.SendAddonMessage = function(prefix, text, channel, target)
+    assert(#text <= 255, "addon message over 255 bytes")
+    M.addonOut[#M.addonOut + 1] = { prefix, text, channel, target }
+    return 0
+  end
 end
 
 --- Fire a game event to every frame that registered it.

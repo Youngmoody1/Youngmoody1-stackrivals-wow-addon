@@ -23,6 +23,9 @@ Session.MODES = {
   daily = { key = "daily", name = "Daily Blitz", short = "Same pieces for everyone", limitTicks = 7200, daily = true },
 }
 Session.MODE_ORDER = { "classic", "blitz", "daily" }
+-- Duel modes (not in the solo menu); limits must match Protocol.RULESETS.
+Session.MODES.duel_b120 = { key = "duel_b120", name = "Duel 2:00", short = "1v1 score race", limitTicks = 7200, countdownTicks = 180, duel = true }
+Session.MODES.duel_r180 = { key = "duel_r180", name = "Duel 3:00", short = "1v1 score race, web rules", limitTicks = 10800, countdownTicks = 240, duel = true }
 
 --- Seed shared by every player for a UTC date string "YYYY-MM-DD".
 function Session.dailySeed(dateStr) return "srwow-daily-" .. dateStr end
@@ -40,14 +43,14 @@ function Session.new(modeKey, seed, dateStr)
     state = E.createGame(seed, { startLevel = 1 }),
     input = Input.new(),
     phase = "countdown",
-    countdown = COUNTDOWN_TICKS,
+    countdown = mode.countdownTicks or COUNTDOWN_TICKS,
     acc = 0,
     events = {},
     pauseReason = nil,
     endReason = nil,
     playSeconds = 0,
   }, Session)
-  self:emit("count", 3)
+  self:emit("count", math.ceil(self.countdown / 60))
   return self
 end
 
@@ -70,6 +73,7 @@ end
 
 --- Serialize an unfinished run for SavedVariables, or nil if there is nothing to keep.
 function Session:suspendData()
+  if self.duel or self.mode.duel then return nil end -- a duel can't be resumed after /reload
   if self.phase == "over" or self.state.gameOver then return nil end
   if self.state.tick == 0 and #self.state.inputLog == 0 then return nil end
   return { mode = self.mode.key, log = E.serializeLog(self.state), playSeconds = self.playSeconds }

@@ -50,7 +50,8 @@ local function rng(seed)
   local x = seed
   return function(n)
     x = (x * 1103515245 + 12345) % 2147483648
-    return (x % n) + 1
+    -- use the high bits: the low bits of this LCG repeat with a very short period
+    return (math.floor(x / 65536) % n) + 1
   end
 end
 
@@ -94,7 +95,8 @@ describe("UI fuzzing (random keys, clicks, combat, reloads, frame times)", funct
           elseif k <= 59 then
             M.fire("LOADING_SCREEN_ENABLED")
           elseif k <= 60 then
-            SlashCmdList.STACKRIVALS("")
+            -- open/close, or start a mode directly the way /sr blitz does
+            if r(2) == 1 then SlashCmdList.STACKRIVALS("") else SlashCmdList.STACKRIVALS(({ "blitz", "classic", "daily" })[r(3)]) end
           elseif k <= 62 then
             -- /reload: logout event, then a new client with the saved data
             seen.reload = seen.reload + 1

@@ -5,8 +5,9 @@ local root, testdir = "StackRivals", "tests"
 local L = dofile(testdir .. "/layout.lua")
 local S = assert(loadfile(testdir .. "/screens.lua"))(root, testdir)
 for _, sc in ipairs(S.list) do
-  local M, ns = sc[3]()
-  local R, items = L.collect(M, StackRivalsFrame)
-  L.dump(outdir .. "/" .. sc[1] .. ".txt", StackRivalsFrame, R, items, "StackRivals " .. (ns.VERSION or "") .. "  -  " .. sc[2])
+  local M, ns, root_ = sc[3]()
+  local F = root_ or StackRivalsFrame
+  local R, items = L.collect(M, F)
+  L.dump(outdir .. "/" .. sc[1] .. ".txt", F, R, items, "StackRivals " .. (ns.VERSION or "") .. "  -  " .. sc[2])
   print("dumped " .. sc[1])
 end

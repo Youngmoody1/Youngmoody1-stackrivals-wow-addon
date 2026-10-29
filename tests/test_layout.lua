@@ -20,8 +20,8 @@ end
 describe("layout of every screen", function()
   for _, sc in ipairs(S.list) do
     it(sc[1] .. " - " .. sc[2], function()
-      local M, ns = sc[3]()
-      local F = StackRivalsFrame
+      local M, ns, root_ = sc[3]()
+      local F = root_ or StackRivalsFrame
       local R, items = L.collect(M, F)
       local texts = {}
       for _, o in ipairs(items) do

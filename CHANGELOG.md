@@ -1,6 +1,24 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — multiplayer preview (branch `multiplayer`, not released)
+
+- **Duels**: challenge a guild or group member to a 1v1 score race on a shared seed — Blitz 2:00,
+  or 3:00 with the web's 1v1 rules. Find players (one guild/group broadcast, answers by whisper),
+  invite popup (works with the window closed), Accept / Decline, lobby with Ready, synced
+  countdown, live rival score and lead, result with Rematch, `/sr duel Name [3]`, `/sr leave`.
+- Seed made from both players' random nonces, so neither picks the pieces alone.
+- Peer check: at the end each addon replays the rival's input log with the engine (port of the
+  web's `verifyLog`): inflated scores, wrong seeds, over-time logs and inhuman input are caught.
+  Results are labelled "peer-checked", never "verified".
+- Compact protocol (≤ 255 bytes, ~3 bytes per input in the log), whispers only during a match,
+  paced below Blizzard's limits (also inside instances), result codes handled (throttle,
+  lockdown → retry; offline, not in guild → give up). Lost/duplicated/late messages recover.
+- Disconnect, forfeit, timeouts, busy/version/combat declines. Combat pauses only your own run.
+- Duel history and W/L/D in saved data (separate from solo records).
+- Tests: two complete simulated clients over a fake network (loss, duplicates, reordering,
+  instance throttling, lockdown, offline, tampering, spoofing).
+
+## Unreleased (main)
 
 - Web sync: fixtures now record the web commit they came from (5d2a9fd) and a full rules
   fingerprint; `tools/parity/check_web.sh` compares any newer web version and names each differing

@@ -65,6 +65,16 @@ local function play(M, ns, mode)
   return s
 end
 
+-- Two simulated clients for the duel screens (Alice's view is captured).
+local function duelPair()
+  local NS = assert(loadfile(testdir .. "/netsim.lua"))(root, testdir)
+  local net = NS.new({ seed = 5 })
+  local a = net.add({ name = "Alice", guild = "G", saved = { seenHelp = true } })
+  local b = net.add({ name = "Bob", guild = "G", saved = { seenHelp = true } })
+  a.env.UIParent:SetSize(1920, 1080)
+  return net, a, b, NS
+end
+
 S.list = {
   { "1-menu", "Mode menu", function()
     local M, ns = boot(); seedRecords(ns); SlashCmdList.STACKRIVALS(""); M.frames_step(1); return M, ns
@@ -90,6 +100,37 @@ S.list = {
   end },
   { "7-settings", "Settings", function()
     local M, ns = boot(); SlashCmdList.STACKRIVALS("settings"); M.frames_step(1); return M, ns
+  end },
+  { "9-duel-sheet", "Duel - find players", function()
+    local net, a, b = duelPair()
+    net.add({ name = "Carol", guild = "G", saved = { seenHelp = true } })
+    a.env.SlashCmdList.STACKRIVALS("")
+    a.ns.UI:ShowSheet("duel")
+    a.ns.Duel.findPlayers(); net.step(60)
+    a.ns.UI:RefreshDuelSheet()
+    return a.M, a.ns, a.env.StackRivalsFrame
+  end },
+  { "10-duel-lobby", "Duel - lobby (Ready)", function()
+    local net, a, b = duelPair()
+    a.ns.Duel.challenge("Bob"); net.step(30); b.ns.Duel.accept(); net.step(30)
+    b.ns.Duel.ready(); net.step(30)
+    return a.M, a.ns, a.env.StackRivalsFrame
+  end },
+  { "11-duel-playing", "Duel - live rival score", function()
+    local net, a, b, NS = duelPair()
+    a.ns.Duel.challenge("Bob"); net.step(30); b.ns.Duel.accept(); net.step(30)
+    a.ns.Duel.ready(); b.ns.Duel.ready(); net.step(30)
+    local pa, pb = NS.autoplay(a, "fast"), NS.autoplay(b, "slow")
+    for _ = 1, 1800 do pa(); pb(); net.step(1) end
+    return a.M, a.ns, a.env.StackRivalsFrame
+  end },
+  { "12-duel-result", "Duel - result (peer-checked)", function()
+    local net, a, b, NS = duelPair()
+    a.ns.Duel.challenge("Bob"); net.step(30); b.ns.Duel.accept(); net.step(30)
+    a.ns.Duel.ready(); b.ns.Duel.ready(); net.step(30)
+    local pa, pb = NS.autoplay(a, "fast"), NS.autoplay(b, "slow")
+    for _ = 1, 7200 + 900 do pa(); pb(); net.step(1) end
+    return a.M, a.ns, a.env.StackRivalsFrame
   end },
   { "8-records", "Records", function()
     local M, ns = boot(); seedRecords(ns); SlashCmdList.STACKRIVALS(""); ns.UI:ShowSheet("records"); M.frames_step(1); return M, ns

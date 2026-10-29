@@ -62,6 +62,9 @@ end
 --- Start a fresh run in `mode` (classic | blitz | daily).
 function App:Start(mode)
   if ns.UI.inCombat() then self:Print("Can't start a run in combat."); return end
+  if ns.Session.MODES[mode] and ns.Session.MODES[mode].duel then return end -- duels start via ns.Duel
+  local d = ns.Duel and ns.Duel.current
+  if d and (d.state == "playing" or d.state == "waiting") then self:Print("Finish or leave your duel first (/sr leave)."); return end
   ns.UI:Create()
   local seed = (mode == "daily") and Session.dailySeed(self:Today()) or newSeed()
   self.session = Session.new(mode, seed, self:Today())
@@ -85,6 +88,7 @@ function App:ContinueSuspended()
 end
 
 function App:ShowMenu()
+  if ns.Duel then ns.Duel.clear() end -- forget a finished/cancelled duel
   self.inMenu = true
   if self.session and self.session:isActive() then self.session:pause("manual") end
   if ns.UI.frame then ns.UI:RefreshMenu(); ns.UI:RefreshPhase() end
@@ -109,10 +113,34 @@ function App:Resume()
 end
 
 --- Called once when a run ends (top-out or time up).
+--- Start the local run of a duel (called by Core/Duel.lua when both players are ready).
+function App:StartDuel(m)
+  ns.UI:Create()
+  local cur = self.session
+  if cur and not cur.duel then
+    local data = cur:suspendData() -- keep an unfinished solo run for "Continue last run"
+    if data then data.date = cur.date or self:Today(); ns.db.suspended = data end
+  end
+  local s = Session.new("duel_" .. m.rulesetId, m.seed, self:Today())
+  s.duel = m
+  self.session = s
+  self.lastMode = s.mode.key
+  self.inMenu = false
+  if ns.UI.HideSheets then ns.UI:HideSheets() end
+  if not ns.UI.frame:IsShown() then ns.UI.frame:Show() end
+  ns.UI:RefreshPhase()
+end
+
 function App:OnRunOver(reason)
   local s = self.session
   if not s or s.recorded then return end
   s.recorded = true
+  if s.duel then
+    ns.Sound.play("gameover")
+    ns.Duel.onLocalEnd(s.state)
+    ns.UI:ShowOver({ state = s.state, reason = reason, mode = s.mode.key, modeName = s.mode.name, duel = s.duel })
+    return
+  end
   local mode = s.mode.key
   local res = DB.recordRun(ns.db, mode, s.state, s.playSeconds, s.date or self:Today(), E.serializeLog(s.state), self:Today())
   if res.newBest then ns.Sound.play("record") else ns.Sound.play("gameover") end
@@ -180,10 +208,22 @@ local function slash(msg)
       App:Print(string.format("%s: best %s, %d runs, %d lines, %d quads", Session.MODES[k].name,
         ns.T.commas(r.best), r.games, r.totalLines, r.quads))
     end
+  elseif cmd == "duel" then
+    local name, three = arg:match("^(%S+)%s*(%S*)$")
+    if not name then
+      ns.UI:Create(); ns.UI.frame:Show(); ns.UI:ShowSheet("duel")
+    else
+      name = name:sub(1, 1):upper() .. name:sub(2)
+      local okDuel, why = ns.Duel.challenge(name, (three == "3" or three == "web") and "r180" or "b120")
+      if okDuel then App:Print("Challenge sent to " .. name .. ".")
+      else App:Print("Can't challenge now (" .. tostring(why) .. ").") end
+    end
+  elseif cmd == "leave" then
+    if ns.Duel.busy() then ns.Duel.leave(); App:Print("You left the duel.") end
   elseif cmd == "version" then
     App:Print("version " .. ns.VERSION .. ", engine v" .. E.ENGINE_VERSION .. ", interface " .. tostring(select(4, GetBuildInfo())))
   else
-    App:Print("commands: /sr (open), /sr blitz | classic | daily, /sr pause, /sr settings, /sr minimap, /sr scale 0.8, /sr reset, /sr sound, /sr stats, /sr version")
+    App:Print("commands: /sr (open), /sr blitz | classic | daily, /sr duel [Name] [3], /sr leave, /sr pause, /sr settings, /sr minimap, /sr scale 0.8, /sr reset, /sr sound, /sr stats, /sr version")
   end
 end
 
@@ -221,11 +261,19 @@ ev:SetScript("OnEvent", function(_, event, arg1)
     if su and su.mode == "daily" and su.date and su.date ~= App:Today() then ns.db.suspended = nil end
   elseif event == "PLAYER_LOGIN" then
     ns.Minimap:Create()
+    if ns.Comm then
+      ns.Comm.init(); ns.Duel.init()
+      -- build the (hidden) window now so a duel invite can be shown even if StackRivals was
+      -- never opened this session
+      ns.UI:Create()
+    end
     if not ns.db.seenIntro then
       ns.db.seenIntro = true
       App:Print("loaded. Type |cffff4d5a/sr|r or click the minimap button to play.")
     end
   elseif event == "PLAYER_LOGOUT" then
+    -- a running duel can't survive a reload: tell the rival (best effort)
+    if ns.Duel and ns.Duel.busy() then ns.Duel.leave() end
     -- keep an unfinished run so /reload or logout never loses it
     local s = App.session
     if s then
