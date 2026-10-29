@@ -24,5 +24,6 @@ UI\Window.lua
 UI\Minimap.lua
 Net\Comm.lua
 Core\Duel.lua
+Core\DuelDiag.lua
 UI\DuelUI.lua
 Core\Main.lua

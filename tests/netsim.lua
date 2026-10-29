@@ -62,11 +62,27 @@ function NS.new(opts)
     if o.engine then ns.Engine.ENGINE_VERSION = o.engine end
     c.ns = ns
     M.time = net.time
+    if o.beforeLogin then o.beforeLogin(env, M, ns) end
     M.fire("ADDON_LOADED", "StackRivals")
     M.fire("PLAYER_LOGIN")
     net.clients[#net.clients + 1] = c
     net.byName[c.name:lower()] = c
     return c
+  end
+
+  --- /reload: logout (the addon may send a last message), then a fresh Lua state with the same
+  --- SavedVariables and the same character. Messages in flight are delivered to the new instance.
+  function net.reload(c)
+    c.M.time = net.time
+    c.M.fire("PLAYER_LOGOUT")
+    for i, x in ipairs(net.clients) do if x == c then table.remove(net.clients, i); break end end
+    local o = {}
+    for k, v in pairs(c.o) do o[k] = v end
+    o.saved = c.env.StackRivalsDB
+    o.beforeLogin = nil
+    local n = net.add(o)
+    n.reloads = (c.reloads or 0) + 1
+    return n
   end
 
   -- Blizzard's documented limit: per prefix 10 messages, +1/s; whispers exempt outside instances.
@@ -126,9 +142,10 @@ function NS.new(opts)
       table.sort(net.queue, function(a, b) if a.at ~= b.at then return a.at < b.at end return a.seq < b.seq end)
       while net.queue[1] and net.queue[1].at <= net.time do
         local q = table.remove(net.queue, 1)
-        if q.to.online then
+        local to = net.byName[q.to.name:lower()] or q.to -- the current instance (after a /reload)
+        if to.online then
           net.delivered = net.delivered + 1
-          q.to.M.fire("CHAT_MSG_ADDON", q.prefix, q.text, q.channel, q.from.name)
+          to.M.fire("CHAT_MSG_ADDON", q.prefix, q.text, q.channel, q.from.name)
         end
       end
       for _, c in ipairs(net.clients) do

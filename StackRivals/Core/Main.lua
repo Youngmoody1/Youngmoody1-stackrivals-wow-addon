@@ -132,8 +132,10 @@ function App:StartDuel(m)
   self.inMenu = false
   if ns.UI.HideSheets then ns.UI:HideSheets() end
   if not ns.UI.frame:IsShown() and not (ns.UI.inCombat() and ns.db.settings.hideInCombat) then ns.UI.frame:Show() end
-  -- GO can arrive after we entered combat: never let pieces fall with the keyboard released
-  if ns.UI.inCombat() then s:pause("combat") end
+  -- GO can arrive after we entered combat or while typing in chat (keys go to the edit box):
+  -- never let pieces fall unattended
+  if ns.UI.inCombat() then s:pause("combat")
+  elseif GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus() then s:pause("chat") end
   ns.UI:RefreshPhase()
 end
 
@@ -214,6 +216,8 @@ local function slash(msg)
       App:Print(string.format("%s: best %s, %d runs, %d lines, %d quads", Session.MODES[k].name,
         ns.T.commas(r.best), r.games, r.totalLines, r.quads))
     end
+  elseif cmd == "duel" and arg == "debug" then
+    for _, l in ipairs(ns.DuelDiag.status()) do App:Print(l) end
   elseif cmd == "duel" then
     local name, three = arg:match("^(%S+)%s*(%S*)$")
     if not name then
@@ -222,7 +226,7 @@ local function slash(msg)
       name = name:sub(1, 1):upper() .. name:sub(2)
       local okDuel, why = ns.Duel.challenge(name, (three == "3" or three == "web") and "r180" or "b120")
       if okDuel then App:Print("Challenge sent to " .. name .. ".")
-      else App:Print("Can't challenge now (" .. tostring(why) .. ").") end
+      else App:Print("Can't challenge now: " .. (ns.Duel.WHY_NOT[why] or tostring(why)) .. ".") end
     end
   elseif cmd == "leave" then
     if ns.Duel.busy() then ns.Duel.leave(); App:Print("You left the duel.") end

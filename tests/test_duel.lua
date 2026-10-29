@@ -516,6 +516,12 @@ describe("review findings (regression tests, simulated clients)", function()
     ok(not b.ns.UI.restartBtn:IsShown(), "no Restart in a duel")
     eq(b.ns.UI.quitBtn.fs:GetText(), "Forfeit duel")
     b.ns.UI.quitBtn:Click()
+    eq(b.ns.Duel.current.state, "playing", "one click only arms the forfeit")
+    eq(b.ns.UI.quitBtn.fs:GetText(), "Click again to forfeit")
+    net.step(60 * 4)
+    eq(b.ns.UI.quitBtn.fs:GetText(), "Forfeit duel", "the confirmation times out")
+    b.ns.UI.quitBtn:Click(); net.step(30)
+    b.ns.UI.quitBtn:Click()
     eq(b.ns.Duel.current.endReason, "you_forfeited"); ok(not b.ns.Duel.busy(), "Bob is free again")
     ok(bobTopsOut(net, a, b, function() return a.ns.Duel.current.state == "done" end))
     eq(a.ns.Duel.current.endReason, "rival_forfeited"); eq(a.ns.Duel.current.outcome, "win")
@@ -532,6 +538,157 @@ describe("review findings (regression tests, simulated clients)", function()
     ok(s and s.duel, "Bob's duel run exists")
     eq(s.phase, "paused"); eq(s.pauseReason, "combat")
     eq(b.ns.UI.keys._kb, false); eq(#b.M.blocked, 0, "no blocked actions")
+  end)
+end)
+
+------------------------------------------------------------------------------------------------
+-- Delivery, WoW API results, budget, reload, version, diagnostics (multiplayer hardening round 2)
+------------------------------------------------------------------------------------------------
+describe("delivery, API results and budget (simulated clients)", function()
+  it("result code is read from the LAST return value (deprecation wrapper) and booleans still work", function()
+    local net, a = pair({ seed = 50 })
+    local R = a.ns.Comm.result
+    eq(R(true, 0), 0); eq(R(true, 3), 3); eq(R(true, true, 3), 3, "wrapper: boolean first, code last")
+    eq(R(true, false, 11), 11); eq(R(true, true), 0); eq(R(true, false), 9); eq(R(true), 0)
+    eq(R(false, "error"), 9, "a Lua error is retried, never counted as sent")
+  end)
+
+  it("a throttle reported in the second return position is retried, not counted as delivered", function()
+    local net, a, b = pair({ seed = 51 })
+    local realSend = a.env.C_ChatInfo.SendAddonMessage
+    local refused = 0
+    a.env.C_ChatInfo.SendAddonMessage = function(prefix, text, ch, tgt)
+      if text:match("^1:INV:") and refused < 2 then refused = refused + 1; return true, 3 end -- wrapper style
+      return realSend(prefix, text, ch, tgt)
+    end
+    ok(a.ns.Duel.challenge("Bob"))
+    for _ = 1, 60 * 6 do net.step(1); if b.ns.Duel.current then break end end
+    eq(refused, 2); eq(b.ns.Duel.current and b.ns.Duel.current.state, "invited", "the invite arrived after the retries")
+    eq(a.ns.Comm.stats.codes[3], 2)
+  end)
+
+  it("prefix registration: duplicate is fine, invalid or full disables duels cleanly; Trial accounts can't challenge", function()
+    local net = NS.new({ seed = 52 })
+    local dup = net.add({ name = "Dup", guild = "G", beforeLogin = function(env) env.C_ChatInfo.RegisterAddonMessagePrefix = function() return 1 end end })
+    ok(dup.ns.Comm.enabled, "DuplicatePrefix (1) = already registered")
+    local full = net.add({ name = "Full", guild = "G", beforeLogin = function(env) env.C_ChatInfo.RegisterAddonMessagePrefix = function() return 3 end end })
+    ok(not full.ns.Comm.enabled, "MaxPrefixes (3) disables messaging")
+    local okF, whyF = full.ns.Duel.challenge("Dup"); ok(not okF); eq(whyF, "unavailable")
+    local old = net.add({ name = "Old", guild = "G", beforeLogin = function(env) env.C_ChatInfo.RegisterAddonMessagePrefix = function() return true end end })
+    ok(old.ns.Comm.enabled, "old clients return a boolean")
+    local trial = net.add({ name = "Trial", guild = "G", beforeLogin = function(env) env.IsTrialAccount = function() return true end end })
+    local okT, whyT = trial.ns.Duel.challenge("Dup")
+    ok(not okT); eq(whyT, "trial")
+    ok(dup.ns.Duel.challenge("Trial")); net.step(60)
+    eq(trial.ns.Duel.current, nil, "a Trial account can't answer, so the popup isn't shown")
+  end)
+
+  it("a lost DEC: the re-sent invite gets the decline again instead of re-opening the popup", function()
+    local net, a, b = pair({ seed = 53 })
+    local realSend = b.env.C_ChatInfo.SendAddonMessage
+    local lost = 0
+    b.env.C_ChatInfo.SendAddonMessage = function(prefix, text, ch, tgt)
+      if text:match("^1:DEC:") and lost == 0 then lost = 1; return 0 end -- accepted, never delivered
+      return realSend(prefix, text, ch, tgt)
+    end
+    ok(a.ns.Duel.challenge("Bob")); net.step(60)
+    b.ns.Duel.decline("no"); net.step(60 * 6)
+    eq(lost, 1)
+    eq(b.ns.Duel.current, nil); ok(not b.ns.UI.invite:IsShown(), "no second popup")
+    eq(a.ns.Duel.current.state, "cancelled"); eq(a.ns.Duel.current.endReason, "rival_no")
+  end)
+
+  it("a cancel in the lobby whose DEC is lost still reaches the rival", function()
+    local net, a, b = pair({ seed = 54 })
+    ok(a.ns.Duel.challenge("Bob")); net.step(60)
+    b.ns.UI.invite.acc:Click(); net.step(60)
+    local realSend = a.env.C_ChatInfo.SendAddonMessage
+    local lost = 0
+    a.env.C_ChatInfo.SendAddonMessage = function(prefix, text, ch, tgt)
+      if text:match("^1:DEC:") and lost == 0 then lost = 1; return 0 end
+      return realSend(prefix, text, ch, tgt)
+    end
+    a.ns.Duel.leave(); net.step(60 * 10)
+    eq(lost, 1); eq(b.ns.Duel.current.state, "cancelled"); eq(b.ns.Duel.current.endReason, "rival_cancel")
+  end)
+
+  it("FIN: results are acknowledged, so nobody keeps re-sending for 60 s", function()
+    local net, a, b = pair({ seed = 55 })
+    local ma, mb = runDuel(net, a, b)
+    eq(ma.endReason, "checked"); eq(mb.endReason, "checked")
+    for _ = 1, 60 * 5 do net.step(1) end
+    ok(ma.rivalHasMine and mb.rivalHasMine, "both sides confirmed")
+    local ends = count(net, a, "END")
+    for _ = 1, 60 * 60 do net.step(1) end
+    eq(ends.v, 0, "no END re-sends after FIN")
+  end)
+
+  it("message budget per player stays far below Blizzard's limits", function()
+    local net, a, b = pair({ seed = 56 })
+    local per = { [a] = {}, [b] = {} }
+    net.tap = function(c, text) local s = math.floor(net.time); per[c][s] = (per[c][s] or 0) + 1 end
+    local ma = runDuel(net, a, b)
+    eq(ma.endReason, "checked")
+    for c, secs in pairs(per) do
+      local total, peak = 0, 0
+      for _, n in pairs(secs) do total = total + n; if n > peak then peak = n end end
+      print(string.format("    %s: %d messages per duel, peak %d in one second", c.name, total, peak))
+      ok(total <= 110, c.name .. " total " .. total)
+      ok(peak <= 8, c.name .. " peak " .. peak .. " per second")
+    end
+  end)
+
+  it("/reload during a duel: the prefix is registered again, the rival wins by forfeit, the loss is saved", function()
+    local net, a, b = pair({ seed = 57 })
+    local ma = runDuel(net, a, b, { during = function(go)
+      go(600)
+      local b2 = net.reload(b)
+      ok(b2.M.prefixes.StackRivals, "prefix registered again after /reload")
+      ok(b2.ns.Comm.enabled)
+      eq(b2.ns.Duel.current, nil, "a running duel can't survive a reload")
+      eq(b2.ns.db.duels.losses, 1, "Bob's forfeit was saved at logout")
+      go(30)
+    end })
+    eq(ma.endReason, "rival_forfeited"); eq(ma.outcome, "win")
+  end)
+
+  it("a client on another protocol version answers in the inviter's version: 'different version'", function()
+    local net = NS.new({ seed = 58 })
+    local a = net.add({ name = "Alice", guild = "G" })
+    local b = net.add({ name = "Bob", guild = "G", beforeLogin = function(env, M, ns) ns.Protocol.VERSION = 2 end })
+    ok(a.ns.Duel.challenge("Bob")); net.step(60)
+    ok(b.ns.Comm.stats.rejected >= 1, "Bob (v2) can't decode Alice's v1 invite")
+    eq(b.ns.Duel.current, nil)
+    eq(a.ns.Duel.current.state, "cancelled"); eq(a.ns.Duel.current.endReason, "rival_version", "Alice is told at once")
+  end)
+
+  it("GO while typing in chat starts the duel paused", function()
+    local net, a, b = pair({ seed = 59 })
+    ok(a.ns.Duel.challenge("Bob")); net.step(60)
+    b.ns.UI.invite.acc:Click(); net.step(60)
+    b.ns.UI.lobby.ready:Click(); net.step(30)
+    b.env.GetCurrentKeyBoardFocus = function() return {} end -- chat edit box has focus
+    a.ns.UI.lobby.ready:Click(); net.step(60)
+    eq(b.ns.App.session.phase, "paused"); eq(b.ns.App.session.pauseReason, "chat")
+  end)
+
+  it("diagnostics: every duel leaves a compact, saved event log", function()
+    local net, a, b = pair({ seed = 60, drop = 0.05 })
+    local ma = runDuel(net, a, b)
+    local r = a.ns.db.duelDiag[1]
+    ok(r, "a record exists"); eq(r.mid, ma.mid); eq(r.rival, "Bob-Realm"); eq(r.result, ma.outcome)
+    ok(r.sent.SC > 30 and r.recv.SC > 30, "score heartbeats counted")
+    ok(r.codes["0"] > 0)
+    ok(#r.lines > 5 and #r.lines < 120, #r.lines .. " lines")
+    local joined = table.concat(r.lines, "\n")
+    ok(joined:find(">INV") and joined:find("<ACC") and joined:find("~playing") and joined:find("=" .. ma.outcome), joined)
+    ok(joined:find("<SC %d+/%d+"), "rival game state sampled")
+    -- survives the SavedVariables round trip
+    local db2 = a.ns.DB.sanitize(a.ns.db)
+    eq(#db2.duelDiag, 1); eq(#db2.duelDiag[1].lines, #r.lines)
+    local st = a.ns.DuelDiag.status()
+    ok(#st >= 4 and st[3]:find("Bob"), table.concat(st, " | "))
+    print("    diag sample: " .. table.concat({ r.lines[1], r.lines[2], r.lines[3], r.lines[#r.lines] }, " | "))
   end)
 end)
 

@@ -22,7 +22,7 @@
 local _, ns = ...
 local P = ns.Protocol
 
-local Comm = { handlers = {}, queue = {}, enabled = false, stats = { sent = 0, received = 0, dropped = 0, rejected = 0 } }
+local Comm = { handlers = {}, queue = {}, enabled = false, stats = { sent = 0, received = 0, dropped = 0, rejected = 0, maxQueue = 0, codes = {} } }
 ns.Comm = Comm
 
 local BUCKETS = {
@@ -71,10 +71,15 @@ function Comm.init()
     Comm.unavailable = true
     return
   end
-  local okReg, res = pcall(api.RegisterAddonMessagePrefix, P.PREFIX)
-  -- older clients return true/false, 12.x an Enum.RegisterAddonMessagePrefixResult
-  -- (0 success, 1 duplicate = already ours, 2 invalid, 3 too many prefixes)
-  if not okReg or res == false or res == 2 or res == 3 then Comm.unavailable = true; return end
+  -- Registrations are lost on every /reload, so this runs on every PLAYER_LOGIN (which also fires
+  -- after a reload). warcraft.wiki.gg: returns Enum.RegisterAddonMessagePrefixResult since 10.2.7 /
+  -- Classic 4.4.0 (0 Success, 1 DuplicatePrefix, 2 InvalidPrefix, 3 MaxPrefixes); older clients a boolean.
+  local res = Comm.result(pcall(api.RegisterAddonMessagePrefix, P.PREFIX))
+  Comm.registerResult = res
+  if res ~= 0 and res ~= 1 then Comm.unavailable = true; return end
+  -- Trial and Veteran accounts can't send addon messages (Forever 1.60.1 / 12.1.7, warcraft.wiki.gg)
+  local trial = (IsTrialAccount and IsTrialAccount()) or (IsVeteranTrialAccount and IsVeteranTrialAccount())
+  if trial then Comm.trial = true end
   local f = CreateFrame("Frame")
   Comm.frame = f
   pcall(f.RegisterEvent, f, "CHAT_MSG_ADDON")
@@ -115,8 +120,15 @@ function Comm.receive(prefix, text, channel, sender)
   if prefix ~= P.PREFIX then return end
   if Comm.same(sender, Comm.me()) then return end -- our own guild/party echo
   local m, why = P.decode(text)
-  if not m then Comm.stats.rejected = Comm.stats.rejected + 1; return end
+  if not m then
+    Comm.stats.rejected = Comm.stats.rejected + 1
+    Comm.traceEvent("reject", text, sender, why)
+    -- a newer (or older) protocol version: tell an inviter instead of leaving them waiting
+    if why == "version" and Comm.handlers["@version"] then Comm.handlers["@version"](text, Comm.fullName(sender)) end
+    return
+  end
   Comm.stats.received = Comm.stats.received + 1
+  Comm.traceEvent("recv", text, Comm.fullName(sender))
   local h = Comm.handlers[m.kind] or Comm.handlers["*"]
   if h then h(m, Comm.fullName(sender), channel) end
 end
@@ -136,14 +148,17 @@ function Comm.send(text, channel, target, onFail, opts)
   end
   if opts and opts.low and #Comm.queue >= LOW_PRIORITY_MAX then
     Comm.stats.dropped = Comm.stats.dropped + 1
+    Comm.traceEvent("drop", text, target, "low_priority")
     return false
   end
   if #Comm.queue >= MAX_QUEUE then
     Comm.stats.dropped = Comm.stats.dropped + 1
+    Comm.traceEvent("drop", text, target, "queue_full")
     if onFail then onFail("queue_full") end
     return false
   end
   Comm.queue[#Comm.queue + 1] = { text = text, channel = channel, target = target, onFail = onFail, tries = 0, notBefore = 0, key = opts and opts.key }
+  if #Comm.queue > Comm.stats.maxQueue then Comm.stats.maxQueue = #Comm.queue end
   Comm.flush()
   return true
 end
@@ -153,7 +168,33 @@ local function refill(b, t)
   b.at = t
 end
 
--- Enum.SendAddonMessageResult (12.x). Older clients return true/false or nothing.
+--- Result code of a pcall'd send/register call. warcraft.wiki.gg: the code is the LAST return value
+--- (a deprecation wrapper put a boolean first on some clients); before 10.2.7 / Classic 4.4.0 it was a
+--- boolean. Number -> that code; false -> 9 (general error, retry); true / nothing -> 0 (success).
+function Comm.result(okCall, ...)
+  if not okCall then return 9 end
+  local n = select("#", ...)
+  for i = n, 1, -1 do
+    local v = select(i, ...)
+    if type(v) == "number" then return v end
+  end
+  for i = n, 1, -1 do
+    if select(i, ...) == false then return 9 end
+  end
+  return 0
+end
+
+--- Diagnostics hook: Comm.trace(event, text, who, info) if set (see Core/DuelDiag.lua).
+function Comm.traceEvent(event, text, who, info)
+  local f = Comm.trace
+  if f then pcall(f, event, text, who, info) end
+end
+
+-- Enum.SendAddonMessageResult (warcraft.wiki.gg): 0 Success, 1 InvalidPrefix, 2 InvalidMessage,
+-- 3 AddonMessageThrottle, 4 InvalidChatType, 5 NotInGroup, 6 TargetRequired, 7 InvalidChannel,
+-- 8 ChannelThrottle, 9 GeneralError, 10 NotInGuild (11.1.0), 11 AddOnMessageLockdown (12.0.0),
+-- 12 TargetOffline (12.0.0). Success only means "accepted into the queue", never "delivered":
+-- the duel logic re-sends and acknowledges (FIN) itself.
 local RESULT_RETRY = { [3] = true, [8] = true, [9] = true, [11] = true }  -- throttles, general error, lockdown
 local RESULT_FAIL = { [1] = "invalid", [2] = "invalid", [4] = "invalid", [5] = "not_in_group", [6] = "invalid", [7] = "invalid", [10] = "not_in_guild", [12] = "offline" }
 
@@ -174,8 +215,9 @@ function Comm.flush()
     else
       bucket.tokens = bucket.tokens - 1
       q.tries = q.tries + 1
-      local okCall, res = pcall(C_ChatInfo.SendAddonMessage, P.PREFIX, q.text, q.channel, q.target)
-      local code = okCall and ((type(res) == "number") and res or ((res == false) and 9 or 0)) or 9
+      local code = Comm.result(pcall(C_ChatInfo.SendAddonMessage, P.PREFIX, q.text, q.channel, q.target))
+      Comm.stats.codes[code] = (Comm.stats.codes[code] or 0) + 1
+      Comm.traceEvent("send", q.text, q.target, code)
       if code == 0 then
         table.remove(Comm.queue, i)
         Comm.stats.sent = Comm.stats.sent + 1
@@ -183,6 +225,7 @@ function Comm.flush()
       elseif RESULT_FAIL[code] or q.tries >= MAX_TRIES then
         table.remove(Comm.queue, i)
         Comm.stats.dropped = Comm.stats.dropped + 1
+        Comm.traceEvent("drop", q.text, q.target, RESULT_FAIL[code] or "gave_up")
         if q.onFail then q.onFail(RESULT_FAIL[code] or "gave_up") end
       else
         q.notBefore = t + math.min(8, 0.5 * 2 ^ q.tries) -- back-off: 1, 2, 4, 8 s

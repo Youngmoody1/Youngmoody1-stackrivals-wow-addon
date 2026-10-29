@@ -21,6 +21,8 @@
     1:LOG:<mid>:<i>:<n>:<payload>                   input log chunk i of n
     1:RQ:<mid>:<i>                                  please (re)send log chunk i
     1:BYE:<mid>:<reason>                            forfeit (during play) / left (after my own run ended)
+    1:FIN:<mid>                                     I have your END and your complete log: stop re-sending
+                                                    (an accepted send is never proof of delivery)
 ]]
 local _, ns = ...
 ns = ns or {}
@@ -86,7 +88,7 @@ function P.encode(kind, ...)
 end
 
 local SPEC = {
-  HEL = 2, HI = 3, INV = 4, ACC = 2, DEC = 2, RDY = 1, GO = 2, PNG = 1, SC = 5, END = 7, LOG = 4, BYE = 2, RQ = 2,
+  HEL = 2, HI = 3, INV = 4, ACC = 2, DEC = 2, RDY = 1, GO = 2, PNG = 1, SC = 5, END = 7, LOG = 4, BYE = 2, RQ = 2, FIN = 1,
 }
 
 --- Parse and validate. Returns a table {kind=..., ...} or nil, reason.
@@ -120,7 +122,7 @@ function P.decode(s)
   elseif kind == "GO" then
     if not isMid(f[3]) or not isNonce(f[4]) then return nil, "bad" end
     m.mid, m.nonce = f[3], f[4]
-  elseif kind == "RDY" or kind == "PNG" then
+  elseif kind == "RDY" or kind == "PNG" or kind == "FIN" then
     if not isMid(f[3]) then return nil, "bad" end
     m.mid = f[3]
   elseif kind == "SC" then

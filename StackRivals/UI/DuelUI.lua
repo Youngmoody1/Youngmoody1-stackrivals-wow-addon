@@ -75,7 +75,7 @@ function UI:CreateDuelSheet()
     row.info = T.text(row, 10, C.label); row.info:SetPoint("LEFT", 190, 0); row.info:SetJustifyH("LEFT")
     row.btn = T.button(row, "Challenge", 84, 20, "steel", function(b)
       local okC, why = ns.Duel.challenge(b.target, UI.duelRuleset)
-      if not okC then UI.duelFindNote = "Can't challenge now (" .. tostring(why) .. ")." end
+      if not okC then UI.duelFindNote = "Can't challenge: " .. (ns.Duel.WHY_NOT[why] or tostring(why)) .. "." end
       UI:RefreshDuelSheet()
     end)
     row.btn:SetPoint("RIGHT", -4, 0)
@@ -98,7 +98,9 @@ function UI:RefreshDuelSheet()
   local on, off = C.steelDeep, C.surface2
   s.b120.bgTex:SetColorTexture((self.duelRuleset == "b120" and on or off)[1], (self.duelRuleset == "b120" and on or off)[2], (self.duelRuleset == "b120" and on or off)[3], 1)
   s.r180.bgTex:SetColorTexture((self.duelRuleset == "r180" and on or off)[1], (self.duelRuleset == "r180" and on or off)[2], (self.duelRuleset == "r180" and on or off)[3], 1)
-  s.note:SetText(not ns.Comm.enabled and "Addon messages are not available in this client." or (self.duelFindNote or ""))
+  s.note:SetText(not ns.Comm.enabled and "Addon messages are not available in this client."
+    or ns.Comm.trial and "Trial/Veteran account: Blizzard blocks addon messages, so duels can't work."
+    or (self.duelFindNote or ""))
   local list = {}
   for _, p in pairs(ns.Duel.players) do list[#list + 1] = p end
   table.sort(list, function(a, b) return a.name < b.name end)
@@ -313,6 +315,9 @@ function UI:CreateDuel()
       if s and s.duel == m and s.phase == "over" and m then UI:ShowDuelOver(m) end
       UI:RefreshPhase()
     end
+  end)
+  D.on("trial", function(sender)
+    ns.App:Print(short(sender) .. " challenged you to a duel, but Trial/Veteran accounts can't send addon messages (Blizzard rule), so you can't answer.")
   end)
   D.on("result", function(m)
     local o = OUTCOME[m.outcome] or OUTCOME.void

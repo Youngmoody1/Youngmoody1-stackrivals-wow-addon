@@ -155,6 +155,37 @@ function DB.sanitize(raw)
     end
   end
 
+  -- Duel diagnostics (Core/DuelDiag.lua): last 5 duels, counters + short event lines.
+  db.duelDiag = {}
+  if type(raw.duelDiag) == "table" then
+    for i = 1, math.min(#raw.duelDiag, 5) do
+      local r = raw.duelDiag[i]
+      if type(r) == "table" and str(r.mid, 10) and str(r.rival, 64) then
+        local function counts(t)
+          local out, n = {}, 0
+          if type(t) == "table" then
+            for k, v in pairs(t) do
+              if type(k) == "string" and #k <= 8 and type(v) == "number" and n < 32 then n = n + 1; out[k] = math.floor(num(v, 0, 0, 1e9)) end
+            end
+          end
+          return out
+        end
+        local lines = {}
+        if type(r.lines) == "table" then
+          for j = 1, math.min(#r.lines, 400) do local l = str(r.lines[j], 80); if l then lines[#lines + 1] = l end end
+        end
+        db.duelDiag[#db.duelDiag + 1] = {
+          mid = r.mid, rival = r.rival, role = str(r.role, 8) or "?", rs = str(r.rs, 8) or "?", d = str(r.d, 16) or "",
+          addon = str(r.addon, 32) or "?", engine = math.floor(num(r.engine, 0, 0, 9999)), build = str(r.build, 32) or "",
+          iface = math.floor(num(r.iface, 0, 0, 1e7)), result = str(r.result, 12), how = str(r.how, 24),
+          sent = counts(r.sent), recv = counts(r.recv), codes = counts(r.codes),
+          drops = math.floor(num(r.drops, 0, 0, 1e9)), maxGap = num(r.maxGap, 0, 0, 1e6), maxQueue = math.floor(num(r.maxQueue, 0, 0, 1e6)),
+          cut = math.floor(num(r.cut, 0, 0, 1e9)), lines = lines,
+        }
+      end
+    end
+  end
+
   -- Diagnostics (written on every load; read back after a test to see what the client reported).
   local rd = (type(raw.diag) == "table") and raw.diag or {}
   db.diag = {

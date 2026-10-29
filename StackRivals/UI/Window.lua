@@ -267,7 +267,17 @@ function UI:CreateOverlays()
   rs:SetPoint("TOP", self.resumeBtn, "BOTTOM", 0, -8)
   self.restartBtn = rs
   local qm = T.button(pause, "Quit to menu", 150, 24, "frame", function()
-    ns.App:Quit() -- reads "Forfeit duel" in a duel: App:Quit turns it into a forfeit
+    local s = ns.App.session
+    if s and s.duel and ns.Duel.busy() then
+      -- a forfeit is a loss: ask for a second click within 3 s
+      if not (UI.forfeitArmedAt and GetTime() - UI.forfeitArmedAt < 3) then
+        UI.forfeitArmedAt = GetTime()
+        UI.quitBtn:SetLabel("Click again to forfeit")
+        return
+      end
+      UI.forfeitArmedAt = nil
+    end
+    ns.App:Quit() -- in a duel App:Quit turns this into a forfeit
   end)
   qm:SetPoint("TOP", rs, "BOTTOM", 0, -6)
   self.quitBtn = qm
@@ -588,6 +598,10 @@ function UI:OnUpdate(elapsed)
       and sess and sess.phase == "over" then
     self:RefreshPhase() -- listening window over: Space is a jump again
   end
+  if self.forfeitArmedAt and GetTime() - self.forfeitArmedAt >= 3 then
+    self.forfeitArmedAt = nil
+    self:RefreshPhase() -- "Click again to forfeit" times out: back to "Forfeit duel"
+  end
   if self.menu:IsShown() then
     self.menuClock = (self.menuClock or 0) + elapsed
     if self.menuClock >= 20 then self.menuClock = 0; self:RefreshMenu() end -- daily countdown
@@ -714,7 +728,9 @@ function UI:RefreshPhase()
     if inCombat() then self.resumeBtn:Disable(); self.resumeBtn:SetLabel("In combat...") else self.resumeBtn:Enable(); self.resumeBtn:SetLabel("Resume") end
     local duel = sess.duel ~= nil
     self.restartBtn:SetShown(not duel)
-    self.quitBtn:SetLabel(duel and "Forfeit duel" or "Quit to menu")
+    if not (self.forfeitArmedAt and GetTime() - self.forfeitArmedAt < 3) then
+      self.quitBtn:SetLabel(duel and "Forfeit duel" or "Quit to menu")
+    end
   end
   local live = sess and (phase == "countdown" or phase == "playing")
   -- While paused (out of combat, no sheet open) we listen too, but only to take the pause key

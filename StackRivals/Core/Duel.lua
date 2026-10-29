@@ -11,9 +11,13 @@
     SC every 2 s  <-------------------> SC every 2 s            live rival score + keep-alive
     END + LOG chunks <----------------> END + LOG chunks         final score, hash, input log
     each side replays the rival's log with the engine (Verify) -> winner, "peer-checked"
+    FIN  <----------------------------> FIN                      "I have your result": stop re-sending
 
   Commit-reveal: neither player can choose or grind the seed, and the guest only learns it at GO.
 
+  A successful SendAddonMessage only means "queued", never "delivered" (warcraft.wiki.gg), so
+  nothing here trusts a send: state messages repeat until the rival's next state shows they
+  arrived, results repeat until FIN, and a declined/cancelled match keeps answering with DEC.
   Everything goes through ns.Comm (whispers, throttled, keyed so repeats replace each other).
   No board state is ever sent. Robust to lost / duplicated / reordered messages: every state
   re-sends what the rival needs, all handlers are idempotent, log chunks that arrive early are
@@ -51,8 +55,18 @@ Duel.LINGER = 60              -- s after the result we still serve the rival (EN
 Duel.EARLY_CANCEL = 20        -- s after GO a rival's cancel still counts if they never played
 Duel.CLOCK_MARGIN = 10        -- s: a final result can't arrive faster than the game takes to play
 Duel.REPLY_GAP = 10           -- s between unsolicited replies (HI, "busy") to the same player
+Duel.CLOSED_KEEP = 300        -- s we remember a declined/cancelled match to answer late messages
+Duel.closed = {}              -- mid -> { rival, reason, at }
+
+--- Why a challenge can't be sent (shown in chat and on the duel sheet).
+Duel.WHY_NOT = {
+  trial = "Trial and Veteran accounts can't send addon messages (Blizzard rule)",
+  busy = "you are already in a duel", combat = "you are in combat", self = "that's you",
+  unavailable = "addon messages are unavailable on this client", ruleset = "unknown rules",
+}
 
 local function now() return GetTime() end
+local diag = function() end -- DuelDiag.poll once Duel.init ran
 local function inCombat() return ns.UI and ns.UI.inCombat and ns.UI.inCombat() end
 local function rnd(a, b) return math.random(a, b) end
 local function session() return ns.App and ns.App.session end
@@ -84,6 +98,23 @@ local function reply(sender, text)
   if lastReply[k] and t - lastReply[k] < Duel.REPLY_GAP then return end
   lastReply[k] = t
   ns.Comm.send(text, "WHISPER", sender, nil, { low = true })
+end
+
+local function remember(m, reason)
+  if not m or not m.mid then return end
+  Duel.closed[m.mid] = { rival = m.rival, reason = reason, at = now() }
+  local t = now()
+  for mid, c in pairs(Duel.closed) do if t - c.at > Duel.CLOSED_KEEP then Duel.closed[mid] = nil end end
+end
+
+--- A message for a match we already declined or cancelled: our DEC may have been lost, say it again.
+local function answerClosed(msg, sender)
+  local c = msg.mid and Duel.closed[msg.mid]
+  if not c or not ns.Comm.same(c.rival, sender) then return false end
+  if msg.kind ~= "DEC" and msg.kind ~= "BYE" and msg.kind ~= "FIN" then
+    reply(sender, P.encode("DEC", msg.mid, c.reason))
+  end
+  return true
 end
 
 function Duel.busy()
@@ -123,11 +154,13 @@ end
 -- Match lifecycle
 ------------------------------------------------------------------------------------------------
 local function newMatch(role, rival, ruleset, mid)
-  return {
+  local m = {
     role = role, rival = rival, ruleset = P.RULESETS[ruleset], rulesetId = ruleset, mid = mid,
     state = "new", createdAt = now(), lastHeard = now(), lastSent = 0, lastRQ = 0,
     myReady = false, rivalReady = false, rival_ = {}, chunks = {},
   }
+  if ns.DuelDiag then ns.DuelDiag.begin(m) end
+  return m
 end
 
 local function pauseSolo()
@@ -140,6 +173,7 @@ function Duel.challenge(name, rulesetId)
   rulesetId = rulesetId or "b120"
   if not P.RULESETS[rulesetId] then return false, "ruleset" end
   if not ns.Comm.enabled then return false, "unavailable" end
+  if ns.Comm.trial then return false, "trial" end
   if Duel.busy() then return false, "busy" end
   if inCombat() then return false, "combat" end
   local rival = ns.Comm.fullName(name)
@@ -157,6 +191,11 @@ function Duel.challenge(name, rulesetId)
 end
 
 local function onInvite(msg, sender)
+  if answerClosed(msg, sender) then return end -- an invite we already declined, re-sent
+  if ns.Comm.trial then
+    if not Duel.trialNoted then Duel.trialNoted = true; emit("trial", sender) end
+    return -- we can't answer at all: Trial/Veteran accounts can't send addon messages
+  end
   local cur = Duel.current
   if cur and cur.mid == msg.mid and ns.Comm.same(cur.rival, sender) then cur.lastHeard = now(); return end -- re-sent invite
   -- we challenged each other at the same moment: the lower match id wins, the other side accepts it
@@ -204,10 +243,12 @@ function Duel.decline(reason)
   if not m or (m.state ~= "invited" and m.state ~= "inviting" and m.state ~= "lobby") then return false end
   local wasInvite = m.state == "invited"
   send(m, "DEC", m.mid, reason or "no")
+  remember(m, reason or "no")
   m.state = "cancelled"
   m.endReason = (reason == "timeout") and "timeout" or (reason == "cancel") and "you_cancelled" or "you_declined"
   if wasInvite then
     -- an unanswered invite never took over the screen: just forget it (the DEC stays queued)
+    if ns.DuelDiag then ns.DuelDiag.poll(m) end
     Duel.current = nil
     emit("changed", nil)
   else
@@ -286,7 +327,16 @@ end
 
 local function matchFor(msg, sender)
   local m = Duel.current
-  if not m or m.mid ~= msg.mid or not ns.Comm.same(m.rival, sender) then return nil end
+  if not m or m.mid ~= msg.mid or not ns.Comm.same(m.rival, sender) then
+    answerClosed(msg, sender)
+    return nil
+  end
+  if m.state == "cancelled" then
+    -- the rival still talks about a match we ended: they missed our DEC (DEC/BYE pass through)
+    if msg.kind ~= "DEC" and msg.kind ~= "BYE" and msg.kind ~= "FIN" and Duel.closed[m.mid] then
+      answerClosed(msg, sender); return nil
+    end
+  end
   heard(m)
   return m
 end
@@ -338,7 +388,7 @@ HANDLERS.GO = function(msg, sender)
   if P.commit(m.mid, msg.nonce) ~= m.commitA then
     -- the host revealed a different nonce than it committed to: a manipulated seed
     send(m, "DEC", m.mid, "cancel")
-    m.state = "cancelled"; m.endReason = "rival_bad_seed"
+    m.state = "cancelled"; m.endReason = "rival_bad_seed"; remember(m, "cancel")
     emit("changed", m)
     return
   end
@@ -358,9 +408,17 @@ HANDLERS.SC = function(msg, sender)
   emit("score", m)
 end
 
+local function sendFin(m)
+  m.finSentAt = now()
+  send(m, "FIN", m.mid)
+end
+
 HANDLERS.END = function(msg, sender)
-  local m = matchFor(msg, sender)
-  if not m or (m.state ~= "playing" and m.state ~= "waiting") or m.rivalEnd then return end
+  local m = servedMatch(msg, sender)
+  if not m then return end
+  -- already have it (their END is being re-sent): our FIN got lost, acknowledge again
+  if m.rivalEnd and m.haveAll and now() - (m.finSentAt or 0) >= 2 then return sendFin(m) end
+  if (m.state ~= "playing" and m.state ~= "waiting") or m.rivalEnd then return end
   local t = now()
   m.rivalEnd = { ticks = msg.ticks, score = msg.score, lines = msg.lines, level = msg.level, hash = msg.hash, chunks = msg.chunks, at = t }
   -- a result can't arrive before the game could have been played (web: faster_than_clock)
@@ -394,6 +452,13 @@ HANDLERS.RQ = function(msg, sender)
   send(m, "LOG", m.mid, msg.i, #m.outChunks, m.outChunks[msg.i])
 end
 
+HANDLERS.FIN = function(msg, sender)
+  local m = servedMatch(msg, sender)
+  if not m then return end
+  m.rivalHasMine = true -- stop re-sending END and log chunks
+  if Duel.past == m then Duel.past = nil end
+end
+
 HANDLERS.BYE = function(msg, sender)
   local m = matchFor(msg, sender)
   if not m or m.state == "done" or m.state == "cancelled" then return end
@@ -411,8 +476,21 @@ local function onOffline(lname)
   end
 end
 
+-- An invite we can't decode (other protocol version): answer in THE INVITER'S version, so they
+-- see "different version" instead of waiting for nothing. "<v>:DEC:<mid>:<reason>" is a frame
+-- every protocol version must keep (docs/CROSS_PLATFORM_MULTIPLAYER.md).
+local function onOtherVersion(text, sender)
+  local v, mid = text:match("^(%d+):INV:([0-9a-z]+):")
+  if v and #v <= 3 and #mid >= 4 and #mid <= 10 then reply(sender, v .. ":DEC:" .. mid .. ":version") end
+end
+
 function Duel.init()
   ns.Comm.tick = Duel.update
+  if ns.DuelDiag then
+    ns.Comm.trace = ns.DuelDiag.trace
+    diag = ns.DuelDiag.poll
+  end
+  ns.Comm.on("@version", onOtherVersion)
   ns.Comm.on("HEL", onHello)
   ns.Comm.on("HI", onHi)
   ns.Comm.on("INV", onInvite)
@@ -433,6 +511,8 @@ function Duel.tryDecide(m)
   if m.state ~= "waiting" then return end -- my own run must be over first
   -- a complete log beats everything else: the rival finished, even if they left afterwards
   if haveAllChunks(m) then
+    m.haveAll = true
+    sendFin(m)
     local log = P.unpackLog(table.concat(m.chunks, "", 1, m.rivalEnd.chunks))
     if not log then
       m.check = { ok = false, reasons = { "malformed_log" } }
@@ -505,7 +585,7 @@ end
 
 -- After the result: keep sending our END and log until the rival has had time to get them.
 local function serveAfter(m, t)
-  if not m.my or m.myForfeit or t - m.doneAt >= Duel.LINGER then return false end
+  if not m.my or m.myForfeit or m.rivalHasMine or t - m.doneAt >= Duel.LINGER then return false end
   streamLog(m, t)
   if t - m.lastSent >= Duel.RESEND then m.lastSent = t; sendEnd(m) end
   return true
@@ -513,6 +593,7 @@ end
 
 function Duel.update()
   local t = now()
+  diag(Duel.current); diag(Duel.past)
   if Duel.past and not serveAfter(Duel.past, t) then Duel.past = nil end
   local m = Duel.current
   if not m or m.state == "cancelled" then return end
@@ -534,7 +615,7 @@ function Duel.update()
   end
 
   if m.state == "inviting" and t - m.createdAt > Duel.INVITE_TIMEOUT + 5 then
-    m.state = "cancelled"; m.endReason = "no_answer"; emit("changed", m); return
+    m.state = "cancelled"; m.endReason = "no_answer"; remember(m, "timeout"); emit("changed", m); return
   end
   if m.state == "invited" and t - m.createdAt > Duel.INVITE_TIMEOUT then
     Duel.decline("timeout"); return
@@ -542,7 +623,7 @@ function Duel.update()
   local lobbyLimit = Duel.LOBBY_TIMEOUT + (m.role == "guest" and Duel.GUEST_GRACE or 0)
   if m.state == "lobby" and t - (m.lobbyAt or t) > lobbyLimit then
     send(m, "DEC", m.mid, "timeout")
-    m.state = "cancelled"; m.endReason = "lobby_timeout"; emit("changed", m); return
+    m.state = "cancelled"; m.endReason = "lobby_timeout"; remember(m, "timeout"); emit("changed", m); return
   end
   -- what the rival needs from us right now (re-sent, so a lost message never stalls a duel)
   local every = (m.state == "playing") and Duel.SCORE_EVERY or Duel.RESEND
@@ -559,7 +640,7 @@ function Duel.update()
       -- repeat GO until the guest's first score shows it started
       if m.role == "host" and m.rival_.tick == nil and t - m.goAt < 30 then send(m, "GO", m.mid, m.nonceA) end
     elseif m.state == "waiting" and m.my then
-      sendEnd(m)
+      if not m.rivalHasMine then sendEnd(m) else send(m, "PNG", m.mid) end
     else
       send(m, "PNG", m.mid)
     end
@@ -567,14 +648,14 @@ function Duel.update()
   if m.state == "playing" or m.state == "waiting" then
     requestMissing(m, t, m.state == "playing" and 2 or 3)
   end
-  streamLog(m, t)
+  if not m.rivalHasMine then streamLog(m, t) end
   -- silence
   local quiet = t - m.lastHeard
   if (m.state == "lobby" or m.state == "playing" or m.state == "waiting") then
     if quiet > Duel.SILENT_GONE and not m.rivalGone then
       m.rivalGone = true
       if m.state == "lobby" then
-        m.state = "cancelled"; m.endReason = "rival_disconnected"; emit("changed", m); return
+        m.state = "cancelled"; m.endReason = "rival_disconnected"; remember(m, "timeout"); emit("changed", m); return
       end
       emit("changed", m)
       Duel.tryDecide(m)
