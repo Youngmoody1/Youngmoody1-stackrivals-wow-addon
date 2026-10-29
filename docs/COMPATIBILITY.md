@@ -10,14 +10,23 @@ Status levels — used strictly:
 | Client | Game type / TOC suffix | Interface in TOC | Status | Notes |
 |---|---|---|---|---|
 | WoW Forever | forever / `_Forever` (family `_Mainline`) | 16001 (beta number; live number unknown until launch) | SIMULATED | Beta closed 23 Oct. Real test on launch night (5 Nov 00:00 CET). |
-| Retail (Midnight) | standard / `_Standard`, `_Mainline` | 120105 | SIMULATED — **installed on the owner's PC 29 Oct, awaiting test** | Secret-value guard for `UnitAffectingCombat`; chat-lockdown guard. |
-| Classic Era (incl. Hardcore realms) | vanilla / `_Vanilla`, `_Classic` | 11509 | SIMULATED — **installed on the owner's PC 29 Oct, awaiting test** | Falls back to global `SendChatMessage` / `GetAddOnMetadata` (tested). No addon compartment (TOC line ignored). |
-| Anniversary | tbc / `_TBC` (Warcraft Wiki: Anniversary runs on the TBC game type) | 20506 | UNTESTED | Client is installed on the owner's PC but has no AddOns yet. |
+| Retail (Midnight) | standard / `_Standard`, `_Mainline` | 120105 | SIMULATED — 0.3.0 **installed on the owner's PC**, awaiting test | Secret-value guard for `UnitAffectingCombat`; chat-lockdown guard. |
+| Classic Era (incl. Hardcore realms) | vanilla / `_Vanilla`, `_Classic` | 11509 | SIMULATED — 0.3.0 **installed on the owner's PC**, awaiting test | Falls back to global `SendChatMessage` / `GetAddOnMetadata` (tested). No addon compartment (TOC line ignored). |
+| Anniversary | tbc / `_TBC` (Warcraft Wiki: Anniversary runs on the TBC game type) | 20506 | SIMULATED (Classic API variant) — 0.3.0 **installed on the owner's PC** | Same API family as Classic Era for everything we call. |
 | TBC / Wrath / Titan Reforged / Cata / Mists Classic | `_TBC` / `_Wrath` / `_Cata` / `_Mists` | 20506, 38002, 30405, 40402, 50504 | UNTESTED | Listed so the addon isn't marked "out of date"; test before claiming support. |
 
 Interface numbers: Warcraft Wiki TOC page (edited 17 Oct 2026). Forever's release value is blank there.
 
+Owner's PC (checked 29 Oct): `_retail_`, `_classic_era_`, `_anniversary_` (full installs);
+`_classic_` and `_classic_ptr_` are present but contain no game executable / saved data, so nothing
+was installed there.
+
 ## One TOC for all clients
+
+Evidence this works on today's clients: Deadly Boss Mods' current core (Sept 2026 build, the copy in
+the owner's Classic Era folder) ships a single `DBM-Core.toc` with
+`## Interface: 11509, 16001, 20506, 30405, 38002, 40402, 50504, 120100`.
+
 
 `StackRivals.toc` has no suffix, so every client loads it, and `## Interface:` lists all numbers
 (comma lists are supported since 10.2.7 / the current Classic clients). If one client ever needs
