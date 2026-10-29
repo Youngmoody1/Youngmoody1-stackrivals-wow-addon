@@ -70,26 +70,29 @@ it happens when players mash keys with a high stack.
 (`SpellBattle.step`). Suggested web fix: `if (side.game.gameOver)` → skip the drain and the cast
 queue for that tick.
 
-### 3. Duels over slow transports: which verdicts are fraud
+### 3. Duels over slow transports: the receiver's landings
 
-Live Spell Battle works because a spell aimed at the rival lands `DELIVERY_TICKS` (90) after the
-cast. If a cast message arrives later than that, the live board and the server replay diverge. In
-the replay, a player's board can then:
+A spell aimed at the rival lands `DELIVERY_TICKS` (90) after the cast. If its message arrives later
+than that (slow transport, or the sender paused), the receiver's live board and a replay that lands
+it at cast + 90 diverge. That divergence can:
 
-- top out earlier, giving `inputs_after_topout`; or
-- clear different lines, giving different mana and so `impossible_cast` (`insufficient_mana`) for a cast that was fine live.
+- top the receiver out earlier in the replay (`inputs_after_topout`);
+- give different mana (`impossible_cast`);
+- simply replay the receiver's inputs on a board they never saw.
 
-On the web (realtime channel, ~250 ms batches) this is rare. WoW whispers are slower, and a combat
-pause stops one clock, so WoW duels count as fraud **only** what divergence can't explain:
+An independent review of the WoW code showed this can be **used on purpose**: withhold your
+sends, or pause, and the rival's replay score collapses.
 
-- malformed, engine or seed problems, over the cap, inhuman input, faster than the clock;
-- an invalid or different loadout;
-- `impossible_cast` for `cooldown`, `not_in_loadout` or `unknown_code`;
-- more than 2 casts without mana;
-- a spell sent live that isn't a cast in the sender's log.
+**WoW's solution.** Each client records where every incoming spell actually landed (tick and cast
+tick) and sends that list with its log. The replay lands spells only there (`Sim` players get an
+optional `landings` list). The receiver's replay is therefore always its live game. Fraud checks
+then cover what a cheater could still do: forged or unpaid casts that were sent live, landings that
+don't match the sender's allowed casts, and ignored spells.
 
-The replay still decides the scores, and it ignores invalid entries, so they can't help anyone.
-You may want the same distinction for web matches with long reconnects.
+With realtime delivery the web may not need this. If you ever see `inputs_after_topout` or
+`impossible_cast` on honest Spell Battle matches after reconnects or long frames, this is the
+mechanism, and the WoW port (`Engine/Spells.lua` `Sim.step`, `Core/Duel.lua` `decideSpell`) is a
+working reference.
 
 ### 4. Spell results and SR1 (proposal, not built)
 

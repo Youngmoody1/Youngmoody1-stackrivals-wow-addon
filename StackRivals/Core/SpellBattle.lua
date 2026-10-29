@@ -33,9 +33,12 @@ function SB.setup(sess, opts)
       remote = opts.remote, rivalLoadout = opts.remote.loadout,
       me = S.createSide(seed, opts.loadout),
       pendingMe = {}, castQueue = {}, seenHitsMe = 0, seenOppCasts = 0,
-      late = 0, -- rival spells that arrived after their landing tick (live view differs from the replay)
+      late = 0,     -- rival spells that arrived after their landing tick (they land on arrival)
+      landings = {}, -- where each rival spell actually landed: sent with my log, used by the replay
     }
-    sess.state = sess.spell.me.game
+    local sp = sess.spell
+    sp.toOpp = function(inc) sp.remote.send(inc) end
+    sess.state = sp.me.game
     sess.capTicks = sess.mode.limitTicks or SB.CAP_TICKS
     return
   end
@@ -52,8 +55,20 @@ function SB.setup(sess, opts)
     settling = false, -- you are done; the bot still plays to the cap
     result = nil,
   }
-  sess.state = sess.spell.me.game
+  local sp = sess.spell
+  sp.toOpp = function(inc) local q = sp.pendingOpp; q[#q + 1] = inc end -- made once, not per tick
+  sp.toMe = function(inc) local q = sp.pendingMe; q[#q + 1] = inc end
+  sess.state = sp.me.game
   sess.capTicks = SB.CAP_TICKS
+end
+
+--- Finish the bot's remaining ticks now (window closing, /reload, a new run): the result of a
+--- match you played is never lost.
+function SB.settleAll(sess)
+  local sp = sess and sess.spell
+  if not sp or not sp.settling then return end
+  local guard = 0
+  while sp.settling and guard < 100 do SB.settle(sess); guard = guard + 1 end
 end
 
 --- Duel: a rival spell arrived (cast at `castTick` on the rival's clock). It lands on your board at
@@ -88,7 +103,7 @@ local function advanceOpp(sess, upTo, budget)
   local o, me = sp.opp, sp.me
   local cap = sess.capTicks
   local n = 0
-  local function toMe(inc) sp.pendingMe[#sp.pendingMe + 1] = inc end
+  local toMe = sp.toMe
   while not o.game.gameOver and o.game.tick < math.min(upTo, cap) do
     if budget and n >= budget then return false end
     n = n + 1
@@ -152,15 +167,33 @@ function SB.step(sess)
   local s = me.game
   local bLines, bLevel, bPieces = s.lines, s.level, s.piecesPlaced
   local due = takeDue(sp.pendingMe, s.tick)
-  if due then for _, inc in ipairs(due) do S.receive(me, inc) end end
-  s = me.game
-  local function toOpp(inc)
-    if sp.remote then sp.remote.send(inc) else sp.pendingOpp[#sp.pendingOpp + 1] = inc end
+  if due then
+    for _, inc in ipairs(due) do
+      if sp.landings and not me.game.gameOver then
+        sp.landings[#sp.landings + 1] = { tick = s.tick, castTick = inc.castTick, spell = inc.spell }
+      end
+      S.receive(me, inc)
+    end
   end
+  s = me.game
+  local toOpp = sp.toOpp
   local actions = sess.input:drain()
   -- incoming garbage can top you out before your keys: then nothing more is logged this tick
   -- (the verification stops reading a log at the top-out; logging more = "inputs_after_topout")
-  if s.gameOver then actions = {}; sp.castQueue = {} end
+  if s.gameOver then actions = {}; sp.castQueue = {}; sp.carry = nil end
+  -- at most MAX_INPUTS_PER_TICK codes per tick (moves + casts), like the web's limit: after a frame
+  -- hitch the rest waits for the next tick, so an honest log is never "inhuman"
+  local limit = ns.Verify.MAX_INPUTS_PER_TICK
+  if sp.carry then
+    local all = sp.carry
+    for i = 1, #actions do all[#all + 1] = actions[i] end
+    actions, sp.carry = all, nil
+  end
+  if #actions > limit then
+    local rest = {}
+    for i = limit + 1, #actions do rest[#rest + 1] = actions[i]; actions[i] = nil end
+    sp.carry = rest
+  end
   for i = 1, #actions do
     local a = actions[i]
     local bHoldUsed = s.holdUsed
@@ -172,11 +205,14 @@ function SB.step(sess)
     s = me.game
     if s.gameOver then break end
   end
-  if #sp.castQueue > 0 then
+  local room = limit - #actions
+  if #sp.castQueue > 0 and room > 0 then
     local q = sp.castQueue
     sp.castQueue = {}
     for _, spell in ipairs(q) do
-      if S.canCast(me, spell) then
+      if room <= 0 then sp.castQueue[#sp.castQueue + 1] = spell
+      elseif S.canCast(me, spell) then
+        room = room - 1
         if spell == "bomb" then sp.lastBombCells = S.bombCells(me.game) end -- for the flash
         S.applyCode(me, S.castCode(spell), toOpp)
         sess:emit("cast", spell)

@@ -160,6 +160,18 @@ local function stepOnce(self)
   -- plain locals, not a table: this runs 60 times a second
   local bLines, bLevel, bPieces = s.lines, s.level, s.piecesPlaced
   local actions = self.input:drain()
+  -- at most 4 inputs per tick (the web's MAX_INPUTS_PER_TICK): after a frame hitch the rest waits
+  -- a tick, so an honest duel log is never "inhuman"
+  if self.carry then
+    local all = self.carry
+    for i = 1, #actions do all[#all + 1] = actions[i] end
+    actions, self.carry = all, nil
+  end
+  if #actions > 4 then
+    local rest = {}
+    for i = 5, #actions do rest[#rest + 1] = actions[i]; actions[i] = nil end
+    self.carry = rest
+  end
   for i = 1, #actions do
     local a = actions[i]
     local bHoldUsed = s.holdUsed

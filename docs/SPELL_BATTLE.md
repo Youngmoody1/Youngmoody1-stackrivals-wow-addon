@@ -105,7 +105,7 @@ The existing duel system is reused, not a second one:
 | extended | `1:RDY:<mid>[:<loadout>]` | the loadout is 4 spell digits, e.g. `1057`; it locks at Ready |
 | extended | `1:GO:<mid>:<nonceA>[:<loadout>]` | the host's spells again (its RDY may arrive after GO) |
 | new | `1:SP:<mid>:<seq>:<tick36>:<spell>` | a spell aimed at the rival, sent at once and repeated after 1 s and 3 s; the receiver drops repeats by `seq` |
-| log codec | `H`–`P` | cast codes 100–108; moves stay `A`–`G` |
+| log codec | `H`–`P`, `Z` + landings | cast codes 100–108 (moves stay `A`–`G`); after `Z`: where each rival spell landed, `<tick36>.<castTick36><Q..Y>` |
 
 Classic duels (`b120`, `r180`) send exactly what 0.4 sends: `RDY` without a loadout, and the same
 log letters. So 0.4 and 0.5 clients still play score races together. A 0.4 player is shown as
@@ -117,47 +117,49 @@ rival. The 3 s cooldown keeps this at one cast per 3 s at most.
 
 **Live play.**
 
-- A rival spell lands on your board at its cast tick + 90 on **your** clock. If your clock is already past that point (lag, or the rival started earlier), it lands at once and is counted as "late".
+- A rival spell lands on your board at its cast tick + 90 on **your** clock. If your clock is already past that point (lag, or the rival paused or started earlier), it lands as soon as it arrives.
 - Spells are checked against what can be known live: the spell must be in the rival's announced loadout and aimed at you, at most one may arrive per cooldown, and none after 3:00. Anything else is refused and counted.
-- Mana can't be checked live, because it depends on the rival's board. The replay checks it.
+- Your client records **where every rival spell actually landed** on your board (tick, the cast it came from).
 
-**Result.** It is the web's server verification, run on both PCs: `Spells.verifyMatch` replays
-**both** logs in lockstep, with the host as side 1. Both PCs replay the same two logs, so they get
-the same boards and the same scores even when a spell arrived late in someone's live view. That
-replay is the result, labelled **peer-checked**, never "verified".
+**Result: the receiver's board is the authority.** At the end each player sends their log
+**plus their landings** (the log codec appends them after a `Z`). Both PCs then replay **both**
+logs in lockstep with `Spells.verifyMatch` (host = side 1). In that replay a rival spell lands
+exactly where it landed live, never at a theoretical tick. So:
+
+- **Your replay is always exactly your live game**, whatever the lag, pauses or lost messages. The tests check this hash for hash, including 2–2.5 s lag and a mid-duel pause.
+- Both PCs replay the same two logs and the same two landing lists, so they get the same scores.
+
+On the web, a spell always lands at cast tick + 90, because the server has both logs and realtime
+delivery. Landings are the WoW-duel extension that makes slow whispers safe. The result is
+labelled **peer-checked**, never "verified".
 
 **What rejects the rival's result** (they lose, reason `check_failed`):
 
-- a broken or foreign log (engine, seed, malformed);
+- any verdict of the web's verification: a broken or foreign log, over the cap, inhuman input, faster than the clock, a cast the replay refuses, inputs after their top-out. With landings, an honest client never gets any of these;
 - a loadout other than the one announced at Ready;
-- over the time cap, or inhuman input;
-- a result faster than the clock;
-- a cast the replay can never allow: cooldown, not in the loadout, or an unknown code;
-- **more than 2** casts without enough mana;
-- **a spell sent live that isn't a cast in their log** (a forgery).
+- **a spell they sent you live that their replay doesn't allow:** forged, unpaid (no mana), or not in their log;
+- **a landing they report that doesn't match one of your allowed casts**, lands before cast tick + 90, or lands twice;
+- **more than one of your casts never landed on their board** although you sent it at least 5 s before their run ended (a client that ignores incoming spells). One is allowed, because all three copies of a message can be lost.
 
-**Not counted against anyone:**
+**What a cheater can't do any more** (each is a test):
 
-- "inputs after top-out";
-- up to 2 casts without mana.
+- **Withhold** their spells, or send them late on purpose: the spell lands where it landed on your board, and your replay is your live game.
+- **Cast for free** (log and send a spell without the mana): caught.
+- **Ignore your spells:** caught.
 
-A spell that reached a board late in the live view can change that board in the replay. The replay
-then ignores those inputs, which can't help anyone. This is a WoW-specific choice: the web has
-realtime channels and a 1.5 s delivery margin, and it counts every reason as fraud. See the web
-report, item 3.
+**Known limits:**
 
-**Known limits**, all documented and shown to the player:
-
-- **Combat pause.** A combat pause stops only your own clock. Your later casts then reach the rival after their landing tick, so their live view differs from the replay. The replay decides, and the result screen says "A spell reached a board late…".
+- **Delayed landing.** A modified client could still hold an incoming spell for a while before applying it, because it reports its own landings. Holding it for good is caught, and so is landing it early; a short delay is not.
 - **Counter-picking.** The rival's loadout is sent at Ready. An honest client doesn't show it before GO; a modified client could read it and pick spells against it. The effect is small, because spells are generic.
+- **Version check.** A Spell Battle challenge is refused before it is sent only when the rival's version is known from Find players (kept for 2 minutes). Otherwise a 0.4 client simply never answers.
 
 ## 5. Tests and parity
 
 | Suite | What | Count |
 |---|---|---|
 | `tests/test_spells.lua` | The Lua port **against fixtures from the web's real code** (`tools/parity/gen-spell-fixtures.ts` at `48fdf46`), plus rule tests. Covers the rules fingerprint (spells, mana, cooldown, delivery, loadouts, bot profiles v1/v2, cast styles) and 20 classic bot games (5 levels × 2 seeds × v1/v2), input for input. It also checks the 24 mid-game boards: bomb cells, worst fit, garbage gap, stack height, every bot candidate with its score, and every effect's resulting hash. Then come 8 full 3:00 bot-vs-bot Spell Battles (hashes, mana, casts, invalid casts at 3 checkpoints, both logs, and a replay from the logs), and 10 "human" logs with random and invalid casts run through `verifySpellMatch` vs bot and vs each other. Last, 16 tampered logs, one for each verdict the web gives. | 66 |
-| `tests/test_spellbattle.lua` | vs Bot in the WoW API mock. The live game equals the verification at 3 levels; the match ends when decided (win at once / "beat N to win" / bot plays on / 3:00), with no input or casts after the end. Also: the keys, refused casts, combat pause, an exact /reload, garbled saved data, Pick Spells. | 13 |
-| `tests/test_spellduel.lua` | Two simulated clients. Protocol round-trips and forged packets; the log codec with casts; full duels with spells crossing and the same result on both PCs; 2–2.5 s lag (late spells, the live view differs, the result still agrees); 15% loss + 30% duplicates; a forged spell (caught); live rule refusals; an old 0.4 peer; both top out; rematch. | 12 |
+| `tests/test_spellbattle.lua` | vs Bot in the WoW API mock. The live game equals the verification at 3 levels; the match ends when decided (win at once / "beat N to win" / bot plays on / 3:00), with no input or casts after the end. Also: the keys, refused casts, combat pause, an exact /reload, garbled saved data, Pick Spells, at most 4 codes per tick after a frame hitch, and a result that is kept when the window closes while the bot finishes. | 15 |
+| `tests/test_spellduel.lua` | Two simulated clients. Protocol round-trips and forged packets; the log codec with casts and landings; full duels with spells crossing and the same result on both PCs; 2–2.5 s lag and a mid-duel pause (spells land late, both replays still equal the live games); 15% loss + 30% duplicates; disconnect while a spell is on its way. Attacks: a forged spell, withheld casts, unpaid casts, a client that ignores incoming spells. Also live rule refusals, an old 0.4 peer, both top out, rematch. | 18 |
 | Existing suites | Classic, Blitz, Daily, duels, SR1, design: unchanged and passing. The 77 SR1 vectors are unchanged (Spell Battle doesn't touch SR1). | |
 
 `tools/parity/check_web.sh <web checkout>` now also regenerates the spell fixtures and runs

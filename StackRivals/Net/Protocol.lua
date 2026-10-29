@@ -180,7 +180,7 @@ function P.decode(s)
     m.mid, m.i = f[3], tonumber(f[4])
   elseif kind == "LOG" then
     if not isMid(f[3]) or not isInt(f[4], 1, 200) or not isInt(f[5], 1, 200) or tonumber(f[4]) > tonumber(f[5]) then return nil, "bad" end
-    if #f[6] > P.CHUNK_PAYLOAD or not f[6]:match("^[0-9a-zA-P]*$") then return nil, "bad" end
+    if #f[6] > P.CHUNK_PAYLOAD or not f[6]:match("^[0-9a-zA-Z%.]*$") then return nil, "bad" end
     m.mid, m.i, m.n, m.payload = f[3], tonumber(f[4]), tonumber(f[5]), f[6]
   end
   return m
@@ -223,6 +223,39 @@ function P.unpackLog(s)
   return log
 end
 
+--- Spell Battle duel log = the moves + casts, then "Z", then where the RIVAL'S spells actually
+--- landed on this board: <landTick36>.<castTick36><Q..Y = spell index 0..8> each. The replay uses
+--- exactly those landings (the receiver's board is the authority), so a live board is always its
+--- replay, whatever the lag; every landing must match a cast the sender's replay allows.
+function P.packSpellLog(log, landings)
+  local out = { P.packLog(log), "Z" }
+  for _, l in ipairs(landings or {}) do
+    out[#out + 1] = P.b36(l.tick) .. "." .. P.b36(l.castTick) .. string.char(81 + ns.Spells.INDEX[l.spell])
+  end
+  return table.concat(out)
+end
+
+function P.unpackSpellLog(s)
+  if type(s) ~= "string" then return nil end
+  local moves, rest = s:match("^([0-9a-zA-P]*)Z([0-9a-z%.Q-Y]*)$")
+  if not moves then return nil end
+  local log = P.unpackLog(moves)
+  if not log then return nil end
+  local landings, prevTick = {}, -1
+  local rebuilt = {}
+  for lt, ct, letter in rest:gmatch("([0-9a-z]+)%.([0-9a-z]+)([Q-Y])") do
+    local t, c = P.unb36(lt), P.unb36(ct)
+    if not t or not c or t < prevTick then return nil end
+    prevTick = t
+    local spell = ns.Spells.SPELLS[letter:byte() - 81 + 1]
+    if not spell or ns.Spells.INFO[spell].target ~= "opponent" then return nil end
+    landings[#landings + 1] = { tick = t, castTick = c, spell = spell }
+    rebuilt[#rebuilt + 1] = lt .. "." .. ct .. letter
+  end
+  if table.concat(rebuilt) ~= rest then return nil end -- every character belongs to a landing
+  return log, landings
+end
+
 --- Split a packed log into chunks that fit one LOG message each (never inside a pair).
 function P.chunk(packed)
   local chunks, i, n = {}, 1, #packed
@@ -230,7 +263,7 @@ function P.chunk(packed)
     local j = math.min(n, i + P.CHUNK_PAYLOAD - 1)
     if j < n then
       -- move the cut back to just after an action letter
-      while j > i and not packed:sub(j, j):match("[A-P]") do j = j - 1 end
+      while j > i and not packed:sub(j, j):match("[A-Z]") do j = j - 1 end
     end
     chunks[#chunks + 1] = packed:sub(i, j)
     i = j + 1

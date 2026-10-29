@@ -694,6 +694,11 @@ function UI:OnHide()
   if self.help then self.help:Hide(); self.records:Hide() end
   if self.duelSheet then self.duelSheet:Hide() end
   if self.spellSheet then self.spellSheet:Hide() end
+  local sess = ns.App.session
+  if sess and sess.spell and sess.spell.settling then
+    ns.SpellBattle.settleAll(sess) -- the bot's last ticks run while the window is shown; finish them now
+    for _, ev in ipairs(sess:takeEvents()) do self:OnEvent(ev) end
+  end
   ns.App:Pause("hidden")
   self:EndBind()
   self:SetKeyboard(false)

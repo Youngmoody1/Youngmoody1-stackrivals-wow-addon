@@ -289,7 +289,11 @@ end
 -- Lockstep simulation of a full Spell Battle (port of SpellSim). Per tick and side: incoming
 -- effects land, then the side's inputs/casts, then gravity. Side 1 is processed before side 2.
 -- players[i] = { loadout, log = flat {t, code, ...} or nil, actor = {act = fn(self, me, opp)},
---                untilTick }
+--                untilTick, landings = { {tick, castTick, spell}, ... } or nil }
+-- `landings` (WoW duels only, never on the web): the opponent spells that actually landed on this
+-- board and when (recorded live by this player's own client). With landings, this side receives
+-- exactly those - the other side's sends are not used for it - so the replay equals what the
+-- player saw. Without landings (vs Bot, and every web match) it is the web's SpellSim.
 ------------------------------------------------------------------------------------------------
 local Sim = {}
 Sim.__index = Sim
@@ -323,8 +327,18 @@ function Sim:step(limits)
   for i = 1, 2 do
     local p, side, o = self.players[i], self.sides[i], 3 - i
     if not (side.game.gameOver or t > p.untilTick or (limits and t >= limits[i])) then
+      local land = p.landings
+      if land then
+        local k = self.landIdx and self.landIdx[i] or 1
+        while land[k] and land[k].tick <= t do
+          if land[k].tick == t then S.receive(side, land[k]) end
+          k = k + 1
+        end
+        self.landIdx = self.landIdx or { 1, 1 }
+        self.landIdx[i] = k
+      end
       local pend = self.pending[i]
-      if #pend > 0 then
+      if not land and #pend > 0 then
         local keep, due = {}, {}
         for _, x in ipairs(pend) do
           if x.at <= t then due[#due + 1] = x else keep[#keep + 1] = x end
@@ -336,7 +350,7 @@ function Sim:step(limits)
       end
       local players, sides, pending = self.players, self.sides, self.pending
       local function send(inc)
-        if not (sides[o].game.gameOver or inc.at > players[o].untilTick) then
+        if not (sides[o].game.gameOver or inc.at > players[o].untilTick or players[o].landings) then
           local q = pending[o]
           q[#q + 1] = inc
         end
@@ -444,7 +458,7 @@ function S.verifyMatch(opts)
   end
   local function simPlayer(i)
     local p = opts.players[i]
-    return { loadout = pre[i].loadout, log = pre[i].usable and p.log or {}, untilTick = pre[i].usable and math.min(p.ticks, cap) or 0 }
+    return { loadout = pre[i].loadout, log = pre[i].usable and p.log or {}, untilTick = pre[i].usable and math.min(p.ticks, cap) or 0, landings = p.landings }
   end
   local second = opts.bot and { loadout = opts.bot.loadout, log = nil, actor = opts.bot.actor, untilTick = cap } or simPlayer(2)
   local run = Sim.new(opts.seed, { simPlayer(1), second }):run()

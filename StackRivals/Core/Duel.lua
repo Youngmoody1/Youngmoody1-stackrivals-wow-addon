@@ -336,13 +336,14 @@ end
 
 --- Called by the app when my run in this duel is over (top-out or time).
 --- `log` = the run's full log (Spell Battle: moves + casts); default: the engine's move log.
-function Duel.onLocalEnd(state, log)
+function Duel.onLocalEnd(state, log, landings)
   local m = Duel.current
   if not m or m.state ~= "playing" then return end
   m.my = { score = state.score, lines = state.lines, level = state.level, ticks = state.tick, hash = E.hashState(state), over = state.gameOver }
   m.myLog = log or state.inputLog
+  m.myLandings = landings
   m.myEndAt = now()
-  m.outChunks = P.chunk(P.packLog(m.myLog))
+  m.outChunks = P.chunk(m.ruleset.spell and P.packSpellLog(m.myLog, landings or {}) or P.packLog(m.myLog))
   m.outNext = 1
   m.state = "waiting"
   send(m, "SC", m.mid, P.b36(state.tick), P.b36(state.score), P.b36(state.lines), 1)
@@ -582,46 +583,67 @@ local function haveAllChunks(m)
   return true
 end
 
---- Spell Battle result: replay BOTH logs in lockstep (the web's verifySpellMatch). Both PCs run
---- the same replay of the same two logs, so they agree on every board and score.
---- What counts against the rival (their result is rejected):
----   a broken / foreign log, a loadout other than the one they announced, a cast the replay can
----   never allow (cooldown, not in the loadout, unknown code), more than 2 casts without the mana,
----   or a spell they sent me live that isn't in their log at all (a fake).
---- Not counted: "inputs after top-out" and a few casts without mana - a spell that reached a
---- board late in the live view can change that board in the replay (lag, a combat pause); the
---- replay simply ignores those inputs, which can't help anyone.
-local DIVERGENCE_OK = { inputs_after_topout = true }
-function Duel.decideSpell(m, log)
-  local mine = { v = E.ENGINE_VERSION, seed = m.seed, startLevel = 1, ticks = m.my.ticks, log = m.myLog or {}, loadout = S.decodeLoadout(m.myLoadout or "") }
-  local theirs = { v = E.ENGINE_VERSION, seed = m.seed, startLevel = 1, ticks = m.rivalEnd.ticks, log = log, loadout = S.decodeLoadout(m.rivalLoadout or "") }
+--- Spell Battle result: replay BOTH logs in lockstep (the web's verifySpellMatch), with each
+--- player's own record of where the rival's spells landed on their board (the receiver is the
+--- authority: a spell lands in the replay exactly when it landed live - lag, pauses and lost
+--- messages can't make a replay differ from what a player saw). Both PCs replay the same two logs
+--- and the same two landing lists, so they agree on every board and score.
+--- The rival's result is rejected when (judged on my PC, about the rival only):
+---   * their log is broken / foreign / over the cap / inhuman / faster than the clock, or uses a
+---     loadout other than the one announced at Ready, or the replay refuses any of their casts or
+---     inputs (with landings the replay is their live game, so an honest client never has those);
+---   * a spell they sent me live is not a cast their replay allows (forged, unpaid, or not in the log);
+---   * a landing they report doesn't match a cast of mine that my replay allows, lands before
+---     castTick + 90, or the same cast lands twice;
+---   * more than one of my allowed casts never landed on their board although I sent it at least 5 s
+---     before their run ended (a client that "doesn't receive" spells). One is allowed: three copies
+---     can all be lost.
+function Duel.decideSpell(m, log, landings)
+  local myLand = m.myLandings or {}
+  local mine = { v = E.ENGINE_VERSION, seed = m.seed, startLevel = 1, ticks = m.my.ticks, log = m.myLog or {}, loadout = S.decodeLoadout(m.myLoadout or ""), landings = myLand }
+  local theirs = { v = E.ENGINE_VERSION, seed = m.seed, startLevel = 1, ticks = m.rivalEnd.ticks, log = log, loadout = S.decodeLoadout(m.rivalLoadout or ""), landings = landings }
   local hostFirst = m.role == "host"
   local res = S.verifyMatch({ seed = m.seed, capTicks = m.ruleset.limitTicks, players = hostFirst and { mine, theirs } or { theirs, mine } })
   local me, them = res[hostFirst and 1 or 2], res[hostFirst and 2 or 1]
   local fraud = {}
-  for _, r in ipairs(them.reasons) do
-    if r == "impossible_cast" then
-      local noMana = 0
-      for _, c in ipairs(them.invalidCasts) do
-        if c.reason == "insufficient_mana" or c.reason == "topped_out" then noMana = noMana + 1
-        else fraud[#fraud + 1] = "impossible_cast" end
-      end
-      if noMana > 2 then fraud[#fraud + 1] = "impossible_cast" end
-    elseif not DIVERGENCE_OK[r] then
-      fraud[#fraud + 1] = r
-    end
+  for _, r in ipairs(them.reasons) do fraud[#fraud + 1] = r end
+  local function key(t, spell) return t .. ":" .. spell end
+  -- casts each replay allowed (opponent spells only: those are the ones that cross)
+  local function allowed(side)
+    local out = {}
+    if side then for _, c in ipairs(side.casts) do if S.INFO[c.spell].target == "opponent" then out[key(c.tick, c.spell)] = true end end end
+    return out
   end
-  -- every spell they sent me live must be a cast in their log at that tick
-  local logged = {}
-  for k = 1, #log, 2 do if S.isCastCode(log[k + 1]) then logged[log[k] .. ":" .. S.spellOfCode(log[k + 1])] = true end end
+  local theirOk, myOk = allowed(them.side), allowed(me.side)
+  -- spells they sent me live must be casts their replay allows
   for _, c in pairs(m.inCasts or {}) do
-    if c.ok and not logged[c.tick .. ":" .. c.spell] then fraud[#fraud + 1] = "fake_cast"; break end
+    if c.ok and not theirOk[key(c.tick, c.spell)] then fraud[#fraud + 1] = "forged_cast"; break end
   end
+  -- their landings must match my allowed casts, once each, never early
+  local used = {}
+  for _, l in ipairs(landings) do
+    local k = key(l.castTick, l.spell)
+    if not myOk[k] or used[k] or l.tick < l.castTick + S.DELIVERY_TICKS then fraud[#fraud + 1] = "bad_landing"; break end
+    used[k] = true
+  end
+  -- my allowed casts that should have landed on them while they were still playing
+  local missing = 0
+  local theirEnd = them.side and them.side.game.tick or m.rivalEnd.ticks
+  -- only casts I sent at least 5 s before their END arrived: they had time to get one of 3 copies
+  -- (a cast sent after my own pause can reach them after their run ended: that's not on them)
+  local sentAt = {}
+  for _, c in ipairs(m.outCasts or {}) do sentAt[key(c.tick, S.SPELLS[c.idx + 1])] = c.at end
+  local endAt = m.rivalEnd.at or now()
+  for k in pairs(myOk) do
+    local t = tonumber(k:match("^(%d+)"))
+    if not used[k] and t + S.DELIVERY_TICKS < theirEnd and sentAt[k] and sentAt[k] < endAt - 5 then missing = missing + 1 end
+  end
+  if missing > 1 then fraud[#fraud + 1] = "spells_not_applied" end
   m.spell = {
     myLive = m.my.score, theirClaim = m.rivalEnd.score,
     my = me.score, their = them.score, diverged = me.hash ~= m.my.hash,
     late = (session() and session().duel == m and session().spell and session().spell.late) or 0,
-    reasons = them.reasons, rejected = m.spRejected or 0,
+    reasons = them.reasons, rejected = m.spRejected or 0, missing = missing,
   }
   -- the replay is the result (also for my own score)
   m.my.score, m.rivalEnd.score = me.score, them.score
@@ -635,13 +657,15 @@ function Duel.tryDecide(m)
   if haveAllChunks(m) then
     m.haveAll = true
     sendFin(m)
-    local log = P.unpackLog(table.concat(m.chunks, "", 1, m.rivalEnd.chunks))
+    local packed = table.concat(m.chunks, "", 1, m.rivalEnd.chunks)
+    local log, landings
+    if m.ruleset.spell then log, landings = P.unpackSpellLog(packed) else log = P.unpackLog(packed) end
     if not log then
       m.check = { ok = false, reasons = { "malformed_log" } }
     elseif m.tooFast then
       m.check = { ok = false, reasons = { "faster_than_clock" } }
     elseif m.ruleset.spell then
-      m.check = Duel.decideSpell(m, log)
+      m.check = Duel.decideSpell(m, log, landings)
     else
       m.check = V.verify(log, m.seed, m.rivalEnd.ticks, {
         seed = m.seed, capTicks = m.ruleset.limitTicks,

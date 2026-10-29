@@ -41,6 +41,20 @@ describe("protocol: Spell Battle additions", function()
     eq(P.packLog({ 1, 0, 2, 5 }), "1A1F", "classic logs pack exactly as in 0.4")
     for _, ch in ipairs(P.chunk(string.rep("1H", 150))) do ok(ch:sub(-1) == "H") end
   end)
+  it("spell duel log = moves + casts + where the rival's spells landed; garbage is refused", function()
+    local log = { 0, 0, 3, 105, 400, 5 }
+    local land = { { tick = 95, castTick = 2, spell = "garbage" }, { tick = 300, castTick = 200, spell = "scramble" } }
+    local packed = P.packSpellLog(log, land)
+    local back, l2 = P.unpackSpellLog(packed)
+    eq(table.concat(back, ","), table.concat(log, ","))
+    eq(#l2, 2); eq(l2[2].tick, 300); eq(l2[2].castTick, 200); eq(l2[2].spell, "scramble")
+    local b2, l3 = P.unpackSpellLog(P.packSpellLog(log, {}))
+    eq(#b2, #log); eq(#l3, 0)
+    for _, bad in ipairs({ packed .. "x", "1AZ5.3Q5.3", "1AZ5.3H", "1AZ9.1Q5.1Q", "1A" }) do
+      ok(P.unpackSpellLog(bad) == nil, "accepted " .. bad)
+    end
+    for _, ch in ipairs(P.chunk(string.rep("1H", 120) .. "Z" .. string.rep("3k.2Q", 60))) do ok(ch:sub(-1):match("[A-Z]"), ch:sub(-3)) end
+  end)
   it("version gate: 0.4.x can't play s180, 0.5.0+ can", function()
     ok(not P.versionAtLeast("0.4.0", "0.5.0")); ok(P.versionAtLeast("0.5.0", "0.5.0")); ok(P.versionAtLeast("0.10.1", "0.5.0"))
     ok(not P.versionAtLeast("dev", "0.5.0"))
@@ -171,7 +185,59 @@ describe("Spell Battle duel between two simulated clients", function()
     play(net, a, b, 10800 + 400)
     finishBoth(net, a, b)
     eq(mb.endReason, "check_failed", "Bob rejects Alice's result"); eq(mb.outcome, "win")
-    eq(ma.endReason, "checked", "Alice (who didn't forge in her own log) still checks Bob fine")
+    -- (a whisper's sender can't be faked in WoW, so this models Alice's own client cheating;
+    -- what Alice's PC concludes doesn't matter)
+  end)
+
+  it("withheld casts (a client that never sends its SP) can't hurt the rival: the replay lands spells only where they landed live", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    a.ns.Duel.sendCast = function() end
+    play(net, a, b, 10800 + 400, spellPlayer(a, "pa", "rival"), spellPlayer(b, "pb", "elite"))
+    finishBoth(net, a, b)
+    ok(#a.ns.App.session.spell.me.casts > 0, "Alice cast spells")
+    eq(mb.spell.diverged, false, "Bob's replay = what Bob saw")
+    eq(mb.myScore, mb.spell.myLive, "Bob keeps his live score")
+    eq(mb.endReason, "checked")
+  end)
+
+  it("unpaid casts (logged and sent without the mana) are caught", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    local real = a.ns.Spells.canCast
+    a.ns.Spells.canCast = function(side, spell, t) if side == a.ns.App.session.spell.me then return true end return real(side, spell, t) end
+    net.step(300)
+    a.ns.App.session:press("spell3"); net.step(400); a.ns.App.session:press("spell3")
+    play(net, a, b, 10800 + 400, spellPlayer(a, "pa", "elite"), spellPlayer(b, "pb", "elite"))
+    finishBoth(net, a, b)
+    eq(mb.endReason, "check_failed", "Bob rejects the free garbage"); eq(mb.outcome, "win")
+  end)
+
+  it("an honest pause (combat, chat) mid-duel: spells land late, nobody is flagged, both replays = live", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    local pa, pb = spellPlayer(a, "pa", "rival"), spellPlayer(b, "pb", "rival")
+    play(net, a, b, 3000, pa, pb)
+    a.ns.App:Pause("combat")
+    play(net, a, b, 600, pa, pb)
+    a.ns.App:Resume()
+    play(net, a, b, 10800, pa, pb)
+    finishBoth(net, a, b)
+    eq(ma.endReason, "checked"); eq(mb.endReason, "checked")
+    eq(ma.spell.diverged, false); eq(mb.spell.diverged, false)
+    eq(ma.myScore, mb.theirScore); eq(ma.theirScore, mb.myScore)
+  end)
+
+  it("a client that ignores incoming spells is caught by the sender", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    b.ns.SpellBattle.incoming = function() end -- Bob "never receives" anything
+    play(net, a, b, 10800 + 400, spellPlayer(a, "pa", "rival"), spellPlayer(b, "pb", "elite"))
+    finishBoth(net, a, b)
+    local sent = 0
+    for _, c in ipairs(a.ns.App.session.spell.me.casts) do if S.INFO[c.spell].target == "opponent" then sent = sent + 1 end end
+    ok(sent > 1, "the test needs casts: " .. sent)
+    eq(ma.endReason, "check_failed", sent .. " spells sent, none applied")
   end)
 
   it("spells that break the live rules are refused at once (not in the loadout, cooldown, after 3:00)", function()

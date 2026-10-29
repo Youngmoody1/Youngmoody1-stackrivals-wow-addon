@@ -66,6 +66,7 @@ function App:Start(mode)
   local d = ns.Duel and ns.Duel.current
   if d and (d.state == "playing" or d.state == "waiting") then self:Print("Finish or leave your duel first (/sr leave)."); return end
   if ns.Duel then ns.Duel.clear() end -- a finished/cancelled duel must not cover the new run
+  if self.session and self.session.spell then ns.SpellBattle.settleAll(self.session) end -- count it first
   ns.UI:Create()
   local seed = (mode == "daily") and Session.dailySeed(self:Today()) or newSeed()
   local opts
@@ -117,6 +118,7 @@ function App:Quit()
   -- quitting a running duel is a forfeit (the rival is told and wins), never a silent stop
   local s = self.session
   if s and s.duel and ns.Duel.busy() and s.duel == ns.Duel.current then ns.Duel.leave(); return end
+  if s and s.spell then ns.SpellBattle.settleAll(s) end
   self.session = nil
   self:ShowMenu()
 end
@@ -169,7 +171,7 @@ function App:OnRunOver(reason)
   s.recorded = true
   if s.duel then
     ns.Sound.play("gameover")
-    ns.Duel.onLocalEnd(s.state, s.spell and s.spell.me.log or nil)
+    ns.Duel.onLocalEnd(s.state, s.spell and s.spell.me.log or nil, s.spell and s.spell.landings or nil)
     ns.UI:ShowOver({ state = s.state, reason = reason, mode = s.mode.key, modeName = s.mode.name, duel = s.duel })
     return
   end
@@ -335,6 +337,7 @@ ev:SetScript("OnEvent", function(_, event, arg1)
     if ns.Duel and ns.Duel.busy() then ns.Duel.leave() end
     -- keep an unfinished run so /reload or logout never loses it
     local s = App.session
+    if s and s.spell then ns.SpellBattle.settleAll(s) end -- a finished Spell Battle is counted now
     if s then
       local data = s:suspendData()
       if data then data.date = s.date or App:Today(); ns.db.suspended = data end

@@ -24,7 +24,13 @@
 - Parity: `tools/parity/gen-spell-fixtures.ts` generates fixtures from the web's real code;
   `check_web.sh` runs them. Two web findings reported in `docs/WEB_SPELL_REPORT.md` (final tick,
   input after an incoming top-out); the addon follows the web server's verification.
-- Tests: 91 new (66 parity + rules, 13 vs Bot in the WoW mock, 12 two-client duels). All 274
+- Independent review applied: in Spell Battle duels each player's client records where the
+  rival's spells actually landed and sends it with the log; the replay lands spells exactly there,
+  so a replay is always the player's live game (lag, pauses, withheld sends can't change it).
+  Forged, unpaid and ignored spells are caught (tests for each). At most 4 inputs per tick (also
+  classic), so a frame hitch never looks "inhuman". A vs Bot result is never lost when the window
+  closes during the bot's finish. Fewer allocations per frame in the spell HUD.
+- Tests: 99 new (66 parity + rules, 15 vs Bot in the WoW mock, 18 two-client duels). All 274
   earlier tests and the 77 SR1 vectors unchanged.
 
 ## 0.4.0 — multiplayer preview (branch `multiplayer`, not released)

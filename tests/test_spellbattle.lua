@@ -211,6 +211,40 @@ describe("Spell Battle vs Bot: casting", function()
   end)
 end)
 
+describe("Spell Battle vs Bot: robustness", function()
+  it("after a frame hitch at most 4 codes go into one tick, the rest the next tick (never 'inhuman')", function()
+    local M, ns = boot(nil)
+    local sess = startSpell(M, ns, "rookie")
+    local sp = sess.spell
+    sp.me.mana = 20
+    for _, a in ipairs({ "left", "right", "left", "right", "rotateCW", "rotateCCW" }) do sess:press(a); sess:release(a) end
+    sess:press("spell1")
+    M.frames_step(3)
+    local perTick = {}
+    for k = 1, #sp.me.log, 2 do perTick[sp.me.log[k]] = (perTick[sp.me.log[k]] or 0) + 1 end
+    local max = 0
+    for _, n in pairs(perTick) do if n > max then max = n end end
+    eq(max, 4, "4 in the first tick, the rest after")
+    eq(#sp.me.casts, 1, "the cast still happened")
+    -- (the mana above was set by hand, so the replay rightly refuses the cast; only the rate matters here)
+    local r = verifyLive(ns, sess)
+    for _, why in ipairs(r.reasons) do ok(why ~= "inhuman_input_rate", "rate flagged") end
+  end)
+  it("closing the window while the bot finishes its run still counts the result", function()
+    local M, ns = boot(nil)
+    local sess = startSpell(M, ns, "challenger")
+    for _ = 1, 400 do
+      if sess.phase ~= "playing" then break end
+      sess:press("hardDrop"); M.frames_step(1); sess:release("hardDrop")
+    end
+    ok(sess.spell.settling, "bot still playing")
+    StackRivalsFrame:Hide()
+    ok(not sess.spell.settling and sess.spell.result, "finished on hide")
+    local st = ns.db.spell.stats.challenger
+    eq(st.wins + st.losses + st.draws, 1, "counted")
+  end)
+end)
+
 describe("Spell Battle vs Bot: /reload and saved data", function()
   it("a match interrupted by /reload is rebuilt exactly (both boards, mana, pending spells)", function()
     local M, ns = boot(nil)

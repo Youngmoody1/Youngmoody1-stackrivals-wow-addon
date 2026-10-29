@@ -233,13 +233,21 @@ end
 ------------------------------------------------------------------------------------------------
 -- Per-frame HUD (called from UI:Render while a Spell Battle session exists)
 ------------------------------------------------------------------------------------------------
-local function chipText(side)
+--- Status text for a side; cached per side until a shown second changes (no per-frame strings).
+local function chipText(side, sep)
   local t = side.game.tick
-  local out = {}
-  if t < side.freezeUntil then out[#out + 1] = "|cff9bd0ffFROZEN " .. secs(side.freezeUntil - t) .. "|r" end
-  if t < side.speedUntil then out[#out + 1] = "|cffff4d5aSPEED UP " .. secs(side.speedUntil - t) .. "|r" end
-  if t < side.blackoutUntil then out[#out + 1] = "|cff9bd0ffBLACKOUT " .. secs(side.blackoutUntil - t) .. "|r" end
-  return table.concat(out, "  ")
+  local f = (t < side.freezeUntil) and math.ceil((side.freezeUntil - t) / 60) or 0
+  local sp = (t < side.speedUntil) and math.ceil((side.speedUntil - t) / 60) or 0
+  local b = (t < side.blackoutUntil) and math.ceil((side.blackoutUntil - t) / 60) or 0
+  local key = f * 10000 + sp * 100 + b
+  local cache = side._chips
+  if cache and cache.key == key and cache.sep == sep then return cache.text end
+  local txt = ""
+  if f > 0 then txt = "|cff9bd0ffFROZEN " .. f .. "s|r" end
+  if sp > 0 then txt = txt .. (txt ~= "" and sep or "") .. "|cffff4d5aSPEED UP " .. sp .. "s|r" end
+  if b > 0 then txt = txt .. (txt ~= "" and sep or "") .. "|cff9bd0ffBLACKOUT " .. b .. "s|r" end
+  side._chips = { key = key, sep = sep, text = txt }
+  return txt
 end
 
 function UI:RenderSpell(sess)
@@ -283,7 +291,7 @@ function UI:RenderSpell(sess)
     end
   end
   -- my board: chips, tint, blackout, bomb target
-  local chips = chipText(me)
+  local chips = chipText(me, "  ")
   if self.spellChips._s ~= chips then self.spellChips._s = chips; self.spellChips:SetText(chips) end
   local tk = me.game.tick
   local tintA, tc = 0, nil
@@ -299,10 +307,19 @@ function UI:RenderSpell(sess)
     self.nextPreviews[1]:SetShown(not blind); self.nextPreviews[2]:SetShown(not blind)
     self.blackoutText:SetShown(blind)
   end
-  if blind then self.blackoutText:SetText("BLACKOUT\n" .. secs(me.blackoutUntil - tk)) end
+  if blind then
+    local left = math.ceil((me.blackoutUntil - tk) / 60)
+    if self.blackoutText._n ~= left then self.blackoutText._n = left; self.blackoutText:SetText("BLACKOUT\n" .. left .. "s") end
+  end
   local hasBomb = false
   for _, x in ipairs(me.loadout) do if x == "bomb" then hasBomb = true end end
-  if hasBomb and live and S.canCast(me, "bomb") then
+  local a = me.game.active
+  -- bomb target: recomputed only when the piece or its landing spot moves (no per-frame tables)
+  local bkey = (hasBomb and live and a and S.canCast(me, "bomb")) and (ns.Pieces.INDEX[a.id] * 1000000 + a.rotation * 100000 + (a.x + 10) * 1000 + (ns.Engine.ghostY(me.game) or 0)) or nil
+  if bkey and bkey == self.bombKey then
+    -- unchanged: keep the outline where it is
+  elseif bkey then
+    self.bombKey = bkey
     local cells = S.bombCells(me.game)
     if #cells == 9 then
       local cs = 19 -- CELL + 1
@@ -321,6 +338,7 @@ function UI:RenderSpell(sess)
       end
     end
   else
+    self.bombKey = nil
     self.bombTarget:Hide()
   end
   if not o then return end -- duel: the rival panel is the duel's (DuelUI)
@@ -332,20 +350,22 @@ function UI:RenderSpell(sess)
   Board.renderMini(rp.board, o.game, o.game.tick < o.blackoutUntil)
   local mh = math.max(1, rp.manaTrack:GetHeight() * o.mana / S.MANA_MAX)
   if rp.manaH ~= mh then rp.manaH = mh; rp.mana:SetHeight(mh) end
-  local oc = chipText(o):gsub("  ", "\n")
+  local oc = chipText(o, "\n")
   if rp.chips._s ~= oc then rp.chips._s = oc; rp.chips:SetText(oc) end
   rp.over:SetShown(o.game.gameOver)
   if rp.score._n ~= o.game.score then rp.score._n = o.game.score; rp.score:SetText(T.commas(o.game.score)) end
   local lead = me.game.score - o.game.score
-  local lt = (lead > 0 and ("you +" .. T.commas(lead))) or (lead < 0 and ("you -" .. T.commas(-lead))) or "level"
-  if o.game.gameOver and not me.game.gameOver and lead <= 0 then lt = "beat " .. T.commas(o.game.score) .. " to win" end
-  if rp.lead._s ~= lt then
+  local beat = o.game.gameOver and not me.game.gameOver and lead <= 0
+  local lkey = (beat and "b" or "l") .. lead
+  if rp.lead._k ~= lkey then
+    rp.lead._k = lkey
+    local lt = (beat and ("beat " .. T.commas(o.game.score) .. " to win")) or (lead > 0 and ("you +" .. T.commas(lead))) or (lead < 0 and ("you -" .. T.commas(-lead))) or "level"
     rp.lead._s = lt; rp.lead:SetText(lt)
     local c = lead > 0 and C.green or (lead < 0 and C.redLight or C.label)
     rp.lead:SetTextColor(c[1], c[2], c[3])
+    local total = me.game.score + o.game.score
+    rp.bar:SetWidth(math.max(1, 88 * (total > 0 and me.game.score / total or 0.5)))
   end
-  local total = me.game.score + o.game.score
-  rp.bar:SetWidth(math.max(1, 88 * (total > 0 and me.game.score / total or 0.5)))
 end
 
 ------------------------------------------------------------------------------------------------
