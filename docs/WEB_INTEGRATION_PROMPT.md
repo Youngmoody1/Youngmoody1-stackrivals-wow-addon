@@ -57,9 +57,9 @@ Range: <old commit>..<new commit>   ENGINE_VERSION: <old> -> <new>
    pass `hashString` (`src/game/engine/prng.ts`) and `verifyLog` (`src/lib/match/rules.ts`).
 2. Copy `docs/vectors/sr1.json` into the test fixtures and add a test that, for every vector:
    - `decodeChallenge` gives `expect`;
-   - `importResult(code, challenge, elapsedMs, { hashString, verifyLog })` deep-equals `expect`;
-   - valid codes re-encode to the same text (whitespace removed).
-
+   - `importResult(code, challenge, nowMs, { hashString, verifyLog })` deep-equals `expect`
+     (`challenge` and `nowMs` are in each vector);
+   - valid codes re-encode to the same text (ASCII whitespace removed);
    - `runKey(a) === runKey(b)` matches `same` for every entry in `runKeys`.
 
    This is exactly what the addon's `tools/sr1/check_vectors.ts` runs against this repo: **77/77
