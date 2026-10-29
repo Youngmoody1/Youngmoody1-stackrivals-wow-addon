@@ -8,17 +8,19 @@
 
     1:HEL:<addonVer>:<engine>                       who has StackRivals? (guild/party broadcast)
     1:HI:<addonVer>:<engine>:<busy>                 reply (whisper)
-    1:INV:<mid>:<ruleset>:<engine>:<nonceA>         challenge
-    1:ACC:<mid>:<nonceB>                            accept (seed = srduel-<mid>-<nonceA><nonceB>)
+    1:INV:<mid>:<ruleset>:<engine>:<commitA>        challenge; commitA = hex FNV-1a of "srcommit-<mid>-<nonceA>"
+    1:ACC:<mid>:<nonceB>                            accept: the guest picks nonceB without knowing nonceA
     1:DEC:<mid>:<reason>                            decline / cancel before start
     1:RDY:<mid>                                     I'm ready
-    1:GO:<mid>                                      inviter: both ready, countdown starts now
+    1:GO:<mid>:<nonceA>                             inviter: both ready, countdown starts now; reveals
+                                                    nonceA (must match commitA). seed = srduel-<mid>-<nonceA><nonceB>,
+                                                    so neither player can pick or grind the seed
     1:PNG:<mid>                                     keep-alive while not playing
     1:SC:<mid>:<tick36>:<score36>:<lines36>:<over>  live score heartbeat
     1:END:<mid>:<ticks36>:<score36>:<lines36>:<level36>:<hash>:<chunks>
     1:LOG:<mid>:<i>:<n>:<payload>                   input log chunk i of n
     1:RQ:<mid>:<i>                                  please (re)send log chunk i
-    1:BYE:<mid>:<reason>                            forfeit / leave during or after the match
+    1:BYE:<mid>:<reason>                            forfeit (during play) / left (after my own run ended)
 ]]
 local _, ns = ...
 ns = ns or {}
@@ -38,7 +40,7 @@ P.RULESETS = {
 }
 
 P.DECLINE = { no = true, busy = true, combat = true, version = true, timeout = true, cancel = true, ruleset = true }
-P.BYE = { forfeit = true, quit = true, timeout = true, combat = true }
+P.BYE = { forfeit = true, left = true, quit = true, timeout = true, combat = true }
 
 local B36 = "0123456789abcdefghijklmnopqrstuvwxyz"
 
@@ -68,6 +70,12 @@ local function isInt(s, lo, hi)
   return n ~= nil and n % 1 == 0 and n >= lo and n <= hi and tostring(s):match("^%d+$") ~= nil
 end
 
+--- Commitment to the inviter's nonce (sent in INV, checked against the nonce revealed in GO).
+function P.commit(mid, nonce)
+  local h = ns.Prng and ns.Prng.hashString("srcommit-" .. mid .. "-" .. nonce)
+  return string.format("%08x", h or 0)
+end
+
 --- Build a message string (fields are validated by decode on the receiving side and in tests).
 function P.encode(kind, ...)
   local parts = { tostring(P.VERSION), kind }
@@ -78,7 +86,7 @@ function P.encode(kind, ...)
 end
 
 local SPEC = {
-  HEL = 2, HI = 3, INV = 4, ACC = 2, DEC = 2, RDY = 1, GO = 1, PNG = 1, SC = 5, END = 7, LOG = 4, BYE = 2, RQ = 2,
+  HEL = 2, HI = 3, INV = 4, ACC = 2, DEC = 2, RDY = 1, GO = 2, PNG = 1, SC = 5, END = 7, LOG = 4, BYE = 2, RQ = 2,
 }
 
 --- Parse and validate. Returns a table {kind=..., ...} or nil, reason.
@@ -109,7 +117,10 @@ function P.decode(s)
     local allowed = (kind == "DEC") and P.DECLINE or P.BYE
     if not isMid(f[3]) or not allowed[f[4]] then return nil, "bad" end
     m.mid, m.reason = f[3], f[4]
-  elseif kind == "RDY" or kind == "GO" or kind == "PNG" then
+  elseif kind == "GO" then
+    if not isMid(f[3]) or not isNonce(f[4]) then return nil, "bad" end
+    m.mid, m.nonce = f[3], f[4]
+  elseif kind == "RDY" or kind == "PNG" then
     if not isMid(f[3]) then return nil, "bad" end
     m.mid = f[3]
   elseif kind == "SC" then

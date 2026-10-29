@@ -13,7 +13,7 @@ describe("protocol", function()
     local msgs = {
       P.encode("HEL", "0.4.0", 1), P.encode("HI", "0.4.0", 1, 0), P.encode("INV", "abc123", "b120", 1, "n0nce123"),
       P.encode("ACC", "abc123", "zz99zz99"), P.encode("DEC", "abc123", "busy"), P.encode("RDY", "abc123"),
-      P.encode("GO", "abc123"), P.encode("PNG", "abc123"), P.encode("SC", "abc123", P.b36(7200), P.b36(123456), P.b36(40), 1),
+      P.encode("GO", "abc123", "n0nce123"), P.encode("PNG", "abc123"), P.encode("SC", "abc123", P.b36(7200), P.b36(123456), P.b36(40), 1),
       P.encode("END", "abc123", P.b36(7200), P.b36(123456), P.b36(40), P.b36(5), "0a1b2c3d", 3),
       P.encode("LOG", "abc123", 2, 3, "3A0Bc"), P.encode("RQ", "abc123", 2), P.encode("BYE", "abc123", "forfeit"),
     }
@@ -30,7 +30,7 @@ describe("protocol", function()
       "", "2:HEL:1:1", "1:XXX:a", "1:INV:abc123:b120:1", "1:INV:ab:b120:1:nonce123", "1:INV:abc123:zz:1:nonce123",
       "1:SC:abc123:-1:2:3:0", "1:SC:abc123:1:2:3:2", "1:END:abc123:1:2:3:4:nothex!!:1", "1:LOG:abc123:3:2:AA",
       "1:LOG:abc123:1:1:" .. string.rep("1A", 101), "1:DEC:abc123:because", "1:HEL:|cff:1", string.rep("x", 256),
-      "1:RDY:abc123:extra", "1:HI:v:1:yes", "1:GO:ABC123",
+      "1:RDY:abc123:extra", "1:HI:v:1:yes", "1:GO:ABC123:nonce123", "1:GO:abc123", "1:BYE:abc123:whatever",
     }
     for _, s in ipairs(bad) do ok(P.decode(s) == nil, "accepted bad packet: " .. s) end
   end)
@@ -136,12 +136,13 @@ local function runDuel(net, a, b, opts)
   b.ns.UI.invite.acc:Click()
   ok(until_(go, function() return a.ns.Duel.current.state == "lobby" end), "Alice in the lobby")
   eq(b.ns.Duel.current.state, "lobby")
-  eq(a.ns.Duel.current.seed, b.ns.Duel.current.seed, "same seed on both sides")
+  ok(b.ns.Duel.current.nonceA == nil, "guest doesn't know the inviter's nonce (seed) before GO")
   ok(a.ns.UI.lobby:IsShown() and b.ns.UI.lobby:IsShown(), "lobby shown")
   a.ns.UI.lobby.ready:Click(); b.ns.UI.lobby.ready:Click()
   ok(until_(go, function() local sa, sb = a.ns.App.session, b.ns.App.session; return sa and sb and sa.duel and sb.duel end), "both runs started")
   eq(a.ns.App.session.duel, a.ns.Duel.current, "Alice's duel run started")
   eq(b.ns.App.session.duel, b.ns.Duel.current, "Bob's duel run started")
+  eq(a.ns.Duel.current.seed, b.ns.Duel.current.seed, "same seed on both sides")
   eq(table.concat(a.ns.App.session.state.queue, ","), table.concat(b.ns.App.session.state.queue, ","), "same pieces")
   if opts.during then opts.during(go) end
   until_(go, function() return a.ns.Duel.current.state == "done" and b.ns.Duel.current.state == "done" end, 60 * 60 * 6)
@@ -179,8 +180,9 @@ describe("duels between two simulated clients", function()
     local seed1 = ma1.seed
     local go = players(net, { a, b })
     a.ns.UI.againBtn:Click() -- "Rematch"
-    go(30)
-    eq(b.ns.Duel.current.state, "invited"); ok(b.ns.Duel.current.rematch, "shown as rematch")
+    -- the invite may queue for a moment behind the last chunks of the previous match's log
+    ok(until_(go, function() return b.ns.Duel.current.state == "invited" end, 60 * 10), "Bob got the rematch invite")
+    ok(b.ns.Duel.current.rematch, "shown as rematch")
     b.ns.UI.invite.acc:Click(); go(30)
     a.ns.UI.lobby.ready:Click(); b.ns.UI.lobby.ready:Click(); go(7200 + 400)
     for _ = 1, 60 do if a.ns.Duel.current.state == "done" and b.ns.Duel.current.state == "done" then break end go(30) end
@@ -197,7 +199,7 @@ describe("duels between two simulated clients", function()
     local net, a, b = pair({ seed = 14, drop = 0.15, dup = 0.10, latency = { 0.05, 0.9 } })
     local ma, mb = runDuel(net, a, b)
     eq(ma.state, "done"); eq(mb.state, "done")
-    ok(ma.endReason == "checked" or ma.endReason == "unchecked", ma.endReason)
+    eq(ma.endReason, "checked"); eq(mb.endReason, "checked")
     complementary(ma, mb)
   end)
   it("works inside instances where whispers are throttled (10 msgs, +1/s)", function()
@@ -218,7 +220,7 @@ describe("duels between two simulated clients", function()
     -- no answer
     a.ns.Duel.challenge("Bob"); go(60 * 36)
     eq(a.ns.Duel.current.state, "cancelled")
-    eq(b.ns.Duel.current.state, "cancelled", "Bob's invite timed out")
+    eq(b.ns.Duel.current, nil, "Bob's invite timed out and was forgotten")
     a.ns.Duel.clear(); b.ns.Duel.clear()
     -- busy: Carol challenges Bob while Bob is in a duel with Alice
     local c = net.add({ name = "Carol", guild = "G" })
@@ -262,7 +264,7 @@ describe("duels between two simulated clients", function()
     eq(ma.state, "done"); eq(mb.state, "done"); complementary(ma, mb)
     eq(#a.M.blocked + #b.M.blocked, 0, "no blocked actions")
   end)
-  it("a tampered result (inflated END score) is caught by the peer check: no winner", function()
+  it("a tampered result (inflated END score) is caught by the peer check: the cheater's result is rejected", function()
     local net, a, b = pair({ seed = 21 })
     -- Bob's client lies about his final score
     local realSend = b.env.C_ChatInfo.SendAddonMessage
@@ -277,8 +279,8 @@ describe("duels between two simulated clients", function()
       return realSend(prefix, text, ch, tgt)
     end
     local ma = runDuel(net, a, b)
-    eq(ma.endReason, "check_failed"); eq(ma.outcome, "void")
-    eq(a.ns.db.duels.voids, 1)
+    eq(ma.endReason, "check_failed"); eq(ma.outcome, "win")
+    eq(a.ns.db.duels.wins, 1)
   end)
   it("garbage and spoofed packets are ignored; nothing crashes", function()
     local net, a, b = pair({ seed = 22 })
@@ -298,6 +300,238 @@ describe("duels between two simulated clients", function()
     local net, a, b = pair({ seed = 23 })
     local ma = runDuel(net, a, b, { during = function(go) a.lockdownUntil = net.time + 8; go(60 * 12) end })
     eq(ma.state, "done"); eq(ma.endReason, "checked")
+  end)
+end)
+
+------------------------------------------------------------------------------------------------
+-- Regression tests for the findings of the independent review (0.4.0-dev)
+------------------------------------------------------------------------------------------------
+local function count(net, from, kind)
+  local n = { v = 0 }
+  local prev = net.tap
+  net.tap = function(c, text, ...)
+    if c == from and text:match("^1:" .. kind .. ":") then n.v = n.v + 1 end
+    if prev then prev(c, text, ...) end
+  end
+  return n
+end
+
+-- challenge -> accept -> ready -> both runs started; returns a stepping function without autoplay
+local function startDuel(net, a, b, rulesetId)
+  local function go(n) net.step(n) end
+  ok(a.ns.Duel.challenge("Bob", rulesetId or "b120"))
+  for _ = 1, 40 do go(15); local m = b.ns.Duel.current; if m and m.state == "invited" then break end end
+  b.ns.UI.invite.acc:Click()
+  for _ = 1, 40 do go(15); if a.ns.Duel.current.state == "lobby" then break end end
+  a.ns.UI.lobby.ready:Click(); b.ns.UI.lobby.ready:Click()
+  for _ = 1, 40 do go(15); local sa, sb = a.ns.App.session, b.ns.App.session; if sa and sb and sa.duel and sb.duel then break end end
+  ok(a.ns.App.session and a.ns.App.session.duel and b.ns.App.session and b.ns.App.session.duel, "both runs started")
+  return go
+end
+
+-- Alice plays well, Bob hard-drops every few frames and tops out early
+local function bobTopsOut(net, a, b, until_cond, maxFrames)
+  local fa = NS.autoplay(a, "fast")
+  for _ = 1, maxFrames or 60 * 60 * 8 do
+    if until_cond() then return true end
+    fa()
+    local sb = b.ns.App.session
+    if sb and sb.duel and sb.phase == "playing" and net.time * 60 % 6 < 1 then sb:press("hardDrop"); sb:release("hardDrop") end
+    net.step(1)
+  end
+  return until_cond()
+end
+
+describe("review findings (regression tests, simulated clients)", function()
+  it("#1 the player who finishes second streams their log unasked, even after going back to the menu", function()
+    local net, a, b = pair({ seed = 31 })
+    startDuel(net, a, b)
+    local rq = count(net, b, "RQ")
+    ok(bobTopsOut(net, a, b, function() return a.ns.Duel.current.state == "done" end), "Alice finished")
+    eq(b.ns.Duel.current.state, "waiting", "Bob topped out first and waits")
+    a.ns.App:ShowMenu() -- Alice clicks "Modes" right away: the match is cleared...
+    eq(a.ns.Duel.current, nil)
+    for _ = 1, 60 * 30 do if b.ns.Duel.current.state == "done" then break end net.step(1) end
+    local mb = b.ns.Duel.current
+    eq(mb.state, "done"); eq(mb.endReason, "checked", "...but her log still reached Bob")
+    ok(rq.v == 0, "Bob didn't have to ask for chunks (" .. rq.v .. " RQ)")
+  end)
+
+  it("#2 log chunks that arrive before their END are kept", function()
+    local net, a, b = pair({ seed = 32 })
+    local realSend = b.env.C_ChatInfo.SendAddonMessage
+    local sentLog, lostEnds = false, 0
+    b.env.C_ChatInfo.SendAddonMessage = function(prefix, text, ch, tgt)
+      if text:match("^1:LOG:") then sentLog = true end
+      if text:match("^1:END:") and (not sentLog or lostEnds < 1) then lostEnds = lostEnds + 1; return 0 end -- lost
+      return realSend(prefix, text, ch, tgt)
+    end
+    local ma, mb = runDuel(net, a, b)
+    ok(lostEnds >= 1, "Bob's first END got lost")
+    eq(ma.endReason, "checked"); eq(mb.endReason, "checked"); complementary(ma, mb)
+  end)
+
+  it("#3 challenging an offline player cancels the challenge; it is never a win", function()
+    local net, a, b = pair({ seed = 33 })
+    b.online = false
+    a.ns.App:Start("classic"); net.step(120)
+    ok(a.ns.Duel.challenge("Bob"))
+    net.step(60)
+    local m = a.ns.Duel.current
+    eq(m.state, "cancelled"); eq(m.endReason, "rival_offline")
+    eq(a.ns.db.duels.wins, 0); eq(#a.ns.db.duels.history, 0)
+    ok(a.ns.UI.lobby.status:GetText():find("offline") ~= nil, "Alice is told Bob is offline")
+  end)
+
+  it("#4 a rival who goes quiet for 40 s (loading screen, lockdown) and comes back is not a disconnect", function()
+    local net, a, b = pair({ seed = 34 })
+    local sawGone = false
+    local ma, mb = runDuel(net, a, b, { during = function(go)
+      go(600)
+      b.lockdownUntil = net.time + 40
+      for _ = 1, 40 do go(60); if a.ns.Duel.current.rivalGone then sawGone = true end end
+      go(60 * 12) -- Comm's retry back-off (up to 8 s) after the lockdown lifts
+      ok(not a.ns.Duel.current.rivalGone, "the mark clears when Bob is heard again")
+    end })
+    ok(sawGone, "Alice did notice the silence")
+    eq(ma.endReason, "checked"); eq(mb.endReason, "checked"); complementary(ma, mb)
+  end)
+
+  it("#5 challenging each other at the same moment starts one duel instead of two 'busy' refusals", function()
+    local net, a, b = pair({ seed = 35 })
+    ok(a.ns.Duel.challenge("Bob")); ok(b.ns.Duel.challenge("Alice"))
+    net.step(120)
+    local ma, mb = a.ns.Duel.current, b.ns.Duel.current
+    eq(ma.state, "lobby"); eq(mb.state, "lobby"); eq(ma.mid, mb.mid, "the same match on both sides")
+    ok(ma.role ~= mb.role, "one host, one guest")
+    a.ns.UI.lobby.ready:Click(); b.ns.UI.lobby.ready:Click(); net.step(120)
+    eq(a.ns.App.session.duel, ma); eq(b.ns.App.session.duel, mb)
+    eq(ma.seed, mb.seed)
+  end)
+
+  it("#6 lobby race: a guest's cancel that crosses GO cancels the duel, nobody wins", function()
+    local net, a, b = pair({ seed = 36 })
+    a.ns.Duel.LOBBY_TIMEOUT = 60
+    eq(b.ns.Duel.LOBBY_TIMEOUT + b.ns.Duel.GUEST_GRACE > a.ns.Duel.LOBBY_TIMEOUT, true, "the guest waits longer than the host")
+    startDuel(net, a, b)
+    local mid = a.ns.Duel.current.mid
+    net.inject(a, "Bob-Realm", "1:DEC:" .. mid .. ":timeout")
+    eq(a.ns.Duel.current.state, "cancelled")
+    eq(a.ns.App.session, nil, "Alice's duel run was stopped")
+    eq(a.ns.db.duels.wins, 0)
+  end)
+
+  it("#7 leaving after your own run ended: no result for you, a checked result for the rival", function()
+    local net, a, b = pair({ seed = 37 })
+    startDuel(net, a, b)
+    ok(bobTopsOut(net, a, b, function() return b.ns.Duel.current.state == "waiting" end), "Bob topped out")
+    b.ns.Duel.leave(); b.ns.App:ShowMenu()
+    eq(b.ns.db.duels.voids, 1); eq(b.ns.db.duels.losses, 0, "not counted as a forfeit loss")
+    eq(b.ns.db.duels.history[1].how, "you_left")
+    ok(bobTopsOut(net, a, b, function() return a.ns.Duel.current.state == "done" end), "Alice finished")
+    eq(a.ns.Duel.current.endReason, "checked", "Bob's result still reached Alice")
+  end)
+
+  it("#8 a rival who withholds their log gets no result: never a win", function()
+    local net, a, b = pair({ seed = 38 })
+    local realSend = b.env.C_ChatInfo.SendAddonMessage
+    b.env.C_ChatInfo.SendAddonMessage = function(prefix, text, ch, tgt)
+      if text:match("^1:LOG:") then return 0 end -- "sent", never arrives
+      return realSend(prefix, text, ch, tgt)
+    end
+    local ma = runDuel(net, a, b)
+    eq(ma.endReason, "unchecked"); eq(ma.outcome, "void")
+    eq(a.ns.db.duels.losses, 0); eq(a.ns.db.duels.voids, 1)
+  end)
+
+  it("#9 seed commit-reveal: an inviter that reveals another nonce is caught", function()
+    local net, a, b = pair({ seed = 39 })
+    local realSend = a.env.C_ChatInfo.SendAddonMessage
+    a.env.C_ChatInfo.SendAddonMessage = function(prefix, text, ch, tgt)
+      text = text:gsub("^(1:GO:%w+:)%w+$", "%1zzzzzzzz")
+      return realSend(prefix, text, ch, tgt)
+    end
+    ok(a.ns.Duel.challenge("Bob")); net.step(60)
+    b.ns.UI.invite.acc:Click(); net.step(60)
+    a.ns.UI.lobby.ready:Click(); b.ns.UI.lobby.ready:Click(); net.step(120)
+    eq(b.ns.Duel.current.state, "cancelled"); eq(b.ns.Duel.current.endReason, "rival_bad_seed")
+    ok(not (b.ns.App.session and b.ns.App.session.duel), "Bob never started on the manipulated seed")
+    eq(a.ns.Duel.current.state, "cancelled", "Alice's duel is cancelled too")
+  end)
+
+  it("#9 a final result that arrives faster than the game can be played is rejected", function()
+    local net, a, b = pair({ seed = 40 })
+    startDuel(net, a, b)
+    net.step(60)
+    local m = a.ns.Duel.current
+    net.inject(a, "Bob-Realm", "1:END:" .. m.mid .. ":" .. P.b36(7200) .. ":" .. P.b36(999999) .. ":5:3:0a1b2c3d:1")
+    ok(m.tooFast, "a 2:00 result 1 s after GO is flagged")
+  end)
+
+  it("#10 300 invites and hellos from a stranger during a duel don't starve it", function()
+    local net, a, b = pair({ seed = 41 })
+    local toMallory = { v = 0 }
+    net.tap = function(c, text, ch, tgt) if c == a and tgt == "Mallory-Realm" then toMallory.v = toMallory.v + 1 end end
+    local maxQueue = 0
+    local ma, mb = runDuel(net, a, b, { during = function(go)
+      for i = 1, 150 do
+        net.inject(a, "Mallory-Realm", "1:INV:m" .. P.b36(1000 + i) .. ":b120:1:abcdef12")
+        net.inject(a, "Mallory-Realm", "1:HEL:0.4.0:1")
+        maxQueue = math.max(maxQueue, #a.ns.Comm.queue)
+      end
+      go(60)
+    end })
+    ok(maxQueue <= 17, "queue stayed small (" .. maxQueue .. ")")
+    ok(toMallory.v <= 2, "at most a couple of replies to the spammer (" .. toMallory.v .. ")")
+    eq(ma.endReason, "checked"); complementary(ma, mb)
+  end)
+
+  it("#11 realm names with hyphens or spaces match the name the server reports", function()
+    local net, a = pair({ seed = 42 })
+    local C = a.ns.Comm
+    eq(C.fullName("Bob-Azjol-Nerub"), "Bob-AzjolNerub")
+    eq(C.fullName("Bob-Azjol Nerub"), "Bob-AzjolNerub")
+    eq(C.fullName("Bob"), "Bob-Realm")
+    ok(C.same("bob-azjolnerub", "Bob-Azjol-Nerub"))
+  end)
+
+  it("#12 declining an invite during a solo run leaves the run visible and playable", function()
+    local net, a, b = pair({ seed = 43 })
+    b.ns.App:Start("classic"); net.step(300)
+    ok(a.ns.Duel.challenge("Bob")); net.step(60)
+    eq(b.ns.Duel.current.state, "invited")
+    b.ns.UI.invite:GetScript("OnUpdate")(b.ns.UI.invite)
+    b.ns.Duel.decline("no"); net.step(30)
+    eq(b.ns.Duel.current, nil, "the declined invite is forgotten")
+    ok(not b.ns.UI.lobby:IsShown(), "nothing covers Bob's board")
+    eq(b.ns.App.session.phase, "playing"); eq(b.ns.UI.keys._kb, true, "Bob still has his keys")
+    eq(a.ns.Duel.current.endReason, "rival_no")
+  end)
+
+  it("#13 'Quit to menu' in a duel is a labelled forfeit, never a stuck duel", function()
+    local net, a, b = pair({ seed = 44 })
+    startDuel(net, a, b)
+    net.step(300)
+    b.ns.App:Pause("manual")
+    ok(not b.ns.UI.restartBtn:IsShown(), "no Restart in a duel")
+    eq(b.ns.UI.quitBtn.fs:GetText(), "Forfeit duel")
+    b.ns.UI.quitBtn:Click()
+    eq(b.ns.Duel.current.endReason, "you_forfeited"); ok(not b.ns.Duel.busy(), "Bob is free again")
+    ok(bobTopsOut(net, a, b, function() return a.ns.Duel.current.state == "done" end))
+    eq(a.ns.Duel.current.endReason, "rival_forfeited"); eq(a.ns.Duel.current.outcome, "win")
+  end)
+
+  it("#14 a duel that starts while you are in combat starts paused", function()
+    local net, a, b = pair({ seed = 45 })
+    ok(a.ns.Duel.challenge("Bob")); net.step(60)
+    b.ns.UI.invite.acc:Click(); net.step(60)
+    b.ns.UI.lobby.ready:Click(); net.step(30)
+    b.M.fire("PLAYER_REGEN_DISABLED"); b.M.combat = true
+    a.ns.UI.lobby.ready:Click(); net.step(60)
+    local s = b.ns.App.session
+    ok(s and s.duel, "Bob's duel run exists")
+    eq(s.phase, "paused"); eq(s.pauseReason, "combat")
+    eq(b.ns.UI.keys._kb, false); eq(#b.M.blocked, 0, "no blocked actions")
   end)
 end)
 

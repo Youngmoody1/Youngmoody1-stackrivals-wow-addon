@@ -266,8 +266,11 @@ function UI:CreateOverlays()
   local rs = T.button(pause, "Restart", 150, 24, "frame", function() ns.App:Start(ns.App.session and ns.App.session.mode.key or "classic") end)
   rs:SetPoint("TOP", self.resumeBtn, "BOTTOM", 0, -8)
   self.restartBtn = rs
-  local qm = T.button(pause, "Quit to menu", 150, 24, "frame", function() ns.App:Quit() end)
+  local qm = T.button(pause, "Quit to menu", 150, 24, "frame", function()
+    ns.App:Quit() -- reads "Forfeit duel" in a duel: App:Quit turns it into a forfeit
+  end)
   qm:SetPoint("TOP", rs, "BOTTOM", 0, -6)
+  self.quitBtn = qm
 
   -- Game over
   local over = overlayFrame(field, 0.88)
@@ -709,6 +712,9 @@ function UI:RefreshPhase()
       or "Take your time."
     self.pauseReason:SetText(txt)
     if inCombat() then self.resumeBtn:Disable(); self.resumeBtn:SetLabel("In combat...") else self.resumeBtn:Enable(); self.resumeBtn:SetLabel("Resume") end
+    local duel = sess.duel ~= nil
+    self.restartBtn:SetShown(not duel)
+    self.quitBtn:SetLabel(duel and "Forfeit duel" or "Quit to menu")
   end
   local live = sess and (phase == "countdown" or phase == "playing")
   -- While paused (out of combat, no sheet open) we listen too, but only to take the pause key

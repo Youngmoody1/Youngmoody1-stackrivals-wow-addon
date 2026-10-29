@@ -17,6 +17,27 @@
 - Duel history and W/L/D in saved data (separate from solo records).
 - Tests: two complete simulated clients over a fake network (loss, duplicates, reordering,
   instance throttling, lockdown, offline, tampering, spoofing).
+- Fixes from an independent review of the duel code (15 findings, each with a regression test):
+  - the player who finishes second now sends their log at once, and keeps serving it for 60 s
+    even after going back to the menu (before, the rival had to ask chunk by chunk);
+  - log chunks arriving before their END are kept; missing chunks are asked for only when the
+    stream stalls, also while still playing; the log wait counts from when both runs ended;
+  - challenging an offline player cancels the challenge (it recorded a win);
+  - a "rival gone" mark clears when the rival is heard again, and a complete log always decides;
+  - challenging each other at the same moment gives one duel instead of two "busy" refusals;
+  - lobby race: the guest waits 15 s longer than the host, and a cancel crossing GO cancels cleanly;
+  - leaving after your own run ended is "no result" for you, not a forfeit loss; both forfeiting is
+    a draw;
+  - security: a withheld log is "no result" (it decided by the claimed score); a failed replay
+    check rejects the cheater's result (a loser could escape by sending a bad log); seed
+    commit-reveal so nobody can pick or grind the seed; results faster than the clock are rejected;
+  - spam: unsolicited replies are rate-limited per player and low priority; re-sent messages
+    replace each other in the queue; realm names with hyphens/spaces now match;
+  - UI: declining an invite no longer hides a running solo run; "Quit to menu" in a duel is a
+    labelled "Forfeit duel" (it left the duel stuck); a duel that starts in combat starts paused;
+    the window no longer pops up in combat with "hide in combat" on.
+  - Comm: prefix registration result checked; the server's "No player named ..." line is hidden
+    for players we just whispered and treats them as offline (API from memory, guarded).
 
 ## Unreleased (main)
 

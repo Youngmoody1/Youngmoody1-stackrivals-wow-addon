@@ -65,6 +65,7 @@ function App:Start(mode)
   if ns.Session.MODES[mode] and ns.Session.MODES[mode].duel then return end -- duels start via ns.Duel
   local d = ns.Duel and ns.Duel.current
   if d and (d.state == "playing" or d.state == "waiting") then self:Print("Finish or leave your duel first (/sr leave)."); return end
+  if ns.Duel then ns.Duel.clear() end -- a finished/cancelled duel must not cover the new run
   ns.UI:Create()
   local seed = (mode == "daily") and Session.dailySeed(self:Today()) or newSeed()
   self.session = Session.new(mode, seed, self:Today())
@@ -95,6 +96,9 @@ function App:ShowMenu()
 end
 
 function App:Quit()
+  -- quitting a running duel is a forfeit (the rival is told and wins), never a silent stop
+  local s = self.session
+  if s and s.duel and ns.Duel.busy() and s.duel == ns.Duel.current then ns.Duel.leave(); return end
   self.session = nil
   self:ShowMenu()
 end
@@ -127,7 +131,9 @@ function App:StartDuel(m)
   self.lastMode = s.mode.key
   self.inMenu = false
   if ns.UI.HideSheets then ns.UI:HideSheets() end
-  if not ns.UI.frame:IsShown() then ns.UI.frame:Show() end
+  if not ns.UI.frame:IsShown() and not (ns.UI.inCombat() and ns.db.settings.hideInCombat) then ns.UI.frame:Show() end
+  -- GO can arrive after we entered combat: never let pieces fall with the keyboard released
+  if ns.UI.inCombat() then s:pause("combat") end
   ns.UI:RefreshPhase()
 end
 

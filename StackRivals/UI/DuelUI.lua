@@ -13,8 +13,9 @@ local OUTCOME = {
 }
 local REASON = {
   checked = "Rival's game replayed to the same score on your PC (peer check).",
-  unchecked = "Rival's replay didn't arrive: result by their reported score.",
-  check_failed = "Rival's result failed the replay check: no winner recorded.",
+  unchecked = "Rival's replay didn't arrive, so their score can't be checked: no result.",
+  check_failed = "Rival's result failed the replay check on your PC: their result is rejected.",
+  you_left = "You left before the result: no result recorded for you.",
   rival_forfeited = "Your rival left the duel.",
   rival_disconnected = "Lost contact with your rival.",
   rival_offline = "Your rival went offline.",
@@ -26,6 +27,8 @@ local CANCEL = {
   rival_version = "has a different StackRivals version.", rival_timeout = "didn't answer in time.",
   rival_cancel = "cancelled the duel.", no_answer = "didn't answer.", lobby_timeout = "Nobody pressed Ready in time.",
   you_declined = "You declined.", timeout = "The invite timed out.", rival_disconnected = "Lost contact with your rival.",
+  you_cancelled = "You cancelled the duel.", rival_offline = "is offline.",
+  rival_bad_seed = "sent a seed that didn't match the invite. Duel cancelled.",
 }
 
 local function short(n) return ns.Duel.short(n) or "?" end
@@ -195,6 +198,8 @@ function UI:RefreshDuel(phase)
   local s = ns.App.session
   local inDuel = s and s.duel and s.duel == m
   if pre and not (inDuel and s:isActive()) then
+    -- the panel covers the field: never let a solo run keep falling underneath it
+    if s and not s.duel and s:isActive() then s:pause("manual") end
     o:Show()
     o.rival:SetText(short(m.rival))
     o.rules:SetText(m.ruleset.name)
@@ -299,7 +304,8 @@ function UI:CreateDuel()
   end)
   D.on("score", function() UI:RenderRival(); if UI.over:IsShown() then local m = D.current; if m then UI:ShowDuelOver(m) end end end)
   D.on("changed", function(m)
-    if m and m.state == "lobby" and UI.frame and not UI.frame:IsShown() then UI.frame:Show() end
+    if m and m.state == "lobby" and UI.frame and not UI.frame:IsShown()
+      and not (UI.inCombat() and ns.db.settings.hideInCombat) then UI.frame:Show() end
     if m and m.state == "inviting" and UI.duelSheet:IsShown() then UI.duelSheet:Hide() end
     UI:RefreshDuelSheet()
     if UI.frame then

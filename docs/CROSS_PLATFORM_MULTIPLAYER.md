@@ -30,16 +30,37 @@ addons exchange a few small messages.
 
 - **Rulesets:** `b120` is Blitz 2:00 (3 s countdown). `r180` is 3:00 with a 4 s countdown, which
   is the web 1v1 time cap and countdown (fingerprinted against `src/lib/match/rules.ts`).
-- **Seed:** `srduel-<matchId>-<nonceA><nonceB>`. The challenger and the accepter each add 8 random
-  base-36 characters, so neither can choose the pieces alone.
+- **Seed (commit-reveal):** `srduel-<matchId>-<nonceA><nonceB>`. The challenger sends only a hash
+  of nonceA in the invite; the accepter picks nonceB without knowing nonceA; the challenger reveals
+  nonceA at GO, and the accepter checks it against the hash. Neither player can choose or grind the
+  pieces, and the accepter only learns the seed when the countdown starts.
 - **Flow:** find players (one broadcast to guild/group, answers by whisper) → INV → ACC → both
   press Ready (RDY) → GO → score heartbeat every 2 s (SC) → END + input log (LOG chunks) → each side
   replays the rival's log → result → Rematch.
-- **Robustness:** every state re-sends what the rival needs. Handlers are idempotent, missing log
-  chunks are re-requested (RQ), and there are timeouts for no answer (30 s), lobby (60 s), silence
-  (warn at 20 s, gone at 35 s), the log (60 s) and the hard deadline (limit + 5 min).
-- **Safety:** messages are whisper-only during a match. Combat pauses only your own run. Nothing
-  protected is called, so nothing is blocked in combat.
+- **Robustness:** every state re-sends what the rival needs; re-sent messages replace each other in
+  the send queue instead of piling up. Handlers are idempotent, log chunks that arrive before their
+  END are kept, stalled chunks are re-requested (RQ, also while still playing), and after the result
+  each side keeps serving its END and log for 60 s, even after going back to the menu. Timeouts: no
+  answer (30 s), lobby (60 s host, 75 s guest, so the host always decides first), silence (warn at
+  20 s, gone at 35 s, cleared as soon as the rival is heard again), the log (60 s after both runs
+  ended) and the hard deadline (limit + 5 min). Players who challenge each other at the same moment
+  get one duel (the lower match id wins).
+- **Results:**
+  | Outcome | When |
+  |---|---|
+  | win / loss / draw by score | the rival's log replayed to exactly their claimed score and hash (`peer_checked`) |
+  | win | the rival's log fails the replay check (their result is rejected), or it arrived faster than the game can be played (web `faster_than_clock`, 10 s margin) |
+  | win | the rival forfeited, disconnected or went offline during play, or didn't finish by the deadline |
+  | no result | the rival's log never fully arrived: a claimed score alone never decides a winner |
+  | loss | you forfeited during play (both forfeited: draw) |
+  | no result (you) | you left after your own run ended; your result still reaches the rival |
+  | cancelled | declined, busy, offline, version mismatch, timeout, or a seed that doesn't match the invite's commitment |
+- **Safety:** messages are whisper-only during a match. Combat pauses only your own run (also when
+  GO arrives during combat). Nothing protected is called, so nothing is blocked in combat. Quitting
+  a running duel is always a labelled forfeit. Unsolicited replies (hellos, "busy") are rate-limited
+  per player and low-priority, so spam can't starve a running duel. Whispering an offline rival
+  stops at once; the server's "No player named ..." line is hidden for players we just whispered
+  (chat-filter API from memory, guarded, not yet client-verified).
 
 ### Wire protocol v1 (addon prefix `StackRivals`)
 
@@ -49,15 +70,16 @@ Plain printable ASCII, `:`-separated, at most 255 bytes, base-36 numbers.
 |---|---|---|
 | `1:HEL` | addonVersion, engineVersion | guild/party broadcast when you press *Find players* (max once per 20 s) |
 | `1:HI` | addonVersion, engineVersion, busy(0/1) | whisper reply |
-| `1:INV` | mid, ruleset, engineVersion, nonceA | challenge (re-sent every 4 s while waiting) |
+| `1:INV` | mid, ruleset, engineVersion, commitA (8 hex, FNV-1a of `srcommit-<mid>-<nonceA>`) | challenge (re-sent every 4 s while waiting) |
 | `1:ACC` | mid, nonceB | accept (re-sent in the lobby) |
-| `1:DEC` | mid, reason (`no busy combat version timeout cancel ruleset`) | decline/cancel |
-| `1:RDY` / `1:GO` / `1:PNG` | mid | ready / start (host) / keep-alive |
+| `1:DEC` | mid, reason (`no busy combat version timeout cancel ruleset`) | decline/cancel (also right after GO, if the guest never started) |
+| `1:RDY` / `1:PNG` | mid | ready / keep-alive |
+| `1:GO` | mid, nonceA | start (host); reveals nonceA; re-sent until the guest's first score arrives |
 | `1:SC` | mid, tick, score, lines, over | every 2 s while playing |
 | `1:END` | mid, ticks, score, lines, level, hash, chunkCount | when your run ends (re-sent) |
 | `1:LOG` | mid, i, n, payload | input-log chunk (≤ 200 chars) |
 | `1:RQ` | mid, i | ask again for chunk i |
-| `1:BYE` | mid, reason (`forfeit quit timeout combat`) | leave |
+| `1:BYE` | mid, reason (`forfeit` during play, `left` after your own run ended; also `quit timeout combat`) | leave |
 
 **Log payload:** for each input, the tick delta in base 36 (`0-9a-z`) followed by the action letter
 `A`–`G` (index into `left,right,rotateCW,rotateCCW,softDrop,hardDrop,hold`). That is about 3 bytes
@@ -65,7 +87,7 @@ per input, so a full 2:00 duel is roughly 1–3 KB in 5–15 chunks.
 
 ### Traffic
 
-A measured simulated 2:00 duel used **172 messages in total** (both players). That is about
+A measured simulated 2:00 duel used **147 messages in total** (both players). That is about
 0.7 messages per second per player, under Blizzard's per-prefix limit of 10 messages plus
 1 per second. Our own pacing: broadcasts get a burst of 4 and then 1 every 2 s. Whispers get a
 burst of 8 and then 2 per second, or 0.8 per second inside instances, where whispers count against
@@ -185,7 +207,9 @@ platforms, so web and WoW players get the same pieces each day.
 - The same engine (`ENGINE_VERSION` must match; parity tests keep the TS and Lua engines identical).
 - The same seed for both players, and the same time cap. Inputs are limited to 4 per tick and 80
   per second, inputs after top-out are rejected, and logs over the time cap are flagged.
-- A forfeit always loses. Equal scores are a draw (web `decideOutcome`).
+- A forfeit always loses; both forfeiting is a draw. Equal scores are a draw (web `decideOutcome`).
+- A result needs the full input log. A claimed score without a log never wins (WoW: "no result").
+- A log that fails the replay, or arrives faster than the game can be played, loses.
 - A replayed match result can't be replayed twice: the web stores `(matchId, playerRef)` as unique.
 - Free and equal on every platform: no paid advantage, and web premium never gates WoW play
   (Blizzard add-on policy).
