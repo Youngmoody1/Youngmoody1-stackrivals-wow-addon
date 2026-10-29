@@ -6,9 +6,13 @@ Built first for **World of Warcraft: Forever** (launch 4 November 2026).
 
 | Client | Status |
 |---|---|
-| WoW Forever | Release target (interface 16001). Real-client test on launch day (beta is closed). |
-| Retail (Midnight) | Listed in the TOC (120105) so it can be tested now; not yet verified in the client. |
-| Classic Era / Hardcore, TBC / Anniversary, Wrath, Cata, Mists Classic | Listed in the TOC; planned, verified one by one after Forever. |
+| WoW Forever | Release target. SIMULATED; real-client test on launch night (beta is closed). |
+| Retail (Midnight) | SIMULATED; real-client test pending. |
+| Classic Era / Hardcore | SIMULATED; real-client test pending. |
+| Anniversary, TBC/Wrath/Cata/Mists Classic | UNTESTED; planned. |
+
+Details and status definitions: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+Bugs: [GitHub issues](https://github.com/Youngmoody1/Youngmoody1-stackrivals-wow-addon/issues).
 
 Free, no ads, no payments. Pauses itself the moment you enter combat.
 

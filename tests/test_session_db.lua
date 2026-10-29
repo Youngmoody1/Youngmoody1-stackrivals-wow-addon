@@ -17,6 +17,16 @@ describe("session", function()
     run(s, 1); eq(s.phase, "playing")
     eq(s.state.piecesPlaced, 0, "countdown input ignored")
   end)
+  it("game speed is the same at 30, 60, 144 and 240 FPS (fixed 60 Hz simulation)", function()
+    for _, fps in ipairs({ 30, 60, 144, 240 }) do
+      local s = S.new("classic", "fps")
+      for _ = 1, 3 * fps do s:update(1 / fps) end -- 3 s countdown
+      local t0 = s.state.tick
+      for _ = 1, 10 * fps do s:update(1 / fps) end -- 10 s of play
+      local dt = s.state.tick - t0
+      ok(math.abs(dt - 600) <= 1, fps .. " fps -> " .. dt .. " ticks in 10 s")
+    end
+  end)
   it("a huge frame never runs more than 8 ticks (no catch-up spiral)", function()
     local s = S.new("classic", "seed-b")
     run(s, 180)

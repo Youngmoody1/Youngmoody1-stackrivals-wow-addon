@@ -25,7 +25,14 @@ local ALWAYS_PASS = { PRINTSCREEN = true }
 local PAUSE_AND_PASS = { ENTER = true, SLASH = true, ["/"] = true }
 
 local function inCombat()
-  return (InCombatLockdown and InCombatLockdown()) or (UnitAffectingCombat and UnitAffectingCombat("player"))
+  if InCombatLockdown and InCombatLockdown() then return true end
+  if UnitAffectingCombat then
+    local v = UnitAffectingCombat("player")
+    -- Modern clients (Midnight / Forever) can return "secret" values that error when tested.
+    if issecretvalue and issecretvalue(v) then return false end
+    return v and true or false
+  end
+  return false
 end
 UI.inCombat = inCombat
 

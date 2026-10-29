@@ -27,6 +27,23 @@ local function boot(saved)
   return M, ns
 end
 
+--- Boot with the API of an older client (Classic Era style): newer namespaces/methods removed.
+local function bootOldApi(saved)
+  local M = dofile(testdir .. "/wowmock.lua")
+  M.install()
+  _G.C_AddOns = nil
+  _G.GetAddOnMetadata = function(_, field) if field == "Version" then return "0.2.0-era" end end
+  M.oldChat = {}
+  _G.C_ChatInfo = {} -- exists, but without SendChatMessage / InChatMessagingLockdown
+  _G.SendChatMessage = function(msg, channel) M.oldChat[#M.oldChat + 1] = { msg, channel } end
+  _G.StackRivalsDB = saved
+  local ns = {}
+  for _, f in ipairs(tocFiles()) do assert(loadfile(root .. "/" .. f))("StackRivals", ns) end
+  M.fire("ADDON_LOADED", "StackRivals")
+  M.fire("PLAYER_LOGIN")
+  return M, ns
+end
+
 local function key(ns, k) ns.UI.keys:GetScript("OnKeyDown")(ns.UI.keys, k); ns.UI.keys:GetScript("OnKeyUp")(ns.UI.keys, k) end
 local function playFrames(M, n) M.frames_step(n) end
 -- Drop a piece at a spread-out column so scripted play doesn't simply top out.
@@ -55,6 +72,27 @@ describe("load and open", function()
     eq(ns.UI.keys._kb, false, "keyboard not captured on the menu")
     SlashCmdList.STACKRIVALS("")
     eq(StackRivalsFrame:IsShown(), false, "toggle closes")
+  end)
+end)
+
+describe("client API variants (simulated, not a real client)", function()
+  it("older-client API: metadata and chat fall back to the global functions", function()
+    local M, ns = bootOldApi(nil)
+    eq(ns.VERSION, "0.2.0-era")
+    M.inGuild = true
+    ns.App:Start("blitz"); ns.App.session:finish("time"); M.frames_step(1)
+    ns.UI.shareGuild:Click()
+    eq(#M.oldChat, 1); eq(M.oldChat[1][2], "GUILD")
+  end)
+  it("secret combat values (Midnight/Forever) never raise errors", function()
+    local M, ns = boot(nil)
+    _G.issecretvalue = function(v) return v == "SECRET" end
+    _G.UnitAffectingCombat = function() return "SECRET" end
+    ns.App:Start("classic"); M.frames_step(200)
+    eq(ns.UI.inCombat(), false)
+    M.combat = true
+    eq(ns.UI.inCombat(), true, "InCombatLockdown still decides")
+    _G.issecretvalue = nil
   end)
 end)
 

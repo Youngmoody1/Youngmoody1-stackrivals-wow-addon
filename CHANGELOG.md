@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1 — compatibility pass (not released yet)
+
+- Combat check ignores "secret" values on modern clients (Midnight/Forever) instead of risking an error.
+- Tested fallbacks for older-client APIs (global `SendChatMessage` / `GetAddOnMetadata`).
+- Verified frame-rate independence (same game speed at 30–240 FPS).
+- Docs: client compatibility matrix, release plan with fallbacks, support/bug reporting.
+
 ## 0.2.0 — quality pass (not released yet)
 
 - How to play screen on first open (and from the menu).

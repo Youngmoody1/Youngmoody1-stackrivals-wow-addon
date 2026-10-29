@@ -67,7 +67,17 @@ Records are stored on your computer and are not verified online.
 
 Free, no ads, no donations, no online accounts. Feedback and bug reports welcome in the comments.
 
+### Beta status (shown at the top of the description while the file is a Beta)
+> **Beta.** StackRivals has been tested automatically and in [Retail/Classic Era — fill in after the
+> real test]. It has **not yet run in the live WoW Forever client**, which opens on 4 November.
+> Please report anything odd in the comments.
+
+### Bug reports
+Comments here, or GitHub issues: https://github.com/Youngmoody1/Youngmoody1-stackrivals-wow-addon/issues
+— include `/sr version` and any error text.
+
 ### Version history
+- 0.2.1 – compatibility fixes for modern clients.
 - 0.2.0 – How to play, Records (top 5), pause-key resume, fit-to-screen, review fixes.
 - 0.1.0 – first playable build.
 
