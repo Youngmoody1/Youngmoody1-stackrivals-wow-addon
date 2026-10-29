@@ -80,7 +80,7 @@ function DB.sanitize(raw)
   s.sound = bool(rs.sound, s.sound)
   s.ghost = bool(rs.ghost, s.ghost)
   s.hideInCombat = bool(rs.hideInCombat, s.hideInCombat)
-  s.scale = num(rs.scale, s.scale, 0.6, 1.6)
+  s.scale = num(rs.scale, s.scale, 0.7, 1.4)
   s.minimapHide = bool(rs.minimapHide, s.minimapHide)
   s.minimapAngle = num(rs.minimapAngle, s.minimapAngle, 0, 360)
   db.settings = s
@@ -132,6 +132,7 @@ function DB.sanitize(raw)
   db.window = {
     point = str(w.point, 16), relPoint = str(w.relPoint, 16),
     x = num(w.x, nil, -10000, 10000), y = num(w.y, nil, -10000, 10000),
+    cx = num(w.cx, nil, -20000, 20000), cy = num(w.cy, nil, -20000, 20000),
   }
   db.seenIntro = bool(raw.seenIntro, false)
   db.seenHelp = bool(raw.seenHelp, false)

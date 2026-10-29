@@ -274,11 +274,18 @@ describe("0.3.0 polish", function()
     down(ns.UI.keys, "SPACE"); eq(ns.UI.keys._prop, false)
     eq(ns.App.session.phase, "countdown"); eq(ns.App.session.mode.key, "blitz")
   end)
-  it("game over: Space is a normal WoW key again after 15 s, after closing the window, and under Settings", function()
+  it("game over: Space is a normal WoW key again after 6 s, with the cursor away, after closing, and under Settings", function()
     local M, ns = boot(nil)
     ns.App:Start("blitz"); playFrames(M, 181); ns.App.session:finish("time"); playFrames(M, 63)
     eq(ns.UI.keys._kb, true)
-    playFrames(M, 16 * 60)
+    -- cursor elsewhere: Space jumps in WoW and doesn't start a run
+    M.mouseOver = false
+    local down = ns.UI.keys:GetScript("OnKeyDown")
+    down(ns.UI.keys, "SPACE"); eq(ns.UI.keys._prop, true, "passed to WoW"); eq(ns.App.session.phase, "over")
+    M.mouseOver = nil
+    playFrames(M, 4 * 60)
+    eq(ns.UI.keys._kb, true, "still listening at 5 s")
+    playFrames(M, 2 * 60)
     eq(ns.UI.keys._kb, false, "stopped listening after the window")
     -- reopen: no listening
     ns.App:Start("blitz"); playFrames(M, 181); ns.App.session:finish("time"); playFrames(M, 63)

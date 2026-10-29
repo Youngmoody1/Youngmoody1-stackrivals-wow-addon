@@ -7,6 +7,10 @@ website's brand mark (src/components/brand/BrandMark.tsx in the web project: Mar
     mark.tga       128x128  full mark (blades, two horizontal cuts, steel diamond)  - header
     marksmall.tga   64x64   simplified mark (thicker blades, one gap, no cuts)       - minimap, <32 px
     icon.tga        64x64   simplified mark on the dark rounded tile (web favicon)   - AddOn list
+    glow.tga       256x256  soft red radial glow (alpha only)                         - window halo
+
+Transparent pixels get the colour of their nearest opaque neighbour ("bleed"), so bilinear
+filtering at small sizes never pulls black into the red edges.
 """
 import sys
 from PIL import Image, ImageDraw
@@ -66,7 +70,47 @@ def compose(size, layers):
     out = Image.new("RGBA", layers[0][0].size, (0, 0, 0, 0))
     for mask, rgb in layers:
         out.paste(Image.new("RGBA", out.size, rgb + (255,)), (0, 0), mask)
-    return out.resize((size, size), Image.LANCZOS)
+    return bleed(out.resize((size, size), Image.LANCZOS))
+
+
+def bleed(img, passes=8):
+    """Give fully transparent pixels the RGB of an opaque neighbour (alpha unchanged)."""
+    w, h = img.size
+    px = img.load()
+    known = [[px[x, y][3] > 0 for y in range(h)] for x in range(w)]
+    for _ in range(passes):
+        fill = []
+        for x in range(w):
+            for y in range(h):
+                if known[x][y]:
+                    continue
+                acc, n = [0, 0, 0], 0
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < w and 0 <= ny < h and known[nx][ny]:
+                        r, g, b, _ = px[nx, ny]
+                        acc[0] += r; acc[1] += g; acc[2] += b; n += 1
+                if n:
+                    fill.append((x, y, tuple(c // n for c in acc)))
+        if not fill:
+            break
+        for x, y, rgb in fill:
+            px[x, y] = rgb + (0,)
+            known[x][y] = True
+    return img
+
+
+def glow(size):
+    """Radial falloff, solid red RGB everywhere; only alpha varies (smooth, no banding)."""
+    img = Image.new("RGBA", (size, size), RED + (0,))
+    px = img.load()
+    c = (size - 1) / 2.0
+    for y in range(size):
+        for x in range(size):
+            d = (((x - c) ** 2 + (y - c) ** 2) ** 0.5) / c
+            a = max(0.0, 1.0 - d)
+            px[x, y] = RED + (int(round(255 * a * a)),)
+    return img
 
 
 def save(img, path):
@@ -79,4 +123,5 @@ if __name__ == "__main__":
     save(small_mark(64), f"{out}/marksmall.tga")
     # favicon.svg: <rect rx=12 fill=#0b0c10/> + MarkESmall at translate(6 6) scale(0.8125)
     save(small_mark(64, ox=6, oy=6, s=0.8125, tile=True), f"{out}/icon.tga")
+    save(glow(256), f"{out}/glow.tga")
     print("ok")
