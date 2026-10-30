@@ -74,21 +74,28 @@ local function makeTile(parent, size)
   b.manaTrack:SetPoint("BOTTOMLEFT", 1, 1); b.manaTrack:SetPoint("BOTTOMRIGHT", -1, 1); b.manaTrack:SetHeight(2)
   b.manaFill = T.tex(b, "OVERLAY", C.red, 1, 2)
   b.manaFill:SetPoint("BOTTOMLEFT", 1, 1); b.manaFill:SetHeight(2); b.manaFill:SetWidth(1)
-  b.key = T.display(b, SZ.label, C.paper, "OUTLINE"); b.key:SetPoint("TOPLEFT", 3, -2)
-  b.cost = T.display(b, SZ.label, C.paper, "OUTLINE"); b.cost:SetPoint("BOTTOMRIGHT", -3, 4)
+  b.key = T.display(b, SZ.small, C.paper, "OUTLINE"); b.key:SetPoint("TOPLEFT", 3, -2)
+  -- mana cost on a dark plate, bottom right (readable on any icon)
+  b.costBg = T.tex(b, "ARTWORK", C.ink, 0.85, 7); b.costBg:SetSize(15, 13); b.costBg:SetPoint("BOTTOMRIGHT", -1, 3)
+  b.cost = T.display(b, SZ.small, C.paper, "OUTLINE", "OVERLAY"); b.cost:SetPoint("CENTER", b.costBg, "CENTER", 0, 0)
+  -- cooldown seconds in the middle while the curtain is down
+  b.cdText = T.display(b, SZ.big, C.paper, "OUTLINE", "OVERLAY"); b.cdText:SetPoint("CENTER", 0, 1)
   b.size = size
   b.pop = T.pulseAnim(b, 1.15, 0.24) -- "ready" bump when it becomes castable, and on cast
   return b
 end
 
-local function setTileEdge(b, c, a)
-  for _, l in ipairs(b.edge) do l:SetColorTexture(c[1], c[2], c[3], a or 1) end
+local function setTileEdge(b, c, a, thick)
+  for i, l in ipairs(b.edge) do
+    l:SetColorTexture(c[1], c[2], c[3], a or 1)
+    if i <= 2 then l:SetHeight(thick or 1) else l:SetWidth(thick or 1) end
+  end
 end
 
 local function setTileSpell(b, spell)
   b.spell = spell
   b.icon:SetTexture(ICON .. spell)
-  b.cost:SetText(S.INFO[spell].cost)
+  b.cost:SetText(tostring(S.INFO[spell].cost))
   local c = tone(spell)
   b.manaFill:SetColorTexture(c[1], c[2], c[3], 1)
 end
@@ -108,15 +115,15 @@ function UI:CreateSpell()
   self.spellBox = box
   local div = T.tex(box, "ARTWORK", C.line, 1); div:SetPoint("TOPLEFT", 10, 0); div:SetPoint("TOPRIGHT", -10, 0); div:SetHeight(1)
   local ml = T.label(box, "MANA"); ml:SetPoint("TOPLEFT", 10, -9)
-  self.manaText = T.display(box, SZ.small, C.paper); self.manaText:SetPoint("TOPRIGHT", -10, -8); self.manaText:SetJustifyH("RIGHT")
+  self.manaText = T.display(box, SZ.big, C.paper); self.manaText:SetPoint("TOPRIGHT", -10, -6); self.manaText:SetJustifyH("RIGHT")
   -- mana bar: 20 segments in 4 groups of 5 (whole units, crisp at any scale)
   self.manaSegs = {}
   local segW, gap = 3, 1
   for i = 1, S.MANA_MAX do
     local g = math.floor((i - 1) / 5)
     local seg = T.tex(box, "ARTWORK", C.line, 1)
-    seg:SetSize(segW, 6)
-    seg:SetPoint("TOPLEFT", 10 + (i - 1) * (segW + gap) + g * 2, -24)
+    seg:SetSize(segW, 8)
+    seg:SetPoint("TOPLEFT", 10 + (i - 1) * (segW + gap) + g * 2, -25)
     self.manaSegs[i] = seg
   end
   self.spellTiles = {}
@@ -196,6 +203,10 @@ function UI:CreateSpell()
   self.spellToastAnim = T.popAnim(toast, 1.15, 0.9, 0.4)
   toast:SetAlpha(0)
   self.spellToastBox = toast
+  -- incoming spells (not landed yet): a steel bar beside the board, 2 rows per garbage, and a chip
+  local ib = T.tex(F, "ARTWORK", C.steel, 1)
+  ib:SetPoint("BOTTOMRIGHT", field, "BOTTOMLEFT", -4, 0); ib:SetWidth(4); ib:SetHeight(1); ib:Hide()
+  self.incomingBar = ib
   -- NEXT panel note while Blackout hides it
   self.blackoutText = T.display(self.nextPanel, SZ.small, C.steel); self.blackoutText:SetPoint("TOP", 0, -50)
   self.blackoutText:Hide()
@@ -226,6 +237,7 @@ function UI:SetSpellLayout(on, remote)
     self.nextPanel:SetHeight(self.field:GetHeight())
     for i = 3, 5 do self.nextPreviews[i]:Show() end
     self.bombTarget:Hide(); self.spellTint:SetAlpha(0); self.blackoutText:Hide()
+    self.incomingBar:Hide(); self.incomingRows = 0
     self.nextPreviews[1]:Show(); self.nextPreviews[2]:Show()
   end
 end
@@ -257,7 +269,7 @@ function UI:RenderSpell(sess)
   -- mana
   if self.manaText._n ~= me.mana then
     self.manaText._n = me.mana
-    self.manaText:SetText(me.mana .. " / " .. S.MANA_MAX)
+    self.manaText:SetText(me.mana .. "/" .. S.MANA_MAX)
     for i, seg in ipairs(self.manaSegs) do
       local c = (i <= me.mana) and C.red or C.line
       seg:SetColorTexture(c[1], c[2], c[3], 1)
@@ -276,22 +288,48 @@ function UI:RenderSpell(sess)
       if ok and t.ok == false then t.pop:Stop(); t.pop:Play() end
       t.ok = ok
       local c = tone(spell)
-      setTileEdge(t, ok and c or C.line, 1)
+      setTileEdge(t, ok and c or C.line, 1, ok and 2 or 1) -- castable: a 2-unit edge in the spell's colour
       t.icon:SetDesaturated(not enough)
       t.icon:SetAlpha(enough and 1 or 0.45)
     end
-    if t.enough ~= enough then t.enough = enough; t.icon:SetDesaturated(not enough); t.icon:SetAlpha(enough and 1 or 0.45) end
+    if t.enough ~= enough then
+      t.enough = enough; t.icon:SetDesaturated(not enough); t.icon:SetAlpha(enough and 1 or 0.45)
+      local cc = enough and C.paper or C.label
+      t.cost:SetTextColor(cc[1], cc[2], cc[3])
+    end
     local frac = math.min(1, me.mana / S.INFO[spell].cost)
     local w = math.max(1, (t.size - 2) * frac)
     if t.manaW ~= w then t.manaW = w; t.manaFill:SetWidth(w) end
     if cdLeft > 0 and enough then
       t.cd:SetHeight(math.max(1, (t.size - 2) * cdLeft / S.CAST_COOLDOWN_TICKS)); t.cd:Show()
+      local tenth = math.ceil(cdLeft / 6) -- tenths of a second
+      if t.cdText._n ~= tenth then t.cdText._n = tenth; t.cdText:SetText(string.format("%.1f", tenth / 10)) end
+      t.cdText:Show()
     else
-      t.cd:Hide()
+      t.cd:Hide(); t.cdText:Hide()
     end
   end
   -- my board: chips, tint, blackout, bomb target
   local chips = chipText(me, "  ")
+  -- spells on their way to you: "INCOMING GARBAGE 1.2s" and the bar beside the board
+  local pend = sp.pendingMe
+  local now = me.game.tick
+  local nextInc, garbageRows = nil, 0
+  for _, p in ipairs(pend) do
+    if p.at >= now then
+      if not nextInc or p.at < nextInc.at then nextInc = p end
+      if p.spell == "garbage" then garbageRows = garbageRows + 2 end
+    end
+  end
+  if nextInc then
+    local tenth = math.max(0, math.ceil((nextInc.at - now) / 6))
+    local inc = string.format("|cff9bd0ffINCOMING %s %.1fs|r", string.upper(S.INFO[nextInc.spell].name), tenth / 10)
+    chips = (chips ~= "" and (chips .. "  ") or "") .. inc
+  end
+  if self.incomingRows ~= garbageRows then
+    self.incomingRows = garbageRows
+    if garbageRows > 0 then self.incomingBar:SetHeight(garbageRows * 19); self.incomingBar:Show() else self.incomingBar:Hide() end
+  end
   if self.spellChips._s ~= chips then self.spellChips._s = chips; self.spellChips:SetText(chips) end
   local tk = me.game.tick
   local tintA, tc = 0, nil
@@ -377,11 +415,12 @@ local FX = {
   speedUp = { C.red, "all" }, blackout = { C.steel, "all" }, scramble = { C.steel, "top" },
 }
 
-function UI:SpellFlash(spell, bombCells)
+function UI:SpellFlash(spell, bombCells, fromRival)
   local f = FX[spell]
   if not f then return end
   local tex, field = self.spellFxTex, self.field
-  local c = f[1]
+  -- your own spells flash in your colour (red), the rival's in theirs (steel); garbage stays grey
+  local c = (spell == "garbage") and f[1] or (fromRival and C.steel or f[1])
   tex:SetColorTexture(c[1], c[2], c[3], 1)
   tex:ClearAllPoints()
   local cs = 19
@@ -429,7 +468,7 @@ function UI:OnSpellEvent(ev)
     local who, h = ev.a, ev.b
     if who == "me" then
       local cells = (h.spell == "bomb" and sess and sess.spell) and sess.spell.lastBombCells or nil
-      self:SpellFlash(h.spell, cells)
+      self:SpellFlash(h.spell, cells, not h.fromSelf)
       if h.spell == "garbage" or h.spell == "bomb" then self.thump:Stop(); self.thump:Play() end
     end
   elseif k == "castfail" then

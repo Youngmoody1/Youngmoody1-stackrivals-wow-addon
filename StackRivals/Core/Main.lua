@@ -133,6 +133,13 @@ function App:Resume()
   if not s then return end
   if ns.UI.inCombat() then self:Print("Finish the fight first."); return end
   if ns.UI.settings and ns.UI.settings:IsShown() then ns.UI:ShowSettings(false) end
+  -- duel: if the rival is still paused, I'm "ready" and wait for them (both go on together)
+  local m = s.duel
+  if m and m.rivalPaused and m.state == "playing" and s.phase == "paused" then
+    s.pauseReason = "rival"
+    ns.UI:RefreshPhase()
+    return
+  end
   if s:resume() then ns.UI:RefreshPhase() end
 end
 

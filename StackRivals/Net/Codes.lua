@@ -202,6 +202,8 @@ function C.result(r)
   assert(link == "-" or link:match("^[A-Z0-9]+$") and #link >= 6 and #link <= 12, "link")
   local player = C.hex(r.player)
   assert(C.nameOk(r.player), "player")
+  -- SR1 carries classic move logs only (A..G). A Spell Battle log (casts) is never an SR1 code.
+  for i = 2, #r.log, 2 do assert(r.log[i] >= 0 and r.log[i] <= 6, "SR1 is for classic logs only") end
   return finish({
     "SR1R", r.platform, r.ruleset, "e" .. (r.engine or ns.Engine.ENGINE_VERSION), r.seed,
     b36(r.ticks), b36(r.score), b36(r.lines), b36(r.level), r.hash:lower(), player, link, P().packLog(r.log),
@@ -229,6 +231,8 @@ function C.parseResult(code)
   if not player or not C.nameOk(player) then return nil, "player" end
   local link = f[12]
   if not (link == "-" or (link:match("^[A-Z0-9]+$") and #link >= 6 and #link <= 12)) then return nil, "link" end
+  -- moves only (A..G), exactly like the TypeScript reference: cast letters are not SR1
+  if not f[13]:match("^[0-9a-zA-G]*$") then return nil, "log" end
   local log = P().unpackLog(f[13])
   if not log then return nil, "log" end
   for i = 1, #log, 2 do if log[i] > ticks then return nil, "log" end end

@@ -782,6 +782,9 @@ function UI:OnUpdate(elapsed)
   end
   if self.goUntil and now >= self.goUntil then self.goUntil = nil; self.countBox:Hide() end
   if self.forfeitArmedAt and now - self.forfeitArmedAt >= 3 then self.forfeitArmedAt = nil; self:RefreshPhase() end
+  if sess and sess.duel and sess.phase == "paused" and now - (self.pauseTextAt or 0) >= 1 then
+    self.pauseTextAt = now; self:RefreshPhase() -- the duel's pause-time counter
+  end
   if self.menu:IsShown() then
     self.menuClock = (self.menuClock or 0) + elapsed
     if self.menuClock >= 20 then self.menuClock = 0; self:RefreshMenu() end -- daily countdown
@@ -954,8 +957,20 @@ function UI:RefreshPhase()
       or (r == "settings") and "Settings were open."
       or (r == "loading") and "Paused for the loading screen."
       or "Take your time."
+    local m = sess.duel
+    local waitRival = m and r == "rival"
+    if waitRival then
+      local who = ns.Duel.short(m.rival) or "Your rival"
+      txt = m.rivalPaused and (who .. " is paused" .. (m.rivalPauseReason == "combat" and " (combat)" or "") .. ". The duel waits for both of you.")
+        or "Starting again..."
+    elseif m and m.state == "playing" then
+      local left = math.max(0, math.floor(ns.Duel.PAUSE_BUDGET - (m.myPaused or 0)))
+      txt = txt .. "\nYour rival waits too. Pause left: " .. left .. " s."
+    end
     self.pauseReason:SetText(txt)
-    if inCombat() then self.resumeBtn:Disable(); self.resumeBtn:SetLabel("In combat...") else self.resumeBtn:Enable(); self.resumeBtn:SetLabel("Resume") end
+    if inCombat() then self.resumeBtn:Disable(); self.resumeBtn:SetLabel("In combat...")
+    elseif waitRival then self.resumeBtn:Disable(); self.resumeBtn:SetLabel("Waiting for rival...")
+    else self.resumeBtn:Enable(); self.resumeBtn:SetLabel("Resume") end
     local duel = sess.duel ~= nil
     self.restartBtn:SetShown(not duel)
     if not (self.forfeitArmedAt and GetTime() - self.forfeitArmedAt < 3) then

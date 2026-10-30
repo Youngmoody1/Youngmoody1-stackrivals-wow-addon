@@ -30,8 +30,16 @@
   Forged, unpaid and ignored spells are caught (tests for each). At most 4 inputs per tick (also
   classic), so a frame hitch never looks "inhuman". A vs Bot result is never lost when the window
   closes during the bot's finish. Fewer allocations per frame in the spell HUD.
-- Tests: 99 new (66 parity + rules, 15 vs Bot in the WoW mock, 18 two-client duels). All 274
-  earlier tests and the 77 SR1 vectors unchanged.
+- Quality pass:
+  - **Duel fairness (0.5 on both sides).** A pause (combat, chat, Esc, loading) pauses both runs, and both resume together. Each player has a 60 s pause budget per duel; past it the duel is forfeited, never voided. A clock check catches a client that pauses silently. A rival who never sends their log, while their own claim is lower, loses (`rival_no_log`).
+  - **Results.** Both PCs confirm the result (`VER`); a disagreement is "disputed" and not counted. A spell held back more than 8 s is caught (`late_landing`).
+  - **Spell edge cases.** 15 scripted scenarios, compared with the web step by step.
+  - **Web bugs.** The two web live-loop findings are reproducible with only the web's code (`tools/parity/web-live-loop-repro.ts`).
+  - **SR1** never carries a Spell Battle log.
+  - **Spell HUD.** Bigger mana value and taller bar; cost on a plate; cooldown seconds on the tiles; castable spells get a 2-unit edge; an incoming-spell chip and a bar beside the board; your spells flash red, the rival's steel.
+  - **Docs.** What peer-checking proves and doesn't; test procedures A and B (`docs/SPELL_BATTLE_TEST.md`).
+- Tests: 121 new (82 parity + rules + scenarios, 15 vs Bot in the WoW mock, 24 two-client duels, plus
+  updated duel tests for the new pause and confirmation rules). All earlier tests and the 77 SR1 vectors pass.
 
 ## 0.4.0 — multiplayer preview (branch `multiplayer`, not released)
 

@@ -21,6 +21,13 @@ local REASON = {
   rival_offline = "Your rival went offline.",
   you_forfeited = "You left the duel.",
   timeout = "Your rival didn't finish in time.",
+  rival_no_log = "Your rival's replay never arrived, and by their own claim they scored less.",
+  you_pause_limit = "You paused for more than a minute in total: the duel is forfeited.",
+}
+local AGREEMENT = {
+  agreed = "Confirmed by both PCs.",
+  disputed = "DISPUTED: the two PCs don't agree. Not counted.",
+  unconfirmed = "Your rival's PC didn't confirm (older version or gone).",
 }
 local CANCEL = {
   rival_no = "declined your challenge.", rival_busy = "is busy in another duel.", rival_combat = "is in combat right now.",
@@ -229,7 +236,7 @@ function UI:CreateDuelOverlays()
   end)
   o.cancel:SetPoint("TOP", o.ready, "BOTTOM", 0, -10)
   o.hint = T.text(o, SZ.label, C.label); o.hint:SetPoint("BOTTOM", 0, 14); o.hint:SetWidth(w - 80)
-  o.hint:SetText("The countdown starts when both are ready. Combat pauses only your own run.")
+  o.hint:SetText("The countdown starts when both are ready. A pause (combat, chat) pauses both runs: at most 60 s in total each.")
   o.fade = T.fadeInAnim(o, 0.2)
 
   -- rival panel under NEXT (only during a duel; NEXT shortens to make room)
@@ -353,11 +360,19 @@ function UI:ShowDuelOver(m)
     self.overBadge:SetText(short(m.rival) .. ": " .. T.commas(m.theirScore or 0))
     self.overBadge:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
     local note = REASON[m.endReason] or ""
+    if m.endReason == "check_failed" and m.check and m.check.reasons and m.check.reasons[1] == "pause_limit" then
+      note = "Your rival's game took far longer than its time plus the allowed pauses: rejected."
+    end
     if m.spell and m.endReason == "checked" then
       note = "Both games replayed together on your PC (peer check)."
       if m.spell.diverged then note = note .. " A spell reached a board late, so the replay differs from what you saw." end
     elseif m.spell and m.endReason == "check_failed" then
       note = "Your rival's spells or moves failed the replay check: their result is rejected."
+    end
+    note = note .. "\n" .. (AGREEMENT[m.agreement] or "Confirming with your rival...")
+    if m.agreement == "disputed" then
+      self.overTitle:SetText("DISPUTED")
+      self.overTitle:SetTextColor(C.label[1], C.label[2], C.label[3])
     end
     self.overDetail:SetText(note)
     self.againBtn:SetLabel("Rematch")

@@ -25,6 +25,12 @@
                                                     (an accepted send is never proof of delivery)
     1:SP:<mid>:<seq>:<tick36>:<spell>               Spell Battle (0.5+): I cast a spell on you at my tick;
                                                     it lands on your board at tick + 90 (Spells.DELIVERY_TICKS)
+    1:PSE:<mid>:<n>:<reason>                        (0.5+) my run is paused (pause #n: combat, chat, ...):
+                                                    yours pauses too; repeated while it lasts
+    1:RSM:<mid>:<n>                                 (0.5+) I'm ready again after pause #n (both resume together)
+    1:VER:<mid>:<w|l|d|v>:<my36>:<your36>:<check>   (0.5+) my final verdict, so both PCs can confirm the same
+                                                    result; check = 1 if your game passed my replay check
+  Older clients ignore kinds they don't know (decode -> "kind"), so these never break a 0.4 duel.
 
   Spell Battle (ruleset s180) uses the same flow; only clients 0.5+ know s180, SP and the cast
   letters in the log (H..P = cast codes 100..108). Classic duels (b120 / r180) are unchanged, so
@@ -115,8 +121,9 @@ end
 
 local SPEC = {
   HEL = 2, HI = 3, INV = 4, ACC = 2, DEC = 2, RDY = 1, GO = 2, PNG = 1, SC = 5, END = 7, LOG = 4, BYE = 2, RQ = 2, FIN = 1,
-  SP = 4,
+  SP = 4, PSE = 3, RSM = 2, VER = 5,
 }
+P.PAUSE_REASONS = { combat = true, chat = true, manual = true, hidden = true, loading = true, settings = true, restored = true }
 local OPTIONAL = { RDY = 1, GO = 1 } -- extra trailing fields a kind may carry (newer clients)
 
 --- Parse and validate. Returns a table {kind=..., ...} or nil, reason.
@@ -161,6 +168,16 @@ function P.decode(s)
       if not (ns.Spells and ns.Spells.decodeLoadout(f[4])) then return nil, "bad" end
       m.loadout = f[4]
     end
+  elseif kind == "PSE" then
+    if not isMid(f[3]) or not isInt(f[4], 1, 999) or not P.PAUSE_REASONS[f[5]] then return nil, "bad" end
+    m.mid, m.n, m.reason = f[3], tonumber(f[4]), f[5]
+  elseif kind == "RSM" then
+    if not isMid(f[3]) or not isInt(f[4], 0, 999) then return nil, "bad" end
+    m.mid, m.n = f[3], tonumber(f[4])
+  elseif kind == "VER" then
+    local a, b = P.unb36(f[5]), P.unb36(f[6])
+    if not isMid(f[3]) or not (f[4] == "w" or f[4] == "l" or f[4] == "d" or f[4] == "v") or not a or not b or (f[7] ~= "0" and f[7] ~= "1") then return nil, "bad" end
+    m.mid, m.verdict, m.mine, m.yours, m.check = f[3], f[4], a, b, f[7] == "1"
   elseif kind == "SP" then
     local t, sp = P.unb36(f[5]), tonumber(f[6])
     if not isMid(f[3]) or not isInt(f[4], 1, 9999) or not t or not isInt(f[6], 0, 8) then return nil, "bad" end

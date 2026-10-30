@@ -149,6 +149,7 @@ function DB.sanitize(raw)
   db.duels = {
     wins = math.floor(num(rdu.wins, 0, 0, 1e9)), losses = math.floor(num(rdu.losses, 0, 0, 1e9)),
     draws = math.floor(num(rdu.draws, 0, 0, 1e9)), voids = math.floor(num(rdu.voids, 0, 0, 1e9)),
+    disputes = math.floor(num(rdu.disputes, 0, 0, 1e9)),
     history = {},
   }
   if type(rdu.history) == "table" then
@@ -327,8 +328,22 @@ function DB.recordDuel(db, m, today)
   elseif res == "loss" then d.losses = d.losses + 1
   elseif res == "draw" then d.draws = d.draws + 1
   else d.voids = d.voids + 1 end
-  table.insert(d.history, 1, { rival = m.rival, me = m.myScore or 0, them = m.theirScore or 0, res = res, how = m.endReason or "", rs = m.rulesetId, d = today })
+  local entry = { rival = m.rival, me = m.myScore or 0, them = m.theirScore or 0, res = res, how = m.endReason or "", rs = m.rulesetId, d = today }
+  table.insert(d.history, 1, entry)
   while #d.history > DB.DUEL_HISTORY do table.remove(d.history) end
+  return entry
+end
+
+--- The two PCs disagree about a duel's result: it no longer counts as a win, loss or draw.
+function DB.disputeDuel(db, m)
+  local d = db.duels
+  local res = m.outcome or "void"
+  if res == "win" then d.wins = math.max(0, d.wins - 1)
+  elseif res == "loss" then d.losses = math.max(0, d.losses - 1)
+  elseif res == "draw" then d.draws = math.max(0, d.draws - 1)
+  else d.voids = math.max(0, d.voids - 1) end
+  d.disputes = (d.disputes or 0) + 1
+  if m.historyRef then m.historyRef.res = "disputed" end
 end
 
 function DB.resetRecords(db)

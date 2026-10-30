@@ -175,6 +175,52 @@ describe("verifySpellMatch: tampered logs get the web's verdict", function()
   end
 end)
 
+describe("spell edge cases, step by step against the web (tools/parity/gen-spell-scenarios.ts)", function()
+  local sfx = dofile(os.getenv("SR_SPELL_SCENARIOS") or (testdir .. "/fixtures/spell_scenarios.lua"))
+  for _, sc in ipairs(sfx.scenarios) do
+    it(sc.name, function()
+      local sides = { S.createSide(sc.seed, sc.loadouts[1]), S.createSide(sc.seed, sc.loadouts[2]) }
+      local pending = { {}, {} }
+      local function recv(i)
+        local t, keep, due = sides[i].game.tick, {}, {}
+        for _, x in ipairs(pending[i]) do if x.at <= t then due[#due + 1] = x else keep[#keep + 1] = x end end
+        pending[i] = keep
+        for _, inc in ipairs(due) do S.receive(sides[i], inc) end
+      end
+      local function tick(i) recv(i); S.stepSide(sides[i]) end
+      for k, op in ipairs(sc.ops) do
+        local kind, a, b = op[1], op[2], op[3]
+        if kind == "mana" then sides[a + 1].mana = b
+        elseif kind == "board" then
+          local g = sides[a + 1].game
+          local w, h = g.config.width, g.config.height + g.config.hiddenRows
+          for r, row in ipairs(b) do
+            local y = h - #b + r - 1
+            for x = 0, w - 1 do g.board[y * w + x + 1] = (row:sub(x + 1, x + 1) == "X") and 8 or 0 end
+          end
+        elseif kind == "code" then
+          local other = 2 - a
+          S.applyCode(sides[a + 1], b, function(inc) local q = pending[other]; q[#q + 1] = inc end)
+        elseif kind == "step" then for _ = 1, b do tick(a + 1) end
+        elseif kind == "both" then for _ = 1, a do tick(1); tick(2) end
+        end
+        for i = 1, 2 do
+          local w, s = sc.after[k][i], sides[i]
+          local inv = {}
+          for _, c in ipairs(s.invalidCasts) do inv[#inv + 1] = c.reason end
+          local label = string.format("step %d (%s) side %s", k, kind, i == 1 and "A" or "B")
+          eq(E.hashState(s.game), w.hash, label .. " board")
+          eq(s.mana, w.mana, label .. " mana"); eq(s.game.gameOver, w.over, label .. " game over")
+          eq(s.freezeUntil, w.freeze, label .. " freeze"); eq(s.speedUntil, w.speed, label .. " speed")
+          eq(s.blackoutUntil, w.blackout, label .. " blackout"); eq(s.game.queue[1], w.next, label .. " next")
+          eq(#s.casts, w.casts, label .. " casts"); eq(table.concat(inv, ","), w.invalid, label .. " refused")
+          eq(#s.log / 2, w.logLen, label .. " log")
+        end
+      end
+    end)
+  end
+end)
+
 describe("spell rules (ported from the web's spells.test.ts behaviour)", function()
   local function sideWithMana(seed, loadout, mana)
     local s = S.createSide(seed, loadout or S.DEFAULT_LOADOUT)
@@ -237,6 +283,13 @@ describe("spell rules (ported from the web's spells.test.ts behaviour)", functio
     local t = sideWithMana("c5")
     S.receive(t, { spell = "speedUp", at = 0, castTick = 0 })
     eq(S.gravityOf(t), "double"); eq(t.speedUntil, 480)
+  end)
+  it("outcome: higher score wins, equal is a draw, a forfeit loses (both forfeited: by score, like the web)", function()
+    eq(select(1, S.decideOutcome({ score = 10 }, { score = 5 })), "win")
+    eq(select(1, S.decideOutcome({ score = 5 }, { score = 10 })), "loss")
+    local a, b = S.decideOutcome({ score = 7 }, { score = 7 }); eq(a, "draw"); eq(b, "draw")
+    eq(select(1, S.decideOutcome({ score = 99, forfeited = true }, { score = 1 })), "loss")
+    eq(select(1, S.decideOutcome({ score = 1, forfeited = true }, { score = 99, forfeited = true })), "loss")
   end)
   it("botMatchDecided only when the bot is out, the player is not, and the player leads", function()
     ok(S.botMatchDecided({ score = 10, gameOver = false }, { score = 5, gameOver = true }))

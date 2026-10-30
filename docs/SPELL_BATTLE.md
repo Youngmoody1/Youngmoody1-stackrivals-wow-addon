@@ -147,19 +147,60 @@ labelled **peer-checked**, never "verified".
 - **Cast for free** (log and send a spell without the mana): caught.
 - **Ignore your spells:** caught.
 
+**Pauses (combat, chat, Esc, a closed window, a loading screen): 0.5+ on both sides.**
+
+- **A pause pauses both runs.** Your client pauses itself (safety first) and tells the rival (`PSE`, repeated while it lasts); the rival's run pauses too ("<rival> is paused (combat). The duel waits for both of you.").
+- **Both resume together.** The rival can't resume alone: their button says "Waiting for rival…". When you press Resume while your rival is still paused, you become "ready" and wait (`RSM`). The last one to be ready starts both runs again, with the usual 2 s countdown.
+- **Pause budget: 60 s in total per player and duel.** The pause screen counts it down. Past it, the duel is **forfeited**, not voided. A "no result" would let a losing player escape by pulling a mob.
+- **Clock check against clients that pause without telling.** A rival whose run takes longer than its ticks + the allowed pauses + 25 s is rejected (`pause_limit`). That covers 60 s, your own pauses (they waited for you), 4 s per pause and 25 s of slack. Your own frozen time (a loading screen) is added, so it's never held against them.
+- **Spells and pauses.** Spells land by each player's own ticks, and the replay uses the real landings, so a pause never changes a board. It only makes the two players' clocks drift apart.
+- **Score-race duels** use the same rules when both players have 0.5. A 0.4 rival ignores `PSE` / `RSM`: it keeps the 0.4 rule (only your own run pauses), and your own 60 s budget still applies.
+
+**Leaving and disconnecting.**
+
+- **Leaving or going silent for 35 s during play** = your rival wins (as before).
+- **Your run ended, but your log never arrived** (60 s):
+  - if your own claimed score is lower than the rival's checked score, **the rival wins** (`rival_no_log`): hiding a lost game's log can't turn it into "no result";
+  - otherwise **no result**, because a claim alone never decides a winner.
+
+**Both PCs confirm the result (`VER`).** After the result, each PC sends its verdict: win / loss / draw / void, both scores, and whether the rival passed the replay check.
+
+- **Same outcome mirrored and the same two scores:** "Confirmed by both PCs".
+- **Anything else: "DISPUTED".** The duel is moved out of won / lost / drawn into a separate "disputed" count, and the history says so. One PC's opinion is never a counted win.
+- **No verdict within 30 s** (a 0.4 rival, or gone): "unconfirmed". The local peer-checked result stands, labelled as such.
+
+**What peer-checking proves, and what it doesn't.**
+
+| Proven (on your PC, from the rival's log and landings) | Not proven |
+|---|---|
+| Their game is a legal StackRivals game for this seed: every move and cast follows the web's rules (engine replay, `verifySpellMatch`) | That a human played it (a bot inside a modified client plays legally too) |
+| Their score is exactly what their inputs give; an inflated claim is caught | That the two PCs are honest: a modified client can claim anything about *your* game. That's why both verdicts must match, or the duel is "disputed" |
+| Every spell they sent you was a cast they could afford, in their loadout, at its tick | When a spell really reached them: they report their own landings. A hold-back of more than 8 s is caught; a shorter one is not |
+| They didn't take much more time than the clock allows (pause limit), nor less (`faster_than_clock`) | Anything about the WoW account or character; nothing is sent to a server |
+| Both PCs computed the same scores ("Confirmed by both PCs") | A server-verified result: only the web server can give that. Duel results stay "peer-checked" |
+
+**Unique IDs and sequences.**
+
+- Every cast has a per-match sequence number (`seq`). Repeats are dropped by it.
+- A landing names its cast by cast tick + spell. That is unique, because the cooldown allows one cast per 3 s.
+- Pauses are numbered (`n`), so a late `PSE` from an old pause is ignored.
+- The landings in the log act as the receiver's acknowledgement of every spell. There is no separate ACK message: the result doesn't need one, and it would double the traffic.
+
 **Known limits:**
 
-- **Delayed landing.** A modified client could still hold an incoming spell for a while before applying it, because it reports its own landings. Holding it for good is caught, and so is landing it early; a short delay is not.
+- **Delayed landing.** A modified client could hold an incoming spell for up to about 8 s (latency + a lost first copy) before applying it. Longer is caught (`late_landing`), so is never applying it (`spells_not_applied`, more than 1) and so is landing it early (`bad_landing`).
 - **Counter-picking.** The rival's loadout is sent at Ready. An honest client doesn't show it before GO; a modified client could read it and pick spells against it. The effect is small, because spells are generic.
 - **Version check.** A Spell Battle challenge is refused before it is sent only when the rival's version is known from Find players (kept for 2 minutes). Otherwise a 0.4 client simply never answers.
+- **Disputes** depend on both PCs reporting. A cheater's PC can always say "I won", so an honest player can't get a *counted* win against a modified client, only a "disputed" one. That is by design: nothing one-sided is counted.
 
 ## 5. Tests and parity
 
 | Suite | What | Count |
 |---|---|---|
 | `tests/test_spells.lua` | The Lua port **against fixtures from the web's real code** (`tools/parity/gen-spell-fixtures.ts` at `48fdf46`), plus rule tests. Covers the rules fingerprint (spells, mana, cooldown, delivery, loadouts, bot profiles v1/v2, cast styles) and 20 classic bot games (5 levels × 2 seeds × v1/v2), input for input. It also checks the 24 mid-game boards: bomb cells, worst fit, garbage gap, stack height, every bot candidate with its score, and every effect's resulting hash. Then come 8 full 3:00 bot-vs-bot Spell Battles (hashes, mana, casts, invalid casts at 3 checkpoints, both logs, and a replay from the logs), and 10 "human" logs with random and invalid casts run through `verifySpellMatch` vs bot and vs each other. Last, 16 tampered logs, one for each verdict the web gives. | 66 |
+| `tests/test_spells.lua`, scenarios | 15 scripted edge cases run step by step against the web (`tools/parity/gen-spell-scenarios.ts`): every spell, the cooldown boundary (179 / 180), garbage that tops out or pushes the piece, two spells crossing on the same tick, Freeze + Speed Up overlap, Blackout, Scramble, refused casts. Plus win / loss / draw / forfeit outcomes. | 16 |
 | `tests/test_spellbattle.lua` | vs Bot in the WoW API mock. The live game equals the verification at 3 levels; the match ends when decided (win at once / "beat N to win" / bot plays on / 3:00), with no input or casts after the end. Also: the keys, refused casts, combat pause, an exact /reload, garbled saved data, Pick Spells, at most 4 codes per tick after a frame hitch, and a result that is kept when the window closes while the bot finishes. | 15 |
-| `tests/test_spellduel.lua` | Two simulated clients. Protocol round-trips and forged packets; the log codec with casts and landings; full duels with spells crossing and the same result on both PCs; 2–2.5 s lag and a mid-duel pause (spells land late, both replays still equal the live games); 15% loss + 30% duplicates; disconnect while a spell is on its way. Attacks: a forged spell, withheld casts, unpaid casts, a client that ignores incoming spells. Also live rule refusals, an old 0.4 peer, both top out, rematch. | 18 |
+| `tests/test_spellduel.lua` | Two simulated clients. Protocol round-trips and forged packets; the log codec with casts and landings; full duels with spells crossing and the same result on both PCs; 2–2.5 s lag and a mid-duel pause (spells land late, both replays still equal the live games); 15% loss + 30% duplicates; disconnect while a spell is on its way. Attacks: a forged spell, withheld casts, unpaid casts, a client that ignores incoming spells. Also live rule refusals, an old 0.4 peer, both top out, rematch. Fairness: both PCs confirm the same result, a pause pauses both runs and both resume together, the 60 s pause limit forfeits, a client that pauses silently is caught by the clock check, a client that holds back spells is caught. SR1 never carries a spell log. | 24 |
 | Existing suites | Classic, Blitz, Daily, duels, SR1, design: unchanged and passing. The 77 SR1 vectors are unchanged (Spell Battle doesn't touch SR1). | |
 
 `tools/parity/check_web.sh <web checkout>` now also regenerates the spell fixtures and runs

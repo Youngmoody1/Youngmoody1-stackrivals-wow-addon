@@ -184,6 +184,8 @@ S.list = {
     spellAutoplay(M, ns, 2400)
     local sp = ns.App.session.spell
     sp.me.mana = math.max(sp.me.mana, 9) -- show castable and not-yet-castable spells side by side
+    sp.lastCastTick = nil
+    sp.me.lastCastTick = sp.me.game.tick - 70 -- a cast 1.2 s ago: the cooldown curtain and seconds
     ns.UI.dirty = true; M.frames_step(1)
     return M, ns
   end },
@@ -232,6 +234,16 @@ S.list = {
     end
     local pa, pb = player(a, "sa", "elite"), player(b, "sb", "rival")
     for _ = 1, 2400 do pa(); pb(); net.step(1) end
+    return a.M, a.ns, a.env.StackRivalsFrame
+  end },
+  { "19-spell-duel-rival-paused", "Spell Battle duel - the rival is in combat: both runs wait", function()
+    local net, a, b = duelPair()
+    a.ns.Duel.challenge("Bob", "s180"); net.step(30); b.ns.Duel.accept(); net.step(30)
+    a.ns.Duel.ready(); b.ns.Duel.ready(); net.step(30)
+    net.step(600)
+    b.M.combat = true; b.M.fire("PLAYER_REGEN_DISABLED")
+    net.step(120)
+    a.ns.UI:RefreshPhase()
     return a.M, a.ns, a.env.StackRivalsFrame
   end },
   { "8-records", "Records", function()

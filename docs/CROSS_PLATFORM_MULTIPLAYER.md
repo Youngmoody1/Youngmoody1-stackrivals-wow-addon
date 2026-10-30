@@ -27,6 +27,10 @@ Status words: **BUILT** (code + automated tests), **SIMULATED** (tested only in 
 
 ## 1b. Spell Battle (branch `spellbattle`, v0.5.0 preview)
 
+0.5 also changes the pause rule for duels between two 0.5 clients: a pause pauses both runs, both
+resume together, and each player may pause for 60 s in total (`PSE`, `RSM`). Both PCs confirm the
+result (`VER`), and a disagreement is "disputed", not counted. Details: `docs/SPELL_BATTLE.md` §4.
+
 Spell Battle from Play 2.0 is BUILT and SIMULATED for **WoW ↔ WoW** duels (ruleset `s180`) and for
 vs Bot. Details, the protocol additions (`RDY`/`GO` loadout, `SP`, cast letters `H`–`P`), the result
 rule (both logs replayed in lockstep = the web's `verifySpellMatch`) and what needs real clients:
@@ -74,7 +78,7 @@ exchange a few small messages.
   The "too fast" check measures from the earliest moment the rival can have started (host: when it
   sent GO; guest: when it sent Ready), so a late GO never makes an honest result look too fast.
 
-- **Safety and UX:** whispers only during a match. Combat pauses only your own run (also when GO
+- **Safety and UX:** whispers only during a match. Combat pauses your own run (also when GO
   arrives in combat); a duel that starts while you type in chat starts paused. Nothing protected
   is called. "Forfeit duel" needs a second click within 3 s. Unsolicited replies (hello, busy) are
   rate-limited per player and low priority, so spam can't starve a duel. Whispering an offline

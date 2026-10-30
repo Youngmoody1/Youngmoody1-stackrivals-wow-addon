@@ -248,16 +248,23 @@ describe("duels between two simulated clients", function()
     eq(mb.outcome, "loss"); eq(mb.endReason, "you_forfeited")
     eq(ma.outcome, "win"); eq(ma.endReason, "rival_forfeited")
   end)
-  it("combat during a duel pauses only your run; the duel still completes", function()
+  it("combat during a duel pauses BOTH runs; both resume together; the duel completes", function()
     local net, a, b = pair({ seed = 20 })
     local ma, mb = runDuel(net, a, b, { during = function(go)
       go(900)
       a.M.fire("PLAYER_REGEN_DISABLED"); a.M.combat = true
       eq(a.ns.App.session.phase, "paused"); ok(not a.ns.UI.keys._kb, "keys back to WoW")
       go(600)
-      eq(b.ns.App.session.phase, "playing", "Bob keeps playing")
+      eq(b.ns.App.session.phase, "paused", "Bob's run waits for Alice")
+      eq(b.ns.App.session.pauseReason, "rival")
+      ok(not b.ns.UI.resumeBtn:IsEnabled(), "Bob can't resume alone")
+      local bt = b.ns.App.session.state.tick
+      go(300)
+      eq(b.ns.App.session.state.tick, bt, "Bob's clock stands still")
       a.M.combat = false; a.M.fire("PLAYER_REGEN_ENABLED")
       a.ns.UI.resumeBtn:Click()
+      go(300)
+      ok(b.ns.App.session.state.tick > bt, "Bob goes on when Alice does")
     end })
     -- Alice lost 10 s of play time to the pause but still finishes her full 2:00
     for _ = 1, 40 do if ma.state == "done" and mb.state == "done" then break end net.step(60) end
@@ -280,7 +287,12 @@ describe("duels between two simulated clients", function()
     end
     local ma = runDuel(net, a, b)
     eq(ma.endReason, "check_failed"); eq(ma.outcome, "win")
-    eq(a.ns.db.duels.wins, 1)
+    -- the cheater's PC claims another result: the two verdicts don't match, so the duel is
+    -- "disputed" and not counted as a win (it would be one-sided)
+    for _ = 1, 60 do if ma.agreement then break end net.step(30) end
+    eq(ma.agreement, "disputed")
+    eq(a.ns.db.duels.wins, 0); eq(a.ns.db.duels.disputes, 1)
+    eq(a.ns.db.duels.history[1].res, "disputed")
   end)
   it("garbage and spoofed packets are ignored; nothing crashes", function()
     local net, a, b = pair({ seed = 22 })
@@ -440,8 +452,13 @@ describe("review findings (regression tests, simulated clients)", function()
       return realSend(prefix, text, ch, tgt)
     end
     local ma = runDuel(net, a, b)
-    eq(ma.endReason, "unchecked"); eq(ma.outcome, "void")
-    eq(a.ns.db.duels.losses, 0); eq(a.ns.db.duels.voids, 1)
+    if ma.rivalEnd.score < ma.my.score then
+      -- by his own claim Bob scored less: hiding the log can't turn his loss into "no result"
+      eq(ma.endReason, "rival_no_log"); eq(ma.outcome, "win")
+    else
+      eq(ma.endReason, "unchecked"); eq(ma.outcome, "void")
+      eq(a.ns.db.duels.losses, 0); eq(a.ns.db.duels.voids, 1)
+    end
   end)
 
   it("#9 seed commit-reveal: an inviter that reveals another nonce is caught", function()
