@@ -38,6 +38,15 @@
   - **SR1** never carries a Spell Battle log.
   - **Spell HUD.** Bigger mana value and taller bar; cost on a plate; cooldown seconds on the tiles; castable spells get a 2-unit edge; an incoming-spell chip and a bar beside the board; your spells flash red, the rival's steel.
   - **Docs.** What peer-checking proves and doesn't; test procedures A and B (`docs/SPELL_BATTLE_TEST.md`).
+- Hardening (no new features):
+  - **Result classes.** Every duel result has a basis: replay, rejected, forfeit, lost contact, or no result. Only a played-out, replay-checked duel is a VICTORY / DEFEAT and counts as won / lost; the rest are WALKOVER / FORFEIT and counted apart ("Forfeits: N won, M lost"). The verdict exchange carries the basis and compares scores only when both PCs replayed.
+  - **Withheld log.** A rival who keeps talking but never sends the log forfeits (a WALKOVER, not a verified win); a rival who goes silent after a high claim gives no result for both.
+  - **Pauses.** Every pause costs at least 3 s of the budget; a rival that stays paused past it is no longer waited for (forfeit); a lost resume message no longer stalls the waiting player (the score heartbeat shows the clock moving); the rival's pause is measured after your own run too.
+  - **Clock check** on the pauses both PCs actually saw (no blanket 60 s): catches hidden pauses and a slowed-down game. Duels now step the game in real time at very low FPS, so a slow PC is never slowed down or rejected.
+  - **Verdicts** are awaited while the rival still plays (e.g. after your forfeit), so both PCs end up agreed or disputed.
+  - **Spell HUD.** One message lane under the board for spell toasts and the status line (INCOMING, FROZEN, SPEED UP, BLACKOUT): nothing spell-related covers the falling piece. Spell tiles are taller, with key and cost under the icon.
+  - **Test builds.** `FLAVOR=vsbot` builds Spell Battle vs Bot with guild duels switched off; CI builds and keeps both builds.
+  - **SR2 draft** (`docs/SR2_DRAFT.md`), nothing built; the two web bugs are listed as open dependencies.
 - Tests: 121 new (82 parity + rules + scenarios, 15 vs Bot in the WoW mock, 24 two-client duels, plus
   updated duel tests for the new pause and confirmation rules). All earlier tests and the 77 SR1 vectors pass.
 
