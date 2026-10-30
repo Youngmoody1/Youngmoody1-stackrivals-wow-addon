@@ -9,18 +9,36 @@ jobs:
           fetch-depth: 1
       - name: Install Lua 5.1 (same language version as WoW)
         run: sudo apt-get update && sudo apt-get install -y lua5.1 zip unzip
-      - name: Validate, test, package, verify
+      - name: Validate, test, package, verify (full build)
         run: tools/build_release.sh
       - name: Reproducibility (second build must be byte-identical)
         run: |
-          cp dist/StackRivals-*.zip /tmp/first.zip
-          tools/build_release.sh > /dev/null
-          cmp dist/StackRivals-*.zip /tmp/first.zip
-      - name: Keep the build
+          V=$(grep -E '^## Version:' StackRivals/StackRivals.toc | sed 's/## Version: *//' | tr -d '\r')
+          cp "dist/StackRivals-$V.zip" /tmp/first.zip
+          SKIP_TESTS=1 tools/build_release.sh > /dev/null
+          cmp "dist/StackRivals-$V.zip" /tmp/first.zip
+      - name: vs-Bot test build (Spell Battle vs Bot, guild duels off) + reproducibility
+        run: |
+          V=$(grep -E '^## Version:' StackRivals/StackRivals.toc | sed 's/## Version: *//' | tr -d '\r')
+          SKIP_TESTS=1 FLAVOR=vsbot tools/build_release.sh
+          cp "dist/StackRivals-$V-vsbot.zip" /tmp/first-vsbot.zip
+          SKIP_TESTS=1 FLAVOR=vsbot tools/build_release.sh > /dev/null
+          cmp "dist/StackRivals-$V-vsbot.zip" /tmp/first-vsbot.zip
+          unzip -p "dist/StackRivals-$V-vsbot.zip" StackRivals/Core/Build.lua | grep -q 'flavour = "vsbot", duels = false'
+          unzip -p "dist/StackRivals-$V.zip" StackRivals/Core/Build.lua | grep -q 'flavour = "full", duels = true'
+      - name: Keep the vs-Bot test build (install first, after 0.3.1 passed; back up before)
+        uses: actions/upload-artifact@v4
+        with:
+          name: StackRivals-vsbot-test
+          path: |
+            dist/*-vsbot.zip
+            dist/*-vsbot.zip.sha256
+            dist/*-vsbot.json
+      - name: Keep the full build (duels; two-player test only after approval, back up before)
         uses: actions/upload-artifact@v4
         with:
           name: StackRivals-build
           path: |
-            dist/*.zip
-            dist/*.sha256
-            dist/*.json
+            dist/*[0-9].zip
+            dist/*[0-9].zip.sha256
+            dist/*[0-9].json

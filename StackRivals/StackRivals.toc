@@ -9,6 +9,7 @@
 ## X-Website: https://stackrivals.io
 ## X-License: All Rights Reserved
 
+Core\Build.lua
 Engine\Prng.lua
 Engine\Pieces.lua
 Engine\Engine.lua

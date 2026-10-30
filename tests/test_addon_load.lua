@@ -500,4 +500,49 @@ describe("performance (Lua 5.1 outside WoW, indicative only)", function()
   end)
 end)
 
+
+describe("vs-Bot test build (FLAVOR=vsbot): Spell Battle without duels", function()
+  -- the packaged vsbot build only changes Core/Build.lua; load the addon the same way
+  local function bootVsBot()
+    local M = dofile(testdir .. "/wowmock.lua")
+    M.install()
+    _G.StackRivalsDB = nil
+    local ns = {}
+    for _, f in ipairs(tocFiles()) do
+      if f == "Core/Build.lua" then
+        local src = assert(io.open(root .. "/" .. f)):read("*a")
+        local line = 'ns.BUILD = { flavour = "full", duels = true }'
+        assert(src:find(line, 1, true), "the build script rewrites exactly this line")
+        assert((loadstring or load)((src:gsub('flavour = "full", duels = true', 'flavour = "vsbot", duels = false'))))("StackRivals", ns)
+      else
+        assert(loadfile(root .. "/" .. f))("StackRivals", ns)
+      end
+    end
+    M.fire("ADDON_LOADED", "StackRivals")
+    M.fire("PLAYER_LOGIN")
+    return M, ns
+  end
+  it("no addon messages registered or sent; the Duel card and /sr duel say it's off; Spell Battle vs Bot plays", function()
+    local M, ns = bootVsBot()
+    eq(ns.BUILD.duels, false)
+    eq(M.prefixes.StackRivals, nil, "no addon prefix: invisible to duel finders, no invites")
+    SlashCmdList.STACKRIVALS("")
+    ok(not ns.UI.duelBtn:IsEnabled(), "Duel card disabled")
+    eq(ns.UI.duelBtn.desc:GetText(), "Off in this test build")
+    local before = #M.log
+    SlashCmdList.STACKRIVALS("duel Bob")
+    ok(M.log[#M.log]:find("switched off", 1, true), M.log[#M.log])
+    eq(#M.addonOut, 0, "nothing sent")
+    -- an invite whisper from someone else is ignored (no handler)
+    M.fire("CHAT_MSG_ADDON", "StackRivals", "1:INV:abc123:s180:1:0011aabb", "WHISPER", "Bob-Realm")
+    eq(#M.addonOut, 0); eq(ns.Duel.current, nil)
+    SlashCmdList.STACKRIVALS("version")
+    ok(M.log[#M.log]:find("build vsbot (duels off)", 1, true), M.log[#M.log])
+    ns.App:Start("spellbot")
+    M.frames_step(300)
+    eq(ns.App.session.mode.key, "spellbot"); eq(ns.App.session.phase, "playing")
+    ok(before >= 0)
+  end)
+end)
+
 return H

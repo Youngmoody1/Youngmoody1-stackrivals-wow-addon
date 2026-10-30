@@ -274,6 +274,8 @@ local function slash(msg)
       App:Print(string.format("%s: best %s, %d runs, %d lines, %d quads", Session.MODES[k].name,
         ns.T.commas(r.best), r.games, r.totalLines, r.quads))
     end
+  elseif (cmd == "duel" or cmd == "leave") and ns.BUILD and not ns.BUILD.duels then
+    App:Print("Duels are switched off in this test build (Spell Battle vs Bot only).")
   elseif cmd == "duel" and arg == "debug" then
     for _, l in ipairs(ns.DuelDiag.status()) do App:Print(l) end
   elseif cmd == "duel" then
@@ -289,7 +291,8 @@ local function slash(msg)
   elseif cmd == "leave" then
     if ns.Duel.busy() then ns.Duel.leave(); App:Print("You left the duel.") end
   elseif cmd == "version" then
-    App:Print("version " .. ns.VERSION .. ", engine v" .. E.ENGINE_VERSION .. ", interface " .. tostring(select(4, GetBuildInfo())))
+    local flavour = (ns.BUILD and ns.BUILD.flavour ~= "full") and (", build " .. ns.BUILD.flavour .. (ns.BUILD.duels and "" or " (duels off)")) or ""
+    App:Print("version " .. ns.VERSION .. ", engine v" .. E.ENGINE_VERSION .. ", interface " .. tostring(select(4, GetBuildInfo())) .. flavour)
   else
     App:Print("commands: /sr (open), /sr blitz | classic | daily, /sr spell, /sr duel [Name] [3], /sr leave, /sr pause, /sr settings, /sr minimap, /sr scale 0.8, /sr reset, /sr sound, /sr stats, /sr version")
   end
@@ -330,7 +333,8 @@ ev:SetScript("OnEvent", function(_, event, arg1)
   elseif event == "PLAYER_LOGIN" then
     ns.Minimap:Create()
     if ns.Comm then
-      ns.Comm.init(); ns.Duel.init()
+      -- a vs-Bot test build (Core/Build.lua) registers no addon messages: duels are off
+      if not ns.BUILD or ns.BUILD.duels then ns.Comm.init(); ns.Duel.init() end
       -- build the (hidden) window now so a duel invite can be shown even if StackRivals was
       -- never opened this session
       ns.UI:Create()

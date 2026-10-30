@@ -428,6 +428,10 @@ function UI:CreateMenu()
   self.spellCard.tip = "Spells, mana and the stackrivals.io bot. Pick 2 spells for your board, 2 for the bot's."
   self.duelBtn = vsCard("Duel", "1v1 with a guild member", "frame", C.steel, T.MEDIA .. "marksmall", function() UI:ShowSheet("duel") end)
   self.duelBtn.tip = "Challenge a guild or group member: score race or Spell Battle."
+  if ns.BUILD and not ns.BUILD.duels then -- vs-Bot test build
+    self.duelBtn:Disable(); self.duelBtn.desc:SetText("Off in this test build")
+    self.duelBtn.tip = "This is a Spell Battle vs Bot test build: guild duels are switched off."
+  end
   self.continueBtn = T.button(menu, "Continue last run", cw, 30, "primary", function() ns.App:ContinueSuspended() end)
   self.continueBtn:SetPoint("TOP", menu, "TOP", 0, -40) -- above the cards when there is a run to continue
   self.continueBtn.tip = "Your unfinished run from before /reload or logout, restored exactly."
@@ -1040,7 +1044,7 @@ function UI:RefreshMenu()
     self.spellCard.desc:SetText("vs " .. (UI.DIFF_LABEL and UI.DIFF_LABEL[sd] or sd) .. " bot" .. rec)
   end
   local du = db.duels
-  if du and du.wins + du.losses + du.draws > 0 then self.duelBtn.desc:SetText(string.format("Guild 1v1  -  %d-%d", du.wins, du.losses)) end
+  if du and du.wins + du.losses + du.draws > 0 and (not ns.BUILD or ns.BUILD.duels) then self.duelBtn.desc:SetText(string.format("Guild 1v1  -  %d-%d", du.wins, du.losses)) end
   if inCombat() then self.spellCard:Disable() else self.spellCard:Enable() end
   -- a brand-new player gets a default: Blitz is the short, forgiving way in
   local fresh = true
