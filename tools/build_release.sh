@@ -32,7 +32,15 @@ if [ -n "${SKIP_TESTS:-}" ]; then
   echo "== 2/5 tests skipped (SKIP_TESTS: they already ran on this commit)"
 else
   echo "== 2/5 run tests ($LUA)"
-  TEST_OUT=$("$LUA" tests/run.lua 2>&1) || { echo "$TEST_OUT" | tail -60; echo "tests failed"; exit 1; }
+  TEST_OUT=$("$LUA" tests/run.lua 2>&1) || {
+    echo "$TEST_OUT" | tail -60
+    if [ -n "${GITHUB_ACTIONS:-}" ]; then
+      # one annotation with the failures (readable from the API even when the raw log isn't)
+      SUMMARY=$( { echo "$TEST_OUT" | grep -E "passed|FAIL|^    " | head -60; echo "--- last lines:"; echo "$TEST_OUT" | tail -12; } \
+        | sed -e 's/%/%25/g' -e 's/\r//g' | awk 'BEGIN{ORS="%0A"} {print}')
+      echo "::error title=tests failed::${SUMMARY}"
+    fi
+    echo "tests failed"; exit 1; }
   echo "$TEST_OUT" | grep -E "passed|ALL TESTS|SOME TESTS"
 fi
 

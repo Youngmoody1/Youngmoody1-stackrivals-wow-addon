@@ -149,25 +149,36 @@ labelled **peer-checked**, never "verified".
 
 **Pauses (combat, chat, Esc, a closed window, a loading screen): 0.5+ on both sides.**
 
-- **A pause pauses both runs.** Your client pauses itself (safety first) and tells the rival (`PSE`, repeated while it lasts); the rival's run pauses too ("<rival> is paused (combat). The duel waits for both of you.").
-- **Both resume together.** The rival can't resume alone: their button says "Waiting for rival…". When you press Resume while your rival is still paused, you become "ready" and wait (`RSM`). The last one to be ready starts both runs again, with the usual 2 s countdown.
-- **Pause budget: 60 s in total per player and duel.** The pause screen counts it down. Past it, the duel is **forfeited**, not voided. A "no result" would let a losing player escape by pulling a mob.
-- **Clock check against clients that pause without telling.** A rival whose run takes longer than its ticks + the allowed pauses + 25 s is rejected (`pause_limit`). That covers 60 s, your own pauses (they waited for you), 4 s per pause and 25 s of slack. Your own frozen time (a loading screen) is added, so it's never held against them.
-- **Spells and pauses.** Spells land by each player's own ticks, and the replay uses the real landings, so a pause never changes a board. It only makes the two players' clocks drift apart.
-- **Score-race duels** use the same rules when both players have 0.5. A 0.4 rival ignores `PSE` / `RSM`: it keeps the 0.4 rule (only your own run pauses), and your own 60 s budget still applies.
+- **A pause pauses both runs.** Your client pauses itself (safety first) and tells the rival (`PSE`, repeated every 2 s while it lasts, with the tick your clock stopped at). The rival's run pauses too ("<rival> is paused (combat). The duel waits for both of you.").
+- **Both resume together.** The rival can't resume alone: their button says "Waiting for rival…". When you press Resume while your rival is still paused, you become "ready" and wait (`RSM`, sent 3 times). The last one to be ready starts both runs again, with the usual 2 s countdown. If all copies of `RSM` are lost, the rival's next score heartbeat (`SC`) shows a tick past the one in `PSE`, and that also ends the wait.
+- **Everything that runs on time stops with the clock:** your tick, mana, cooldowns, spells on their way to you (they land by your ticks) and effect timers (Freeze, Speed Up, Blackout). A test checks every one of them across a 10 s pause, and that a spell in flight still lands at exactly its tick afterwards.
+- **Pause budget: 60 s in total per player and duel.** Every pause costs at least 3 s (so nobody can break the rival's rhythm with free micro-pauses: at most 20 pauses). The pause screen counts the budget down. Past it, the duel is **forfeited**, not voided. A "no result" would let a losing player escape by pulling a mob.
+- **A rival that stays paused** (a modified client that ignores the budget): after 70 s of their pause as seen on your PC, you stop waiting and play on; the duel is yours by forfeit (`rival_pause_limit`). If their log arrives later anyway, it is rejected (`pause_limit`).
+- **Silence:** 35 s without any message from the rival (also while they are paused) = lost contact. You play on; at your end you win by lost contact (`rival_disconnected`).
+- **Clock check (against hidden pauses and slow motion).** A rival's run may take its ticks + **the pauses your PC saw** (theirs, from `PSE` to `RSM`; yours, which they had to wait for) + your own frozen frames + 4 s per pause + 20 s of slack. Longer is rejected (`pause_limit`). This catches a client that pauses without telling and a client that runs the game slower (easier to play): about 10 % slower over a full 3:00 run, more on shorter runs. Duels step the game in real time even at very low FPS (each frame catches up to 1 s), so an honest slow PC is never slowed down and never trips the check. The tests cover 5 FPS with two 3 s freezes on a lossy network (accepted) and 75 % speed (rejected).
+- **Spells and pauses.** Spells land by each player's own ticks, and the replay uses the real landings, so a pause never changes a board.
+- **Score-race duels** use the same rules when both players have 0.5 (known from Find players, or from their first `PSE` / `RSM`). A 0.4 rival ignores `PSE` / `RSM`: it keeps the 0.4 rule (only your own run pauses), the clock check is off, and your own 60 s budget still applies.
 
-**Leaving and disconnecting.**
+**Result classes: what each decision rests on.** Every result has a *basis*. Only a played-out duel
+whose rival log was replayed counts as won / lost / drawn and is shown as VICTORY / DEFEAT / DRAW.
+Everything else is labelled for what it is and counted apart ("Forfeits: N won, M lost").
 
-- **Leaving or going silent for 35 s during play** = your rival wins (as before).
-- **Your run ended, but your log never arrived** (60 s):
-  - if your own claimed score is lower than the rival's checked score, **the rival wins** (`rival_no_log`): hiding a lost game's log can't turn it into "no result";
-  - otherwise **no result**, because a claim alone never decides a winner.
+| Basis | Results (reason) | Evidence your PC needs | Shown as | Counted as |
+|---|---|---|---|---|
+| **replay** | `checked` | the rival's END + complete log (+ landings); both games replayed together on your PC; the rival's clock within the limits | VICTORY / DEFEAT / DRAW | won / lost / drawn |
+| **rejected** | `check_failed` | the rival's complete log, which failed a check (illegal game, forged / unpaid / held-back spell, clock, pause limit) | WALKOVER | forfeit won |
+| **forfeit** | `rival_forfeited`, `you_forfeited`, `you_pause_limit`, `rival_pause_limit`, `rival_no_log` | a `BYE`; your own pause budget; the rival's pause seen > 70 s; or **no log for 60 s** while the rival still talked to you (or claimed less than you) | WALKOVER / FORFEIT | forfeit won / lost |
+| **timeout** | `rival_disconnected`, `rival_offline`, `timeout` | 35 s of silence, the server's "player offline" message, or no END 5 min after 3:00 | WALKOVER | forfeit won |
+| **void** | `unchecked`, `you_left` | the rival's log never came **and** they went silent after their END with a claim ≥ your score; or you left before the result | NO RESULT | no result |
 
-**Both PCs confirm the result (`VER`).** After the result, each PC sends its verdict: win / loss / draw / void, both scores, and whether the rival passed the replay check.
+- **A withheld log never gives a verified win**, to either side. If the rival keeps talking to you but doesn't send their log (asked for again every 4 s for 60 s), they forfeit: a loser can't turn a loss into "no result" by keeping the log back. It's a WALKOVER, not a VICTORY, and their verdict can still make it "disputed".
+- **The one thing a cheater can still do: avoid a loss**, by claiming a high score and going silent right after their run. That looks exactly like a lost connection, so it gives **no result** for both, never a win for the cheater. (An honest disconnect in those few seconds is rare; repeated "no results" against one player are visible in the duel history.)
 
-- **Same outcome mirrored and the same two scores:** "Confirmed by both PCs".
-- **Anything else: "DISPUTED".** The duel is moved out of won / lost / drawn into a separate "disputed" count, and the history says so. One PC's opinion is never a counted win.
-- **No verdict within 30 s** (a 0.4 rival, or gone): "unconfirmed". The local peer-checked result stands, labelled as such.
+**Both PCs confirm the result (`VER`).** After the result, each PC sends its verdict: win / loss / draw / void, both scores, and the basis (`r` replay, `x` rejected, `f` forfeit, `t` timeout, `v` void).
+
+- **Same outcome mirrored**, and **when both verdicts rest on a replay, the same two scores**: "Confirmed by both PCs". (A forfeit or lost-contact verdict carries live scores the other PC can't know exactly, so only the outcome is compared there.)
+- **Anything else: "DISPUTED".** The duel is moved out of whichever counter it was in into a separate "disputed" count, and the history says so. One PC's opinion is never a counted win.
+- **Waiting for the verdict:** 30 s, and longer while the rival is still playing (still talking: e.g. you forfeited, they play on), up to the duel's deadline. **No verdict:** "unconfirmed" (a 0.4 rival, or gone). The local result stands, labelled as such.
 
 **What peer-checking proves, and what it doesn't.**
 
@@ -176,7 +187,8 @@ labelled **peer-checked**, never "verified".
 | Their game is a legal StackRivals game for this seed: every move and cast follows the web's rules (engine replay, `verifySpellMatch`) | That a human played it (a bot inside a modified client plays legally too) |
 | Their score is exactly what their inputs give; an inflated claim is caught | That the two PCs are honest: a modified client can claim anything about *your* game. That's why both verdicts must match, or the duel is "disputed" |
 | Every spell they sent you was a cast they could afford, in their loadout, at its tick | When a spell really reached them: they report their own landings. A hold-back of more than 8 s is caught; a shorter one is not |
-| They didn't take much more time than the clock allows (pause limit), nor less (`faster_than_clock`) | Anything about the WoW account or character; nothing is sent to a server |
+| They didn't take much more time than the clock allows (pauses seen + 20 s), nor less (`faster_than_clock`) | A slow-down of less than about 10 % over 3:00, or a hidden pause under about 20 s: indistinguishable from lag |
+| | Anything about the WoW account or character; nothing is sent to a server |
 | Both PCs computed the same scores ("Confirmed by both PCs") | A server-verified result: only the web server can give that. Duel results stay "peer-checked" |
 
 **Unique IDs and sequences.**
@@ -191,6 +203,7 @@ labelled **peer-checked**, never "verified".
 - **Delayed landing.** A modified client could hold an incoming spell for up to about 8 s (latency + a lost first copy) before applying it. Longer is caught (`late_landing`), so is never applying it (`spells_not_applied`, more than 1) and so is landing it early (`bad_landing`).
 - **Counter-picking.** The rival's loadout is sent at Ready. An honest client doesn't show it before GO; a modified client could read it and pick spells against it. The effect is small, because spells are generic.
 - **Version check.** A Spell Battle challenge is refused before it is sent only when the rival's version is known from Find players (kept for 2 minutes). Otherwise a 0.4 client simply never answers.
+- **Avoiding a loss by vanishing.** A modified client can claim a high score and go silent right after its run: that gives "no result" for both (it looks like a lost connection), never a win for it.
 - **Disputes** depend on both PCs reporting. A cheater's PC can always say "I won", so an honest player can't get a *counted* win against a modified client, only a "disputed" one. That is by design: nothing one-sided is counted.
 
 ## 5. Tests and parity

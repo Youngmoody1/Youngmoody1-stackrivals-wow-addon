@@ -6,6 +6,19 @@ repository was changed.
 - Web base: `48fdf46` ("Release candidate A: Play 2.0").
 - WoW branch: `spellbattle` (addon 0.5.0 preview).
 
+## Open dependencies (status 2026-10-30)
+
+| # | Item | Status | Closed when |
+|---|---|---|---|
+| 1 | Bug 1: the final tick (live loop vs `SpellSim`) | **OPEN** on the web | the web project names a commit that fixes it **and** adds the regression test below; `check_web.sh` and the repro script pass against that commit |
+| 2 | Bug 2: an input logged after an incoming top-out (`inputs_after_topout` for an honest player) | **OPEN** on the web | the same |
+| 3 | `decideOutcome`: both forfeited, draw or score? | **OPEN** (question) | the web says which rule is intended; WoW follows it |
+| 4 | SR2 for Spell Battle vs Bot results | **PROPOSAL** (`docs/SR2_DRAFT.md`), nothing built | both sides agree on the field list and share `docs/vectors/sr2.json` |
+
+Neither bug affects the WoW addon's own results: WoW already runs the final tick like `SpellSim`
+and never logs an input after a top-out. They matter for **parity** (a WoW vs-Bot result must
+verify on the web exactly as it played) and for honest web players.
+
 ## How the two implementations are kept equal
 
 The WoW addon ports this web code to Lua:
@@ -151,7 +164,7 @@ reconnects.
 ## SR1 and Spell Battle (decision)
 
 - **Existing SR1 codes are never used for Spell Battle results.** `SR1R` carries a classic log (moves `A`–`G`) and verifies with `verifyLog`. It cannot represent casts, the loadout, the bot level or the bot tuning. In the addon, SR1 codes are only made for classic modes; Spell Battle has no export.
-- **A spell result needs a new format version**, not a new ruleset id inside SR1. Proposal, **SR2** (not built; it waits for your agreement). In addition to the SR1 fields:
+- **A spell result needs a new format version**, not a new ruleset id inside SR1. Proposal, **SR2** (not built; it waits for your agreement; the full draft with limits, versioning and ranking rules is `docs/SR2_DRAFT.md`). In addition to the SR1 fields:
   - `mode` = `spellbot`;
   - `diff` = the bot level;
   - `tuning` = v1 / v2, or `createdAtMs`;
@@ -181,5 +194,6 @@ reconnects.
 > 3. `decideOutcome`: the comment says both forfeits are a draw, the code compares scores. Which is
 >    intended?
 > 4. SR1 can't carry Spell Battle results. If you want WoW vs-Bot Spell Battles importable, please
->    review the SR2 proposal in the WoW repo's `docs/WEB_SPELL_REPORT.md`; nothing is built until you agree.
+>    review the SR2 draft in the WoW repo's `docs/SR2_DRAFT.md`; nothing is built until you agree.
+>    A valid replay alone must not give ranked rating or rewards (server-issued seeds, one submission each).
 > Don't change ENGINE_VERSION for 1 and 2 (no server result changes). Report back which commit fixes them.
