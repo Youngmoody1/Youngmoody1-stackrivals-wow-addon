@@ -143,14 +143,30 @@ function NS.new(opts)
       while net.queue[1] and net.queue[1].at <= net.time do
         local q = table.remove(net.queue, 1)
         local to = net.byName[q.to.name:lower()] or q.to -- the current instance (after a /reload)
-        if to.online then
+        if to.hangUntil and net.time < to.hangUntil then
+          -- a frozen client runs no Lua: the message waits until it is back
+          q.at = to.hangUntil; net.queue[#net.queue + 1] = q
+        elseif to.online then
           net.delivered = net.delivered + 1
           to.M.fire("CHAT_MSG_ADDON", q.prefix, q.text, q.channel, q.from.name)
         end
       end
       for _, c in ipairs(net.clients) do
-        c.M.time = net.time
-        c.M.frames_step(1, dt)
+        -- a client can run at its own frame rate (c.frameDt, e.g. 1/15) and freeze (c.hangUntil):
+        -- its frames then come less often, each with the time since its last frame
+        if not c.frameDt and not c.hangUntil then
+          c.M.time = net.time
+          c.M.frames_step(1, dt)
+        else
+          c.acc = (c.acc or 0) + dt
+          local hung = c.hangUntil and net.time < c.hangUntil
+          if not hung and c.acc >= (c.frameDt or dt) - 1e-9 then
+            local fdt = c.acc
+            c.acc = 0
+            c.M.time = net.time
+            c.M.frames_step(1, fdt)
+          end
+        end
         c.M.time = net.time -- frames_step advanced it; keep every client on the shared clock
       end
     end

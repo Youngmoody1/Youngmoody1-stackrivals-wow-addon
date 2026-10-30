@@ -111,7 +111,18 @@ function D.trace(event, text, who, info)
 end
 
 --- Called every frame by Duel.update: logs state changes and the result once.
+local function pauseLine(m)
+  return string.format("basis %s, clock %s/%s s, pauses me %d (%.0f s) rival %d (%.0f s)", tostring(m.basis),
+    m.stall and m.stall.stall or "-", m.stall and m.stall.allowed or "-", m.myPauses or 0, m.myPausedTotal or 0,
+    m.rivalPauses or 0, m.rivalPausedSeen or 0)
+end
+
 function D.poll(m)
+  if m and m.agreement and m.diagAgree ~= m.agreement then
+    m.diagAgree = m.agreement
+    local r = find(m.mid)
+    if r then line(r, m, "=verdicts " .. m.agreement) end
+  end
   if not m or m.diagState == m.state then return end
   m.diagState = m.state
   local r = find(m.mid)
@@ -120,6 +131,7 @@ function D.poll(m)
     r.result = m.outcome
     r.how = m.endReason
     line(r, m, string.format("=%s %s %d-%d", tostring(m.outcome), tostring(m.endReason), m.myScore or 0, m.theirScore or 0))
+    line(r, m, pauseLine(m))
   elseif m.state == "cancelled" then
     r.result = "cancelled"
     r.how = m.endReason
@@ -156,6 +168,9 @@ function D.status()
     local have = 0
     for i = 1, m.rivalEnd.chunks do if m.chunks[i] then have = have + 1 end end
     add(string.format("rival log: %d/%d chunks%s", have, m.rivalEnd.chunks, m.check and (", check " .. (m.check.ok and "OK" or table.concat(m.check.reasons or {}, ","))) or ""))
+  end
+  if m.state == "done" or m.stall or (m.myPauses or 0) + (m.rivalPauses or 0) > 0 then
+    add(pauseLine(m) .. (m.agreement and (", verdicts " .. m.agreement) or ""))
   end
   if m.outChunks then add(string.format("my log: %d chunks, streamed %d%s", #m.outChunks, (m.outNext or 1) - 1, m.rivalHasMine and ", rival confirmed (FIN)" or "")) end
   return out

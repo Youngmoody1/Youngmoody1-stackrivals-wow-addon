@@ -83,8 +83,9 @@ describe("Spell Battle vs Bot: live play = the web's verification", function()
       eq(r.hash, ns.Engine.hashState(sp.me.game), "your board")
       eq(#r.invalidCasts, 0, "no invalid casts are ever logged live")
       eq(r.ok, true, table.concat(r.reasons, ","))
-      if sess.phase == "playing" then
-        -- mid-match: the bot side matches the replay up to the same tick
+      if sess.phase == "playing" and not sp.opp.game.gameOver then
+        -- mid-match: the bot side matches the replay up to the same tick (unless the bot already
+        -- topped out and you play on to beat its score; the seed depends on earlier tests)
         eq(sp.opp.game.tick, sp.me.game.tick)
       else
         eq(ns.Engine.hashState(botSide.game), ns.Engine.hashState(sp.opp.game), "bot board")

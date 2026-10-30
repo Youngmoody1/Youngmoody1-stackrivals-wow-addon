@@ -25,11 +25,15 @@
                                                     (an accepted send is never proof of delivery)
     1:SP:<mid>:<seq>:<tick36>:<spell>               Spell Battle (0.5+): I cast a spell on you at my tick;
                                                     it lands on your board at tick + 90 (Spells.DELIVERY_TICKS)
-    1:PSE:<mid>:<n>:<reason>                        (0.5+) my run is paused (pause #n: combat, chat, ...):
-                                                    yours pauses too; repeated while it lasts
+    1:PSE:<mid>:<n>:<reason>[:<tick36>]             (0.5+) my run is paused (pause #n: combat, chat, ...) at my
+                                                    tick; yours pauses too; repeated while it lasts. A score
+                                                    heartbeat (SC) past that tick also means "resumed"
     1:RSM:<mid>:<n>                                 (0.5+) I'm ready again after pause #n (both resume together)
-    1:VER:<mid>:<w|l|d|v>:<my36>:<your36>:<check>   (0.5+) my final verdict, so both PCs can confirm the same
-                                                    result; check = 1 if your game passed my replay check
+    1:VER:<mid>:<w|l|d|v>:<my36>:<your36>:<basis>   (0.5+) my final verdict, so both PCs can confirm the same
+                                                    result. basis = what my verdict rests on: r = both games
+                                                    replayed, x = your result failed my replay check,
+                                                    f = forfeit / left / log never sent, t = lost contact or
+                                                    out of time, v = no result (0 / 1 = x / r, older builds)
   Older clients ignore kinds they don't know (decode -> "kind"), so these never break a 0.4 duel.
 
   Spell Battle (ruleset s180) uses the same flow; only clients 0.5+ know s180, SP and the cast
@@ -124,7 +128,10 @@ local SPEC = {
   SP = 4, PSE = 3, RSM = 2, VER = 5,
 }
 P.PAUSE_REASONS = { combat = true, chat = true, manual = true, hidden = true, loading = true, settings = true, restored = true }
-local OPTIONAL = { RDY = 1, GO = 1 } -- extra trailing fields a kind may carry (newer clients)
+local OPTIONAL = { RDY = 1, GO = 1, PSE = 1 } -- extra trailing fields a kind may carry (newer clients)
+--- VER basis codes (see the header). Scores are only compared when both verdicts rest on a replay.
+P.VER_BASIS = { r = "replay", x = "rejected", f = "forfeit", t = "timeout", v = "void", ["1"] = "replay", ["0"] = "rejected" }
+P.VER_CODE = { replay = "r", rejected = "x", forfeit = "f", timeout = "t", void = "v" }
 
 --- Parse and validate. Returns a table {kind=..., ...} or nil, reason.
 function P.decode(s)
@@ -171,13 +178,18 @@ function P.decode(s)
   elseif kind == "PSE" then
     if not isMid(f[3]) or not isInt(f[4], 1, 999) or not P.PAUSE_REASONS[f[5]] then return nil, "bad" end
     m.mid, m.n, m.reason = f[3], tonumber(f[4]), f[5]
+    if f[6] then
+      m.tick = P.unb36(f[6])
+      if not m.tick then return nil, "bad" end
+    end
   elseif kind == "RSM" then
     if not isMid(f[3]) or not isInt(f[4], 0, 999) then return nil, "bad" end
     m.mid, m.n = f[3], tonumber(f[4])
   elseif kind == "VER" then
     local a, b = P.unb36(f[5]), P.unb36(f[6])
-    if not isMid(f[3]) or not (f[4] == "w" or f[4] == "l" or f[4] == "d" or f[4] == "v") or not a or not b or (f[7] ~= "0" and f[7] ~= "1") then return nil, "bad" end
-    m.mid, m.verdict, m.mine, m.yours, m.check = f[3], f[4], a, b, f[7] == "1"
+    if not isMid(f[3]) or not (f[4] == "w" or f[4] == "l" or f[4] == "d" or f[4] == "v") or not a or not b or not P.VER_BASIS[f[7]] then return nil, "bad" end
+    m.mid, m.verdict, m.mine, m.yours, m.basis = f[3], f[4], a, b, P.VER_BASIS[f[7]]
+    m.check = m.basis ~= "rejected"
   elseif kind == "SP" then
     local t, sp = P.unb36(f[5]), tonumber(f[6])
     if not isMid(f[3]) or not isInt(f[4], 1, 9999) or not t or not isInt(f[6], 0, 8) then return nil, "bad" end

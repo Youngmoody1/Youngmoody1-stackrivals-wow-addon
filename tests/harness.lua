@@ -15,7 +15,10 @@ end
 local current = "?"
 function H.describe(name, fn) current = name; fn() end
 
+-- SR_ONLY="part of a test name" runs only the matching tests (development)
+local ONLY = os and os.getenv and os.getenv("SR_ONLY")
 function H.it(name, fn)
+  if ONLY and not name:find(ONLY, 1, true) then return end
   local ok, err = pcall(fn)
   if ok then
     H.passed = H.passed + 1

@@ -31,14 +31,22 @@
   After the result we keep serving our END and log for LINGER seconds, even if the player
   already went back to the menu (Duel.past), so the rival can still check our run.
 
-  Results
-    checked            rival's log replayed to the claimed score -> compare scores
-    check_failed       rival's log does NOT replay to their claim  -> I win (their result is rejected)
-    unchecked          rival's log never fully arrived              -> no result (void)
-    rival_forfeited / rival_disconnected / rival_offline / timeout -> I win
-    you_forfeited      I left during play                           -> loss (both forfeited: draw)
-    you_left           I left after my run ended, before the result  -> no result for me (void)
-  Combat during a duel pauses your own run (safety first); the rival keeps playing.
+  Results. Every result has a BASIS (what it rests on); only "replay" is a played-out result
+  (docs/SPELL_BATTLE.md "Result classes" has the evidence each one needs):
+    reason               outcome                                        basis
+    checked              rival's log replayed -> compare scores          replay
+    check_failed         rival's log/clock failed my checks -> I win     rejected
+    rival_forfeited      rival left during play -> I win                 forfeit
+    rival_pause_limit    rival paused > 60 s (seen here) -> I win        forfeit
+    rival_no_log         rival's log never came although they still talked to me, or their own
+                         claim was lower than my score -> I win          forfeit
+    you_forfeited / you_pause_limit -> loss (both forfeited: draw)       forfeit
+    rival_disconnected / rival_offline / timeout -> I win                timeout
+    unchecked            rival's log never came, rival silent -> void    void
+    you_left             I left after my run, before the result -> void  void
+  After the result both PCs exchange verdicts (VER): the same outcome (and, when both replayed,
+  the same two scores) -> "agreed"; anything else -> "disputed" (not counted).
+  A pause in a duel (combat, chat, ...) pauses BOTH runs; see PAUSE_BUDGET below.
 ]]
 local _, ns = ...
 local P, E, V, S = ns.Protocol, ns.Engine, ns.Verify, ns.Spells
@@ -71,6 +79,14 @@ Duel.WHY_NOT = {
   unavailable = "addon messages are unavailable on this client", ruleset = "unknown rules",
   old = "they need StackRivals 0.5 or newer for Spell Battle",
 }
+--- What each result rests on (see the header). Only "replay" is a played-out, checked result.
+Duel.BASIS = {
+  checked = "replay", check_failed = "rejected",
+  rival_forfeited = "forfeit", rival_pause_limit = "forfeit", rival_no_log = "forfeit",
+  you_forfeited = "forfeit", you_pause_limit = "forfeit",
+  rival_disconnected = "timeout", rival_offline = "timeout", timeout = "timeout",
+  unchecked = "void", you_left = "void",
+}
 Duel.SP_REPEAT = { 1.0, 3.0 } -- s after a cast: send the SP again (lost messages; the rival ignores repeats)
 -- Pauses in a duel (0.5+): a pause (combat, chat, ...) pauses BOTH runs; both resume together.
 -- Each player may pause for PAUSE_BUDGET seconds in total per duel; past that the duel is forfeited
@@ -78,8 +94,12 @@ Duel.SP_REPEAT = { 1.0, 3.0 } -- s after a cast: send the SP again (lost message
 -- too: a run that took longer than its ticks + the allowed pauses is rejected (a client that pauses
 -- without telling).
 Duel.PAUSE_BUDGET = 60
+Duel.PAUSE_MIN_CHARGE = 3     -- s: every pause costs at least this (no free micro-pauses to break the rival's rhythm)
 Duel.PAUSE_EPISODE_COST = 4   -- s per pause: the resume countdown and message delays
-Duel.STALL_SLACK = 25         -- s: latency, start offset, a slow frame or two
+Duel.RIVAL_PAUSE_MARGIN = 10  -- s over the budget (as seen here) before I stop waiting for a paused rival
+-- Clock check: the rival's run may take its ticks + the pauses I SAW (theirs and mine) + this.
+-- Duels step the game in real time even at low FPS (Session), so an honest run never needs more.
+Duel.STALL_SLACK = 20         -- s: latency, start offset, frames longer than 1 s
 Duel.VER_EVERY = 4            -- s between verdict messages after the result
 Duel.VER_FOR = 30             -- s we keep sending our verdict / wait for theirs
 Duel.LANDING_SLACK = 480      -- ticks (8 s): latency both ways + a lost first copy of a spell
@@ -307,6 +327,9 @@ local function seedFor(m) return P.seed(m.mid, m.nonceA, m.nonceB) end
 function Duel.go(m)
   if m.ruleset.spell and not m.rivalLoadout then return end -- wait for their spells (RDY / GO repeat)
   m.seed = seedFor(m)
+  -- a 0.5+ rival (shared pauses, clock check): Spell Battle needs 0.5, or their HI said so
+  local known = Duel.players[m.rival]
+  m.rival05 = m.rival05 or m.ruleset.spell or (known ~= nil and P.versionAtLeast(known.addon, "0.5.0"))
   if m.role == "host" then send(m, "GO", m.mid, m.nonceA, m.myLoadout) end
   m.state = "playing"
   m.goAt = now()
@@ -381,6 +404,9 @@ end
 local function matchFor(msg, sender)
   local m = Duel.current
   if not m or m.mid ~= msg.mid or not ns.Comm.same(m.rival, sender) then
+    -- a finished match I still serve: the rival is alive (we may be waiting for their verdict)
+    local p = Duel.past
+    if p and p.mid == msg.mid and ns.Comm.same(p.rival, sender) then p.lastHeard = now() end
     answerClosed(msg, sender)
     return nil
   end
@@ -400,6 +426,26 @@ local function servedMatch(msg, sender)
   if m then return m end
   local p = Duel.past
   if p and p.mid == msg.mid and ns.Comm.same(p.rival, sender) then return p end
+end
+
+--- The rival's pause as I see it: from their first PSE to their RSM (or a score heartbeat that
+--- shows their clock moving again). Measured on my clock, for the clock check and their budget.
+local function rivalPausedNow(m, t)
+  return (m.rivalPausedSeen or 0) + (m.rivalPauseFrom and (t - m.rivalPauseFrom) or 0)
+end
+local function closeRivalPause(m, t)
+  if m.rivalPauseFrom then
+    m.rivalPausedSeen = (m.rivalPausedSeen or 0) + (t - m.rivalPauseFrom)
+    m.rivalPauseFrom = nil
+  end
+  m.rivalPaused = false
+end
+--- The rival is ready again: if I'm only waiting for them, my run goes on too.
+local function rivalResumed(m)
+  closeRivalPause(m, now())
+  local s = session()
+  if m.state == "playing" and s and s.duel == m and s.phase == "paused" and s.pauseReason == "rival" then ns.App:Resume() end
+  emit("changed", m)
 end
 
 local HANDLERS = {}
@@ -463,16 +509,23 @@ end
 
 HANDLERS.PNG = function(msg, sender) matchFor(msg, sender) end
 
---- The rival paused (combat, chat, ...): my run pauses too, so nobody plays on alone.
+--- The rival paused (combat, chat, ...): my run pauses too, so nobody plays on alone. Their pause
+--- is measured even after my own run ended (it still makes their run take longer).
 HANDLERS.PSE = function(msg, sender)
   local m = matchFor(msg, sender)
   if not m then return end
   m.rival05 = true
-  if m.state ~= "playing" or msg.n <= (m.rivalRsmN or 0) then return end -- over, or an old pause
-  if m.rivalPauseN ~= msg.n then m.rivalPauses = (m.rivalPauses or 0) + 1; m.rivalPauseN = msg.n end
+  if (m.state ~= "playing" and m.state ~= "waiting") or m.rivalEnd or m.rivalPauseLimit then return end
+  if msg.n <= (m.rivalRsmN or 0) then return end -- an old pause (repeats / reordered after their RSM)
+  if m.rivalPauseN ~= msg.n then
+    m.rivalPauses = (m.rivalPauses or 0) + 1
+    m.rivalPauseN = msg.n
+    m.rivalPauseFrom = now()
+    m.rivalPauseTick = msg.tick -- their clock stands here until they resume
+  end
   m.rivalPaused, m.rivalPauseReason = true, msg.reason
   local s = session()
-  if s and s.duel == m and s:isActive() then ns.App:Pause("rival") end
+  if m.state == "playing" and s and s.duel == m and s:isActive() then ns.App:Pause("rival") end
   emit("changed", m)
 end
 
@@ -482,11 +535,8 @@ HANDLERS.RSM = function(msg, sender)
   if not m then return end
   m.rival05 = true
   m.rivalRsmN = math.max(m.rivalRsmN or 0, msg.n)
-  if msg.n < (m.rivalPauseN or 0) then return end -- they paused again since
-  m.rivalPaused = false
-  local s = session()
-  if s and s.duel == m and s.phase == "paused" and s.pauseReason == "rival" then ns.App:Resume() end
-  emit("changed", m)
+  if msg.n < (m.rivalPauseN or 0) or not m.rivalPaused then return end -- they paused again since / repeat
+  rivalResumed(m)
 end
 
 --- The rival's final verdict: both PCs must agree, or the result is "disputed" (not counted).
@@ -494,7 +544,7 @@ HANDLERS.VER = function(msg, sender)
   local m = servedMatch(msg, sender)
   if not m then return end
   m.rival05 = true
-  m.rivalVer = { verdict = msg.verdict, mine = msg.mine, yours = msg.yours, check = msg.check }
+  m.rivalVer = { verdict = msg.verdict, mine = msg.mine, yours = msg.yours, basis = msg.basis or "replay", check = msg.check }
   if m.state == "done" then Duel.confirm(m) end
 end
 
@@ -529,6 +579,11 @@ HANDLERS.SC = function(msg, sender)
   if r.tick and msg.tick < r.tick then return end -- old / duplicated / reordered
   r.tick, r.score, r.lines, r.over = msg.tick, msg.score, msg.lines, msg.over
   r.tickAt = now()
+  -- their clock moved past the tick they paused at: they resumed (all copies of RSM may be lost)
+  if m.rivalPaused and m.rivalPauseTick and msg.tick > m.rivalPauseTick then
+    m.rivalRsmN = math.max(m.rivalRsmN or 0, m.rivalPauseN or 0)
+    rivalResumed(m)
+  end
   emit("score", m)
 end
 
@@ -554,10 +609,15 @@ HANDLERS.END = function(msg, sender)
   if t < earliest then m.tooFast = true end
   -- ...nor much later than its ticks plus the pauses the duel allows (a client that pauses without
   -- telling, or ignores the pause limit). Only for 0.5 rivals: 0.4 has no pause limit.
+  -- Allowed: the pauses I saw (theirs, from PSE to RSM; mine, which they had to wait for), my own
+  -- frozen frames, a little per pause (resume countdown, message delays) and STALL_SLACK. A silent
+  -- pause or a slowed-down game (easier to play) shows up here.
   if m.rival05 and m.goAt then
+    closeRivalPause(m, t) -- their run is over
     local stall = (t - m.goAt) - (m.ruleset.countdownTicks + msg.ticks) / 60
-    local allowed = Duel.PAUSE_BUDGET + (m.myPausedTotal or 0) + (m.myFrozen or 0)
+    local allowed = (m.rivalPausedSeen or 0) + (m.myPausedTotal or 0) + (m.myFrozen or 0)
       + Duel.PAUSE_EPISODE_COST * ((m.myPauses or 0) + (m.rivalPauses or 0)) + Duel.STALL_SLACK
+    m.stall = { stall = math.floor(stall), allowed = math.floor(allowed) }
     if stall > allowed then m.tooSlow = math.floor(stall) end
   end
   -- chunks that arrived before this END but for a different log length are useless
@@ -730,7 +790,7 @@ function Duel.tryDecide(m)
       m.check = { ok = false, reasons = { "malformed_log" } }
     elseif m.tooFast then
       m.check = { ok = false, reasons = { "faster_than_clock" } }
-    elseif m.tooSlow then
+    elseif m.tooSlow or m.rivalPauseLimit then
       m.check = { ok = false, reasons = { "pause_limit" } }
     elseif m.ruleset.spell then
       m.check = Duel.decideSpell(m, log, landings)
@@ -743,6 +803,8 @@ function Duel.tryDecide(m)
     return Duel.finish(m, m.check.ok and "checked" or "check_failed")
   end
   if m.rivalForfeit == "forfeit" or m.rivalForfeit == "quit" then return Duel.finish(m, "rival_forfeited") end
+  -- they stayed paused far past the budget (a client that ignores it): I stopped waiting
+  if m.rivalPauseLimit and not m.rivalEnd then return Duel.finish(m, "rival_pause_limit") end
   -- "left" means their run had ended: their END/log may still be on its way (it can be overtaken
   -- by the BYE). update() waits LOG_WAIT for it and then gives "no result", never a win.
   if m.rivalForfeit == "left" and not m.rivalEnd then m.leftAt = m.leftAt or now(); return end
@@ -757,13 +819,14 @@ function Duel.finish(m, reason)
   local prev = m.state
   m.state = "done"
   m.endReason = reason
+  m.basis = Duel.BASIS[reason] or "void"
   m.doneAt = now()
   local s = session()
   local mine = s and s.duel == m
   local my = m.my and m.my.score or (mine and s.state.score) or 0
   local their = m.rivalEnd and m.rivalEnd.score or (m.rival_.score or 0)
   if reason == "check_failed" or reason == "rival_forfeited" or reason == "rival_disconnected"
-    or reason == "rival_offline" or reason == "timeout" or reason == "rival_no_log" then
+    or reason == "rival_offline" or reason == "timeout" or reason == "rival_no_log" or reason == "rival_pause_limit" then
     m.outcome = "win"
   elseif reason == "unchecked" or reason == "you_left" then
     m.outcome = "void"
@@ -779,22 +842,23 @@ function Duel.finish(m, reason)
   if ns.DB and ns.db then m.historyRef = ns.DB.recordDuel(ns.db, m, ns.App:Today()) end
   -- my verdict, for the rival to confirm (0.5+); a 0.4 rival never answers: "unconfirmed"
   local code = ({ win = "w", loss = "l", draw = "d" })[m.outcome] or "v"
-  m.verOut = { code, P.b36(math.max(0, my)), P.b36(math.max(0, their)), (reason == "check_failed") and 0 or 1 }
+  m.verOut = { code, P.b36(math.max(0, my)), P.b36(math.max(0, their)), P.VER_CODE[m.basis] or "v" }
   m.verSentAt, m.verSends = nil, 0
   if m.rivalVer then Duel.confirm(m) end
   emit("result", m)
   emit("changed", m)
 end
 
---- Both verdicts in: the same outcome (mirrored) and the same two scores, or "disputed".
+--- Both verdicts in: the same outcome (mirrored) and, when BOTH rest on a replay of both games,
+--- the same two scores; otherwise "disputed". A forfeit / timeout verdict carries live scores that
+--- the other PC can't know exactly, so only the outcome is compared there.
 --- A disputed duel is not counted as a win, loss or draw (DB.disputeDuel moves it).
 local MIRROR = { win = "l", loss = "w", draw = "d", void = "v" }
 function Duel.confirm(m)
   local r = m.rivalVer
   if not r or m.agreement == "agreed" or m.agreement == "disputed" then return end
   local same = MIRROR[m.outcome or "void"] == r.verdict
-  -- scores only count when both sides reached a checked result
-  if same and m.outcome ~= "void" and r.verdict ~= "v" then
+  if same and m.basis == "replay" and r.basis == "replay" then
     same = (r.mine == (m.theirScore or 0)) and (r.yours == (m.myScore or 0))
   end
   if same then
@@ -836,15 +900,27 @@ local function serveAfter(m, t)
   return true
 end
 
--- After the result: send our verdict a few times; "unconfirmed" if the rival never sends theirs.
+-- After the result: send our verdict; "unconfirmed" if the rival's never comes. While the rival is
+-- still playing (it still talks to us: I forfeited, or they were out of contact for a while) we wait
+-- for their verdict until the duel's deadline, so both PCs end up agreed or disputed.
+local function verWaiting(m, t)
+  return t - m.doneAt < Duel.VER_FOR
+    or (t - (m.lastHeard or 0) < Duel.SILENT_WARN and t < (m.deadline or 0) + Duel.VER_FOR)
+end
+local function verKeep(m, t)
+  if not (m.verOut and m.doneAt) then return false end
+  if m.rivalVer then return (m.verSends or 0) < 2 end
+  return verWaiting(m, t)
+end
 local function verTick(m, t)
   if not m.verOut or not m.doneAt then return end
-  if t - m.doneAt >= Duel.VER_FOR then
+  if not m.rivalVer and not verWaiting(m, t) then
     if not m.agreement then m.agreement = "unconfirmed"; emit("changed", m) end
     return
   end
-  local enough = m.rivalVer and m.verSends >= 2
-  if not enough and t - (m.verSentAt or -99) >= Duel.VER_EVERY then
+  if m.rivalVer and m.verSends >= 2 then return end -- sent at least twice (one can be lost)
+  local every = (t - m.doneAt < Duel.VER_FOR) and Duel.VER_EVERY or 10
+  if t - (m.verSentAt or -99) >= every then
     m.verSentAt, m.verSends = t, m.verSends + 1
     send(m, "VER", m.mid, m.verOut[1], m.verOut[2], m.verOut[3], m.verOut[4])
   end
@@ -854,7 +930,7 @@ end
 -- and say "ready" (RSM) when I resume or am only waiting for the rival.
 --- Stop waiting for the rival (they left, went silent or finished): my run goes on alone.
 local function releaseRivalPause(m)
-  m.rivalPaused = false
+  closeRivalPause(m, now())
   local s = session()
   if s and s.duel == m and s.phase == "paused" and s.pauseReason == "rival" then
     s.pauseReason = "manual"
@@ -875,13 +951,22 @@ local function pauseTick(m, t, dt)
       m.pauseN = (m.pauseN or 0) + 1
       m.myPauses = (m.myPauses or 0) + 1
       m.pseAt = -99
+      m.pauseTickAt = s.state.tick
+      -- every pause costs at least PAUSE_MIN_CHARGE of the budget, charged now (shown at once)
+      m.myPaused = (m.myPaused or 0) + Duel.PAUSE_MIN_CHARGE
+      m.myPauseFree = Duel.PAUSE_MIN_CHARGE
     end
-    m.myPaused = (m.myPaused or 0) + dt
-    m.myPausedTotal = m.myPaused
+    local use = dt
+    if (m.myPauseFree or 0) > 0 then
+      local f = math.min(m.myPauseFree, dt)
+      m.myPauseFree, use = m.myPauseFree - f, dt - f
+    end
+    m.myPaused = (m.myPaused or 0) + use              -- the budget
+    m.myPausedTotal = (m.myPausedTotal or 0) + dt     -- real time (the rival waited this long)
     if t - m.pseAt >= Duel.SCORE_EVERY then
       m.pseAt = t
       local why = P.PAUSE_REASONS[s.pauseReason] and s.pauseReason or "manual"
-      send(m, "PSE", m.mid, m.pauseN, why)
+      send(m, "PSE", m.mid, m.pauseN, why, P.b36(m.pauseTickAt))
     end
     if m.myPaused > Duel.PAUSE_BUDGET then
       Duel.leave("you_pause_limit") -- the pause limit: a forfeit, never a free "no result"
@@ -902,13 +987,22 @@ function Duel.update()
   Duel.lastT = t
   diag(Duel.current); diag(Duel.past)
   if Duel.past then verTick(Duel.past, t) end
-  if Duel.past and not serveAfter(Duel.past, t) and not (Duel.past.verOut and t - (Duel.past.doneAt or 0) < Duel.VER_FOR) then Duel.past = nil end
+  if Duel.past and not serveAfter(Duel.past, t) and not verKeep(Duel.past, t) then Duel.past = nil end
   local m = Duel.current
   if not m or m.state == "cancelled" then return end
   if m.state == "done" then serveAfter(m, t); verTick(m, t); return end
   -- my client was frozen (loading screen, a long hitch): not the rival's stall
   if dt > 1.5 and (m.state == "playing" or m.state == "waiting") then m.myFrozen = (m.myFrozen or 0) + dt end
   if m.state == "playing" then pauseTick(m, t, dt) end
+  -- a rival that stays paused far past the budget (it should have forfeited itself): stop waiting
+  if (m.state == "playing" or m.state == "waiting") and m.rivalPaused and not m.rivalPauseLimit
+    and rivalPausedNow(m, t) > Duel.PAUSE_BUDGET + Duel.RIVAL_PAUSE_MARGIN then
+    m.rivalPauseLimit = true
+    releaseRivalPause(m)
+    emit("changed", m)
+    Duel.tryDecide(m)
+    if m.state ~= "playing" and m.state ~= "waiting" then return end
+  end
   if m.state ~= "playing" and m.state ~= "waiting" and m.state ~= "lobby" and m.state ~= "inviting" and m.state ~= "invited" then return end
 
   -- the rival is offline (server said so): stop before the match, or decide during it
@@ -985,11 +1079,16 @@ function Duel.update()
     end
   end
   if m.state ~= "waiting" then return end
-  -- rival's log never fully arrived: no result (a missing log must never decide a winner)
+  -- rival's log never fully arrived (asked for again every few seconds): never a checked result.
+  --   * they still talk to me (heard within SILENT_WARN) but don't send it: withheld -> a forfeit
+  --     (otherwise a loser could turn every loss into "no result" by keeping the log back);
+  --   * their own claim is lower than my score: withholding can't turn their loss into "no result";
+  --   * otherwise (silent: they most likely lost their connection right after their run): no result.
+  -- A forfeit win is labelled as one (basis "forfeit", never "replay"), and their verdict (VER) can
+  -- still make it "disputed".
   if m.rivalEnd and not haveAllChunks(m) and t - math.max(m.rivalEnd.at, m.myEndAt or 0) > Duel.LOG_WAIT then
-    -- their log never came. If even their own claim is lower than my score, withholding the log
-    -- can't be allowed to turn their loss into "no result"
-    if m.my and m.rivalEnd.score < m.my.score then return Duel.finish(m, "rival_no_log") end
+    m.noLogTalking = t - m.lastHeard < Duel.SILENT_WARN
+    if m.my and (m.rivalEnd.score < m.my.score or m.noLogTalking) then return Duel.finish(m, "rival_no_log") end
     return Duel.finish(m, "unchecked")
   end
   if m.leftAt and not m.rivalEnd and t - math.max(m.leftAt, m.myEndAt or 0) > Duel.LOG_WAIT then
@@ -1005,7 +1104,7 @@ end
 function Duel.retire(m)
   if not (m and m.state == "done") then return end
   local serving = m.my and not m.myForfeit and now() - m.doneAt < Duel.LINGER
-  local confirming = m.verOut and now() - m.doneAt < Duel.VER_FOR
+  local confirming = verKeep(m, now())
   if serving or confirming then Duel.past = m end
 end
 

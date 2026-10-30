@@ -286,13 +286,39 @@ describe("duels between two simulated clients", function()
       return realSend(prefix, text, ch, tgt)
     end
     local ma = runDuel(net, a, b)
-    eq(ma.endReason, "check_failed"); eq(ma.outcome, "win")
-    -- the cheater's PC claims another result: the two verdicts don't match, so the duel is
-    -- "disputed" and not counted as a win (it would be one-sided)
+    eq(ma.endReason, "check_failed"); eq(ma.outcome, "win"); eq(ma.basis, "rejected")
+    eq(a.ns.UI.duelOutcomeOf(ma)[1], "WALKOVER", "a rejected rival is not a played-out VICTORY")
+    -- never counted as a played-out win. Bob's own PC replayed both games: if it says Bob won, the
+    -- verdicts don't match ("disputed", not counted); if it agrees Bob lost, it's a forfeit win.
+    for _ = 1, 60 do if ma.agreement then break end net.step(30) end
+    eq(a.ns.db.duels.wins, 0)
+    if ma.agreement == "disputed" then
+      eq(a.ns.db.duels.disputes, 1); eq(a.ns.db.duels.history[1].res, "disputed")
+    else
+      eq(ma.agreement, "agreed"); eq(ma.rivalVer.verdict, "l", "Bob's PC says he lost"); eq(a.ns.db.duels.fwins, 1)
+    end
+  end)
+
+  it("a cheater whose own PC says it won against a rejected result: disputed, counted nowhere", function()
+    local net, a, b = pair({ seed = 21 })
+    local realSend = b.env.C_ChatInfo.SendAddonMessage
+    b.env.C_ChatInfo.SendAddonMessage = function(prefix, text, ch, tgt)
+      local mid, rest = text:match("^1:END:(%w+):(.*)$")
+      if mid then
+        local f = {}
+        for x in rest:gmatch("[^:]+") do f[#f + 1] = x end
+        f[2] = P.b36(P.unb36(f[2]) + 50000)
+        text = "1:END:" .. mid .. ":" .. table.concat(f, ":")
+      end
+      local vmid = text:match("^1:VER:(%w+):")
+      if vmid then text = P.encode("VER", vmid, "w", P.b36(999999), P.b36(1), "r") end -- "I won"
+      return realSend(prefix, text, ch, tgt)
+    end
+    local ma = runDuel(net, a, b)
+    eq(ma.endReason, "check_failed")
     for _ = 1, 60 do if ma.agreement then break end net.step(30) end
     eq(ma.agreement, "disputed")
-    eq(a.ns.db.duels.wins, 0); eq(a.ns.db.duels.disputes, 1)
-    eq(a.ns.db.duels.history[1].res, "disputed")
+    eq(a.ns.db.duels.wins + a.ns.db.duels.fwins, 0); eq(a.ns.db.duels.disputes, 1)
   end)
   it("garbage and spoofed packets are ignored; nothing crashes", function()
     local net, a, b = pair({ seed = 22 })
@@ -444,21 +470,57 @@ describe("review findings (regression tests, simulated clients)", function()
     eq(a.ns.Duel.current.endReason, "checked", "Bob's result still reached Alice")
   end)
 
-  it("#8 a rival who withholds their log gets no result: never a win", function()
+  it("#8 a rival who keeps talking but withholds their log forfeits: a walkover, never a checked win", function()
     local net, a, b = pair({ seed = 38 })
     local realSend = b.env.C_ChatInfo.SendAddonMessage
     b.env.C_ChatInfo.SendAddonMessage = function(prefix, text, ch, tgt)
       if text:match("^1:LOG:") then return 0 end -- "sent", never arrives
       return realSend(prefix, text, ch, tgt)
     end
-    local ma = runDuel(net, a, b)
-    if ma.rivalEnd.score < ma.my.score then
-      -- by his own claim Bob scored less: hiding the log can't turn his loss into "no result"
-      eq(ma.endReason, "rival_no_log"); eq(ma.outcome, "win")
-    else
-      eq(ma.endReason, "unchecked"); eq(ma.outcome, "void")
-      eq(a.ns.db.duels.losses, 0); eq(a.ns.db.duels.voids, 1)
+    local ma, mb = runDuel(net, a, b)
+    -- Bob still sends his END (and everything else) but never his log: whatever he claims, keeping
+    -- the log back can't turn his loss into "no result"
+    eq(ma.endReason, "rival_no_log"); eq(ma.outcome, "win"); eq(ma.basis, "forfeit")
+    ok(ma.noLogTalking, "Bob was still talking")
+    eq(a.ns.UI.duelOutcomeOf(ma)[1], "WALKOVER", "never shown as a VICTORY")
+    for _ = 1, 60 do if ma.agreement then break end net.step(30) end
+    -- Bob replayed Alice's game: if he says he won, the two verdicts disagree -> disputed
+    eq(a.ns.db.duels.wins, 0, "not a played-out win")
+    if ma.agreement == "disputed" then eq(a.ns.db.duels.disputes, 1); eq(a.ns.db.duels.fwins, 0)
+    else eq(a.ns.db.duels.fwins, 1) end
+    eq(mb.basis, "replay", "Bob had Alice's log: his result is a replay")
+  end)
+
+  it("#8b a rival who claims a high score, then goes silent without the log: no result for either side", function()
+    local net, a, b = pair({ seed = 48 })
+    local realSend = b.env.C_ChatInfo.SendAddonMessage
+    local gone = false
+    b.env.C_ChatInfo.SendAddonMessage = function(prefix, text, ch, tgt)
+      if gone or text:match("^1:LOG:") then return 0 end
+      local mid, rest = text:match("^1:END:(%w+):(.*)$")
+      if mid then
+        local f = {}
+        for x in rest:gmatch("[^:]+") do f[#f + 1] = x end
+        f[2] = P.b36(P.unb36(f[2]) + 5000000) -- "I scored a lot more"
+        text = "1:END:" .. mid .. ":" .. table.concat(f, ":")
+        local r = realSend(prefix, text, ch, tgt)
+        gone = true -- ...and nothing after that (like a client that drops right after its run)
+        return r
+      end
+      return realSend(prefix, text, ch, tgt)
     end
+    local ma = runDuel(net, a, b, { during = function(go)
+      -- Bob stops playing at once, so his END comes first
+      for _ = 1, 600 do
+        local s = b.ns.App.session
+        if s and s.phase == "playing" then s:press("hardDrop"); s:release("hardDrop") end
+        go(1)
+        if b.ns.Duel.current.state ~= "playing" then break end
+      end
+    end })
+    eq(ma.endReason, "unchecked"); eq(ma.outcome, "void"); eq(ma.basis, "void")
+    eq(a.ns.db.duels.wins + a.ns.db.duels.fwins + a.ns.db.duels.losses + a.ns.db.duels.flosses, 0)
+    eq(a.ns.db.duels.voids, 1)
   end)
 
   it("#9 seed commit-reveal: an inviter that reveals another nonce is caught", function()
@@ -663,10 +725,12 @@ describe("delivery, API results and budget (simulated clients)", function()
       ok(b2.M.prefixes.StackRivals, "prefix registered again after /reload")
       ok(b2.ns.Comm.enabled)
       eq(b2.ns.Duel.current, nil, "a running duel can't survive a reload")
-      eq(b2.ns.db.duels.losses, 1, "Bob's forfeit was saved at logout")
+      eq(b2.ns.db.duels.flosses, 1, "Bob's forfeit was saved at logout (as a forfeit loss)")
+      eq(b2.ns.db.duels.losses, 0, "not a played-out loss")
       go(30)
     end })
-    eq(ma.endReason, "rival_forfeited"); eq(ma.outcome, "win")
+    eq(ma.endReason, "rival_forfeited"); eq(ma.outcome, "win"); eq(ma.basis, "forfeit")
+    eq(a.ns.db.duels.fwins, 1); eq(a.ns.db.duels.wins, 0)
   end)
 
   it("a client on another protocol version answers in the inviter's version: 'different version'", function()

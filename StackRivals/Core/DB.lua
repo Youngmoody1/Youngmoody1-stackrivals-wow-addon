@@ -150,6 +150,8 @@ function DB.sanitize(raw)
     wins = math.floor(num(rdu.wins, 0, 0, 1e9)), losses = math.floor(num(rdu.losses, 0, 0, 1e9)),
     draws = math.floor(num(rdu.draws, 0, 0, 1e9)), voids = math.floor(num(rdu.voids, 0, 0, 1e9)),
     disputes = math.floor(num(rdu.disputes, 0, 0, 1e9)),
+    -- wins / losses / draws = played-out, replay-checked duels only; these are the rest
+    fwins = math.floor(num(rdu.fwins, 0, 0, 1e9)), flosses = math.floor(num(rdu.flosses, 0, 0, 1e9)),
     history = {},
   }
   if type(rdu.history) == "table" then
@@ -159,6 +161,7 @@ function DB.sanitize(raw)
         db.duels.history[#db.duels.history + 1] = {
           rival = h.rival, me = math.floor(num(h.me, 0, 0, 1e12)), them = math.floor(num(h.them, 0, 0, 1e12)),
           res = str(h.res, 8) or "void", how = str(h.how, 24) or "", rs = str(h.rs, 8) or "b120", d = str(h.d, 16),
+          b = str(h.b, 8),
         }
       end
     end
@@ -321,14 +324,23 @@ function DB.recordRun(db, modeKey, state, playSeconds, runDate, logStr, today)
 end
 
 --- Store a finished duel (match table from Core/Duel.lua).
+--- Which counter a duel result goes to: wins / losses / draws only for a played-out duel whose
+--- result rests on a replay of the rival's game (basis "replay"). A win because the rival left,
+--- lost contact, withheld their log or failed the check is a forfeit win (fwins), never a "win".
+local function duelKey(res, basis)
+  if res == "void" then return "voids" end
+  if basis == "replay" then return (res == "win" and "wins") or (res == "loss" and "losses") or "draws" end
+  return (res == "win" and "fwins") or (res == "loss" and "flosses") or "voids"
+end
+DB.duelKey = duelKey
+
 function DB.recordDuel(db, m, today)
   local d = db.duels
   local res = m.outcome or "void"
-  if res == "win" then d.wins = d.wins + 1
-  elseif res == "loss" then d.losses = d.losses + 1
-  elseif res == "draw" then d.draws = d.draws + 1
-  else d.voids = d.voids + 1 end
-  local entry = { rival = m.rival, me = m.myScore or 0, them = m.theirScore or 0, res = res, how = m.endReason or "", rs = m.rulesetId, d = today }
+  local basis = m.basis or ((m.endReason == "checked") and "replay") or "void"
+  local key = duelKey(res, basis)
+  d[key] = (d[key] or 0) + 1
+  local entry = { rival = m.rival, me = m.myScore or 0, them = m.theirScore or 0, res = res, how = m.endReason or "", rs = m.rulesetId, d = today, b = basis, k = key }
   table.insert(d.history, 1, entry)
   while #d.history > DB.DUEL_HISTORY do table.remove(d.history) end
   return entry
@@ -337,11 +349,8 @@ end
 --- The two PCs disagree about a duel's result: it no longer counts as a win, loss or draw.
 function DB.disputeDuel(db, m)
   local d = db.duels
-  local res = m.outcome or "void"
-  if res == "win" then d.wins = math.max(0, d.wins - 1)
-  elseif res == "loss" then d.losses = math.max(0, d.losses - 1)
-  elseif res == "draw" then d.draws = math.max(0, d.draws - 1)
-  else d.voids = math.max(0, d.voids - 1) end
+  local key = (m.historyRef and m.historyRef.k) or duelKey(m.outcome or "void", m.basis or "void")
+  d[key] = math.max(0, (d[key] or 0) - 1)
   d.disputes = (d.disputes or 0) + 1
   if m.historyRef then m.historyRef.res = "disputed" end
 end

@@ -11,6 +11,22 @@ local P = ns.Protocol
 local OUTCOME = {
   win = { "VICTORY", C.gold }, loss = { "DEFEAT", C.steel }, draw = { "DRAW", C.paper }, void = { "NO RESULT", C.label },
 }
+-- a result that wasn't played out and replay-checked (forfeit, lost contact, rejected): it is never
+-- shown as a VICTORY / DEFEAT
+local NOT_PLAYED = {
+  win = { "WALKOVER", C.gold }, loss = { "FORFEIT", C.steel }, draw = { "DRAW", C.paper }, void = { "NO RESULT", C.label },
+}
+local function outcomeOf(m)
+  local t = (m.basis == nil or m.basis == "replay") and OUTCOME or NOT_PLAYED
+  return t[m.outcome] or OUTCOME.void
+end
+UI.duelOutcomeOf = outcomeOf
+local BASIS = {
+  replay = "Replay-checked result.",
+  rejected = "Won without a played-out result (your rival's game was rejected).",
+  forfeit = "Not played out: decided by a forfeit, not by a replay.",
+  timeout = "Not played out: decided by lost contact / time, not by a replay.",
+}
 local REASON = {
   checked = "Rival's game replayed to the same score on your PC (peer check).",
   unchecked = "Rival's replay didn't arrive, so their score can't be checked: no result.",
@@ -21,7 +37,8 @@ local REASON = {
   rival_offline = "Your rival went offline.",
   you_forfeited = "You left the duel.",
   timeout = "Your rival didn't finish in time.",
-  rival_no_log = "Your rival's replay never arrived, and by their own claim they scored less.",
+  rival_no_log = "Your rival never sent their replay (asked again and again): they forfeit. Their game was not checked.",
+  rival_pause_limit = "Your rival stayed paused far past the 1-minute limit: they forfeit.",
   you_pause_limit = "You paused for more than a minute in total: the duel is forfeited.",
 }
 local AGREEMENT = {
@@ -98,12 +115,12 @@ function UI:CreateDuelSheet()
   s.empty:SetText("Press |cfff6f4f0Find players|r to see who in your guild or group has StackRivals.\nOr type |cffff4d5a/sr duel Name|r to challenge anyone on your realm.")
 
   -- your record
-  local rec = T.label(s, "YOUR DUELS"); rec:SetPoint("BOTTOMLEFT", L, 74)
+  local rec = T.label(s, "YOUR DUELS (PLAYED OUT, REPLAY-CHECKED)"); rec:SetPoint("BOTTOMLEFT", L, 74)
   s.won = T.display(s, SZ.title, C.green); s.won:SetPoint("BOTTOMLEFT", L, 48)
   s.lost = T.display(s, SZ.title, C.redLight); s.lost:SetPoint("BOTTOMLEFT", L + 92, 48)
   s.draws = T.display(s, SZ.title, C.paper); s.draws:SetPoint("BOTTOMLEFT", L + 184, 48)
   local trust = T.text(s, SZ.label, C.label); trust:SetPoint("BOTTOMLEFT", L, 22); trust:SetWidth(270); trust:SetJustifyH("LEFT")
-  trust:SetText("Checked by both players' addons, not by a server.")
+  s.trust = trust
   local close = T.button(s, "Close", 130, 32, "frame", function() s:Hide(); UI:RefreshPhase() end)
   close:SetPoint("BOTTOMRIGHT", -20, 16)
   s:SetScript("OnShow", function() UI:RefreshDuelSheet() end)
@@ -148,6 +165,8 @@ function UI:RefreshDuelSheet()
   s.empty:SetShown(#list == 0)
   local d = ns.db.duels
   s.won:SetText(d.wins .. " won"); s.lost:SetText(d.losses .. " lost"); s.draws:SetText(d.draws .. " draws")
+  -- won / lost / draws count only played-out, replay-checked duels (peer-checked, not by a server)
+  s.trust:SetText(string.format("Forfeits: %d won, %d lost  -  Disputed: %d", d.fwins or 0, d.flosses or 0, d.disputes or 0))
 end
 
 ------------------------------------------------------------------------------------------------
@@ -353,7 +372,7 @@ function UI:ShowDuelOver(m)
     self.overDetail:SetText(m.silentWarned and "No answer from your rival..." or "Waiting for your rival to finish.")
     self.againBtn:SetLabel("Leave duel")
   else
-    local o = OUTCOME[m.outcome] or OUTCOME.void
+    local o = outcomeOf(m)
     self.overTitle:SetText(o[1])
     self.overTitle:SetTextColor(o[2][1], o[2][2], o[2][3])
     self.overScore:SetText(T.commas(m.myScore or 0))
@@ -361,7 +380,7 @@ function UI:ShowDuelOver(m)
     self.overBadge:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
     local note = REASON[m.endReason] or ""
     if m.endReason == "check_failed" and m.check and m.check.reasons and m.check.reasons[1] == "pause_limit" then
-      note = "Your rival's game took far longer than its time plus the allowed pauses: rejected."
+      note = "Your rival's game took far longer than its time plus the pauses both PCs saw (a hidden pause or a slowed-down game): rejected."
     end
     if m.spell and m.endReason == "checked" then
       note = "Both games replayed together on your PC (peer check)."
@@ -369,6 +388,7 @@ function UI:ShowDuelOver(m)
     elseif m.spell and m.endReason == "check_failed" then
       note = "Your rival's spells or moves failed the replay check: their result is rejected."
     end
+    if m.basis and m.basis ~= "replay" and m.basis ~= "void" and BASIS[m.basis] then note = note .. "\n" .. BASIS[m.basis] end
     note = note .. "\n" .. (AGREEMENT[m.agreement] or "Confirming with your rival...")
     if m.agreement == "disputed" then
       self.overTitle:SetText("DISPUTED")
@@ -428,7 +448,7 @@ function UI:CreateDuel()
     ns.App:Print(short(sender) .. " challenged you to a duel, but Trial/Veteran accounts can't send addon messages (Blizzard rule), so you can't answer.")
   end)
   D.on("result", function(m)
-    local o = OUTCOME[m.outcome] or OUTCOME.void
+    local o = outcomeOf(m)
     ns.App:Print(string.format("Duel vs %s: %s  (%s - %s). %s", short(m.rival), o[1], T.commas(m.myScore or 0), T.commas(m.theirScore or 0), REASON[m.endReason] or ""))
     if m.outcome == "win" then ns.Sound.play("record") end
   end)

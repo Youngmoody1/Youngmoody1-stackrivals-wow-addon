@@ -7,8 +7,12 @@
   World of Warcraft ability; the spell keys are read only while a Spell Battle run is live.
 
   Layout in a Spell Battle (same window size as every other mode):
-    left   HOLD | SCORE, MANA bar, 2x2 spell tiles, TIME
-    centre your board (status chips on top: FROZEN / SPEED UP / BLACKOUT)
+    left   HOLD | SCORE, MANA bar, 2x2 spell tiles (icon, key and cost under it), TIME
+    centre your board; ONE message lane under it (where the controls hint is in other modes):
+           spell toasts (LINE BLAST, GARBAGE SENT, NOT ENOUGH MANA) and, between toasts, the
+           status line (INCOMING GARBAGE 1.2s, FROZEN, SPEED UP, BLACKOUT). Nothing spell-related
+           is written over the board, so the falling piece and the stack stay visible; line
+           clears keep their callout on the board.
     right  NEXT (2) | RIVAL: name, mini board + mana, score, lead bar
 ]]
 local _, ns = ...
@@ -50,9 +54,9 @@ end
 ------------------------------------------------------------------------------------------------
 -- Spell tile (in-game bar and the Pick Spells sheet use the same look)
 ------------------------------------------------------------------------------------------------
-local function makeTile(parent, size)
+local function makeTile(parent, w, h)
   local b = CreateFrame("Button", nil, parent)
-  b:SetSize(size, size)
+  b:SetSize(w, h)
   b.bg = T.tex(b, "BACKGROUND", C.ink, 1); b.bg:SetAllPoints()
   b.edge = {}
   for i, side in ipairs({ { "TOPLEFT", "TOPRIGHT", nil, 1 }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, 1 }, { "TOPLEFT", "BOTTOMLEFT", 1, nil }, { "TOPRIGHT", "BOTTOMRIGHT", 1, nil } }) do
@@ -62,9 +66,9 @@ local function makeTile(parent, size)
     b.edge[i] = l
   end
   b.icon = b:CreateTexture(nil, "ARTWORK")
-  local is = math.floor(size * 0.74)
+  local is = w - 10
   b.icon:SetSize(is, is)
-  b.icon:SetPoint("CENTER", 0, 1)
+  b.icon:SetPoint("TOP", 0, -4)
   -- cooldown: a dark curtain that shrinks from the top (no Cooldown frame needed)
   b.cd = T.tex(b, "OVERLAY", C.ink, 0.72)
   b.cd:SetPoint("TOPLEFT", 1, -1); b.cd:SetPoint("TOPRIGHT", -1, -1); b.cd:SetHeight(1)
@@ -74,13 +78,12 @@ local function makeTile(parent, size)
   b.manaTrack:SetPoint("BOTTOMLEFT", 1, 1); b.manaTrack:SetPoint("BOTTOMRIGHT", -1, 1); b.manaTrack:SetHeight(2)
   b.manaFill = T.tex(b, "OVERLAY", C.red, 1, 2)
   b.manaFill:SetPoint("BOTTOMLEFT", 1, 1); b.manaFill:SetHeight(2); b.manaFill:SetWidth(1)
-  b.key = T.display(b, SZ.small, C.paper, "OUTLINE"); b.key:SetPoint("TOPLEFT", 3, -2)
-  -- mana cost on a dark plate, bottom right (readable on any icon)
-  b.costBg = T.tex(b, "ARTWORK", C.ink, 0.85, 7); b.costBg:SetSize(15, 13); b.costBg:SetPoint("BOTTOMRIGHT", -1, 3)
-  b.cost = T.display(b, SZ.small, C.paper, "OUTLINE", "OVERLAY"); b.cost:SetPoint("CENTER", b.costBg, "CENTER", 0, 0)
-  -- cooldown seconds in the middle while the curtain is down
-  b.cdText = T.display(b, SZ.big, C.paper, "OUTLINE", "OVERLAY"); b.cdText:SetPoint("CENTER", 0, 1)
-  b.size = size
+  -- key (left) and mana cost (right) under the icon, never on top of it: readable at any scale
+  b.key = T.display(b, SZ.body, C.paper, "OUTLINE", "OVERLAY"); b.key:SetPoint("BOTTOMLEFT", 4, 5)
+  b.cost = T.display(b, SZ.body, C.paper, "OUTLINE", "OVERLAY"); b.cost:SetPoint("BOTTOMRIGHT", -4, 5)
+  -- cooldown seconds over the icon while the curtain is down
+  b.cdText = T.display(b, SZ.big, C.paper, "OUTLINE", "OVERLAY"); b.cdText:SetPoint("CENTER", b.icon, "CENTER", 0, 0)
+  b.w, b.h = w, h
   b.pop = T.pulseAnim(b, 1.15, 0.24) -- "ready" bump when it becomes castable, and on cast
   return b
 end
@@ -111,7 +114,7 @@ function UI:CreateSpell()
   local box = CreateFrame("Frame", nil, stats)
   box:SetPoint("TOPLEFT", stats, "TOPLEFT", 0, -58)
   box:SetPoint("TOPRIGHT", stats, "TOPRIGHT", 0, -58)
-  box:SetHeight(140)
+  box:SetHeight(152)
   self.spellBox = box
   local div = T.tex(box, "ARTWORK", C.line, 1); div:SetPoint("TOPLEFT", 10, 0); div:SetPoint("TOPRIGHT", -10, 0); div:SetHeight(1)
   local ml = T.label(box, "MANA"); ml:SetPoint("TOPLEFT", 10, -9)
@@ -127,11 +130,11 @@ function UI:CreateSpell()
     self.manaSegs[i] = seg
   end
   self.spellTiles = {}
-  local ts, tg = 42, 4
+  local tw, th, tg = 42, 54, 4
   for i = 1, 4 do
-    local t = makeTile(box, ts)
+    local t = makeTile(box, tw, th)
     local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
-    t:SetPoint("TOPLEFT", 10 + col * (ts + tg), -38 - row * (ts + tg))
+    t:SetPoint("TOPLEFT", 10 + col * (tw + tg), -38 - row * (th + tg))
     t.slot = i
     t:SetScript("OnClick", function() local s = ns.App.session; if s then s:press("spell" .. i) end end)
     t:SetScript("OnEnter", function(btn) if btn.spell then spellTooltip(btn, btn.spell, "Key: " .. keyLabel(i)) end end)
@@ -164,11 +167,12 @@ function UI:CreateSpell()
   rp:Hide()
   self.spellRival = rp
 
-  -- your board: status chips, tints, effect flash, bomb target
-  local chips = CreateFrame("Frame", nil, field)
-  chips:SetSize(field:GetWidth(), 18); chips:SetPoint("TOP", field, "TOP", 0, -4)
+  -- the message lane under the board (status line; toasts below take its place for a moment)
+  local LANE_W = F:GetWidth() - 80
+  local chips = CreateFrame("Frame", nil, F)
+  chips:SetSize(LANE_W, 20); chips:SetPoint("BOTTOM", F, "BOTTOM", 0, 6)
   chips:SetFrameLevel(field:GetFrameLevel() + 4)
-  self.spellChips = T.display(chips, SZ.small, C.paper, "OUTLINE"); self.spellChips:SetPoint("TOP")
+  self.spellChips = T.display(chips, SZ.big, C.paper, "OUTLINE"); self.spellChips:SetPoint("CENTER")
   self.spellChipBox = chips
   local tint = field:CreateTexture(nil, "OVERLAY", nil, 1)
   tint:SetAllPoints(); tint:SetColorTexture(C.steel[1], C.steel[2], C.steel[3], 1); tint:SetAlpha(0)
@@ -195,9 +199,9 @@ function UI:CreateSpell()
   end
   bt:Hide()
   self.bombTarget = bt
-  -- spell toast above the board: "LINE BLAST", "INCOMING GARBAGE"
-  local toast = CreateFrame("Frame", nil, field)
-  toast:SetSize(field:GetWidth(), 22); toast:SetPoint("TOP", field, "TOP", 0, -24)
+  -- spell toast in the lane under the board: "LINE BLAST", "GARBAGE SENT", "INCOMING GARBAGE"
+  local toast = CreateFrame("Frame", nil, F)
+  toast:SetSize(LANE_W, 22); toast:SetPoint("BOTTOM", F, "BOTTOM", 0, 5)
   toast:SetFrameLevel(field:GetFrameLevel() + 6)
   self.spellToast = T.display(toast, SZ.big, C.paper, "OUTLINE"); self.spellToast:SetPoint("CENTER")
   self.spellToastAnim = T.popAnim(toast, 1.15, 0.9, 0.4)
@@ -229,6 +233,7 @@ function UI:SetSpellLayout(on, remote)
   end
   self.spellRival:SetShown(on and not remote)
   self.spellChipBox:SetShown(on)
+  if self.hint then self.hint:SetShown(not on) end -- the message lane takes the hint's place
   if remote then return end -- RefreshDuel sizes NEXT and shows the duel rival panel
   if on then
     self.nextPanel:SetHeight(self.field:GetHeight() - 207)
@@ -298,10 +303,10 @@ function UI:RenderSpell(sess)
       t.cost:SetTextColor(cc[1], cc[2], cc[3])
     end
     local frac = math.min(1, me.mana / S.INFO[spell].cost)
-    local w = math.max(1, (t.size - 2) * frac)
+    local w = math.max(1, (t.w - 2) * frac)
     if t.manaW ~= w then t.manaW = w; t.manaFill:SetWidth(w) end
     if cdLeft > 0 and enough then
-      t.cd:SetHeight(math.max(1, (t.size - 2) * cdLeft / S.CAST_COOLDOWN_TICKS)); t.cd:Show()
+      t.cd:SetHeight(math.max(1, (t.h - 2) * cdLeft / S.CAST_COOLDOWN_TICKS)); t.cd:Show()
       local tenth = math.ceil(cdLeft / 6) -- tenths of a second
       if t.cdText._n ~= tenth then t.cdText._n = tenth; t.cdText:SetText(string.format("%.1f", tenth / 10)) end
       t.cdText:Show()
@@ -331,6 +336,9 @@ function UI:RenderSpell(sess)
     if garbageRows > 0 then self.incomingBar:SetHeight(garbageRows * 19); self.incomingBar:Show() else self.incomingBar:Hide() end
   end
   if self.spellChips._s ~= chips then self.spellChips._s = chips; self.spellChips:SetText(chips) end
+  -- one message at a time in the lane: a toast hides the status line while it shows
+  local toastOn = (self.spellToastUntil or 0) > GetTime()
+  if self.spellChipsHidden ~= toastOn then self.spellChipsHidden = toastOn; self.spellChipBox:SetAlpha(toastOn and 0 or 1) end
   local tk = me.game.tick
   local tintA, tc = 0, nil
   if tk < me.freezeUntil then tintA, tc = 0.10, C.steel elseif tk < me.speedUntil then tintA, tc = 0.07, C.red end
@@ -439,6 +447,8 @@ function UI:SpellFlash(spell, bombCells, fromRival)
 end
 
 function UI:SpellToast(text, color)
+  self.spellToastUntil = GetTime() + 1.45 -- the pop animation's length; the status line waits
+  self.spellChipBox:SetAlpha(0); self.spellChipsHidden = true
   self.spellToast:SetText(text)
   self.spellToast:SetTextColor(color[1], color[2], color[3])
   self.spellToastAnim:Stop(); self.spellToastAnim:Play()
@@ -496,7 +506,7 @@ local REASON = {
 
 function UI:ShowSpellOver(sess)
   local sp = sess.spell
-  self.spellToastAnim:Stop(); self.spellToastBox:SetAlpha(0)
+  self.spellToastAnim:Stop(); self.spellToastBox:SetAlpha(0); self.spellToastUntil = 0
   self.spellFxAnim:Stop(); self.spellFx:SetAlpha(0)
   self.bombTarget:Hide()
   self.shareGuild:Hide(); self.shareGroup:Hide(); self.shareLabel:Hide()

@@ -68,6 +68,16 @@ describe("protocol: Spell Battle additions", function()
     local parsed, why = C.parseResult(spellCode)
     eq(parsed, nil); ok(why == "log" or why == "check", tostring(why))
   end)
+  it("PSE carries the pause tick (optional); VER carries what the verdict rests on", function()
+    local m = P.decode(P.encode("PSE", "abc123", 2, "combat", P.b36(4321)))
+    eq(m.n, 2); eq(m.reason, "combat"); eq(m.tick, 4321)
+    eq(P.decode(P.encode("PSE", "abc123", 2, "combat")).tick, nil, "without the tick (older build)")
+    ok(P.decode("1:PSE:abc123:2:combat:!") == nil and P.decode("1:PSE:abc123:2:combat:1:2") == nil)
+    for code, basis in pairs({ r = "replay", x = "rejected", f = "forfeit", t = "timeout", v = "void", ["1"] = "replay", ["0"] = "rejected" }) do
+      eq(P.decode(P.encode("VER", "abc123", "w", P.b36(10), P.b36(20), code)).basis, basis, code)
+    end
+    ok(P.decode("1:VER:abc123:w:a:k:z") == nil, "unknown basis")
+  end)
   it("version gate: 0.4.x can't play s180, 0.5.0+ can", function()
     ok(not P.versionAtLeast("0.4.0", "0.5.0")); ok(P.versionAtLeast("0.5.0", "0.5.0")); ok(P.versionAtLeast("0.10.1", "0.5.0"))
     ok(not P.versionAtLeast("dev", "0.5.0"))
@@ -396,6 +406,280 @@ describe("Spell Battle duel between two simulated clients", function()
     net.step(30)
     eq(a.ns.Duel.current.rulesetId, "s180"); eq(b.ns.Duel.current.rulesetId, "s180")
     eq(a.ns.Duel.current.myLoadout, nil, "spells are chosen again at Ready")
+  end)
+end)
+
+
+------------------------------------------------------------------------------------------------
+-- Hardening: result classes, pauses, clocks and sync under bad conditions. Each test is a
+-- documented risk (docs/SPELL_BATTLE.md "Result classes" and "Pauses"). Simulated clients only.
+------------------------------------------------------------------------------------------------
+local function agree(net, ma, mb)
+  for _ = 1, 120 do if ma.agreement and mb.agreement then break end; net.step(30) end
+end
+local function dropper(c) return function() local s = c.ns.App.session; if s and s.phase == "playing" then s:press("hardDrop"); s:release("hardDrop") end end end
+local function idle() end
+-- the web's spell bot plays the moves only (no casts): mana builds up for a scripted cast
+local function mover(c, seed, diff)
+  local bot, last
+  return function()
+    local s = c.ns.App.session
+    if not (s and s.spell and s.phase == "playing") or s.state.tick == last then return end
+    last = s.state.tick -- one decision per game tick (a slow client gets fewer, not doubled, keys)
+    bot = bot or c.ns.Bot.SpellBot.new(seed, diff)
+    local code = bot:act(s.spell.me, { game = { score = 0 } })
+    if code and not c.ns.Spells.spellOfCode(code) then
+      local a = c.ns.Engine.INPUT_ACTIONS[code + 1]
+      s:press(a); s:release(a)
+    end
+  end
+end
+local function blockSends(c, pattern)
+  local real = c.env.C_ChatInfo.SendAddonMessage
+  c.env.C_ChatInfo.SendAddonMessage = function(prefix, text, ch, tgt)
+    if text:match(pattern) then return 0 end
+    return real(prefix, text, ch, tgt)
+  end
+end
+-- everything that moves with time on a spell side
+local function snap(c)
+  local s = c.ns.App.session
+  local me = s.spell.me
+  local pend = {}
+  for _, p in ipairs(s.spell.pendingMe) do pend[#pend + 1] = p.spell .. "@" .. p.at end
+  return table.concat({ me.game.tick, me.mana, me.freezeUntil, me.speedUntil, me.blackoutUntil, S.cooldownLeft(me),
+    c.ns.Engine.hashState(me.game), table.concat(pend, ","), #me.hits }, "|")
+end
+
+describe("hardening: result classes, pauses, clocks and sync (simulated clients)", function()
+  it("a forfeit is a forfeit on both PCs: labelled, counted apart, and the verdicts agree", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    play(net, a, b, 1200)
+    a.ns.Duel.leave()
+    play(net, a, b, 10800, idle)
+    finishBoth(net, a, b)
+    agree(net, ma, mb)
+    eq(ma.endReason, "you_forfeited"); eq(ma.basis, "forfeit"); eq(ma.outcome, "loss")
+    eq(mb.endReason, "rival_forfeited"); eq(mb.basis, "forfeit"); eq(mb.outcome, "win")
+    -- live scores of a forfeit can't match exactly on both PCs: only the outcome is compared
+    eq(ma.agreement, "agreed", "the forfeiter waited for the rival's verdict"); eq(mb.agreement, "agreed")
+    eq(b.ns.db.duels.wins, 0); eq(b.ns.db.duels.fwins, 1); eq(a.ns.db.duels.losses, 0); eq(a.ns.db.duels.flosses, 1)
+    eq(b.ns.UI.duelOutcomeOf(mb)[1], "WALKOVER"); eq(a.ns.UI.duelOutcomeOf(ma)[1], "FORFEIT")
+    eq(b.ns.db.duels.history[1].b, "forfeit")
+  end)
+
+  it("a played-out duel is the only VICTORY / DEFEAT, and only it counts as won / lost", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    play(net, a, b, 2000, dropper(a), dropper(b))
+    finishBoth(net, a, b)
+    agree(net, ma, mb)
+    eq(ma.basis, "replay"); eq(mb.basis, "replay"); eq(ma.agreement, "agreed")
+    local d = a.ns.db.duels
+    eq(d.wins + d.losses + d.draws, 1); eq(d.fwins + d.flosses, 0)
+    local t = a.ns.UI.duelOutcomeOf(ma)[1]
+    ok(t == "VICTORY" or t == "DEFEAT" or t == "DRAW", t)
+  end)
+
+  it("a dispute takes the result out of the counter it was in (forfeit counters too)", function()
+    local net, a = pair()
+    local DB = a.ns.DB
+    local db = a.ns.db
+    local m = { outcome = "win", basis = "forfeit", endReason = "rival_no_log", rival = "Bob-Realm", myScore = 1, theirScore = 0, rulesetId = "s180" }
+    m.historyRef = DB.recordDuel(db, m, "2026-11-05")
+    eq(db.duels.fwins, 1)
+    DB.disputeDuel(db, m)
+    eq(db.duels.fwins, 0); eq(db.duels.disputes, 1); eq(db.duels.history[1].res, "disputed")
+    local m2 = { outcome = "loss", basis = "replay", endReason = "checked", rival = "Bob-Realm", rulesetId = "s180" }
+    m2.historyRef = DB.recordDuel(db, m2, "2026-11-05")
+    eq(db.duels.losses, 1); DB.disputeDuel(db, m2); eq(db.duels.losses, 0); eq(db.duels.disputes, 2)
+  end)
+
+  it("all RSM copies lost: the rival's score heartbeat (clock moving again) still ends my wait", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    blockSends(a, "^1:RSM:")
+    local pa, pb = spellPlayer(a, "pa", "elite"), spellPlayer(b, "pb", "elite")
+    play(net, a, b, 1200, pa, pb)
+    a.ns.App:Pause("manual")
+    play(net, a, b, 300, pa, pb)
+    local sb = b.ns.App.session
+    eq(sb.phase, "paused"); eq(sb.pauseReason, "rival")
+    a.ns.App:Resume()
+    play(net, a, b, 60 * 6, pa, pb) -- 2 s resume countdown + one heartbeat (2 s) + latency
+    ok(sb.phase == "playing" or sb.phase == "countdown", "Bob runs again: " .. sb.phase)
+    play(net, a, b, 10800, pa, pb)
+    finishBoth(net, a, b)
+    agree(net, ma, mb)
+    eq(ma.endReason, "checked"); eq(mb.endReason, "checked"); eq(ma.agreement, "agreed")
+  end)
+
+  it("a rival that never comes back from a pause (ignores the limit): I stop waiting and win by forfeit", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    a.ns.Duel.PAUSE_BUDGET = 1e9 -- modified client
+    local pb = spellPlayer(b, "pb", "elite")
+    play(net, a, b, 900, nil, pb)
+    a.ns.App:Pause("manual")
+    play(net, a, b, 60 * 50, idle, pb)
+    local sb = b.ns.App.session
+    eq(sb.phase, "paused", "Bob waits while it's within the limit")
+    play(net, a, b, 60 * 25, idle, pb)
+    ok(mb.rivalPauseLimit, "Bob saw the pause go far past the limit")
+    ok(sb.phase == "playing" or sb.phase == "countdown" or sb.phase == "over", "Bob plays on: " .. sb.phase)
+    play(net, a, b, 10800, idle, pb)
+    for _ = 1, 400 do if mb.state == "done" then break end; net.step(30) end
+    eq(mb.endReason, "rival_pause_limit"); eq(mb.outcome, "win"); eq(mb.basis, "forfeit")
+  end)
+
+  it("micro-pauses cost at least 3 s each: a rival can't break your rhythm for free", function()
+    local net, a, b = pair()
+    local ma = startSpellDuel(net, a, b)
+    play(net, a, b, 600)
+    for i = 1, 25 do
+      if ma.state ~= "playing" then break end
+      a.ns.App:Pause("manual"); net.step(6); a.ns.App:Resume(); net.step(130)
+      if i == 10 then ok(ma.myPaused >= 30, "10 short pauses = " .. ma.myPaused .. " s of the budget") end
+    end
+    eq(ma.endReason, "you_pause_limit", "the 21st pause goes over 60 s")
+    ok(ma.myPauses <= 21, tostring(ma.myPauses))
+  end)
+
+  it("a shared pause freezes everything that runs on time: clock, mana, cooldowns, spells on their way, effects", function()
+    local net, a, b = pair({ latency = { 0.05, 0.1 } })
+    local ma, mb = startSpellDuel(net, a, b)
+    local sa, sb = a.ns.App.session, b.ns.App.session
+    -- both play (moves only) until they have earned the mana: Bob for Freeze, Alice for Garbage
+    local pa, pb = mover(a, "pa", "elite"), mover(b, "pb", "elite")
+    for _ = 1, 60 * 150 do
+      if S.canCast(sa.spell.me, "garbage") and S.canCast(sb.spell.me, "freeze") then break end
+      pa(); pb(); net.step(1)
+    end
+    ok(S.canCast(sa.spell.me, "garbage") and S.canCast(sb.spell.me, "freeze"), "mana earned")
+    sb:press("spell1") -- Bob: Freeze on himself (5 s)
+    sa:press("spell3") -- Alice: Garbage at Bob (lands 90 ticks later on his clock)
+    net.step(20)
+    eq(#sb.spell.pendingMe, 1, "the garbage is on its way to Bob")
+    ok(sb.spell.me.freezeUntil > sb.state.tick, "Bob is frozen")
+    local castTick = sb.spell.pendingMe[1].castTick
+    b.M.combat = true; b.M.fire("PLAYER_REGEN_DISABLED")
+    net.step(30)
+    eq(sa.phase, "paused"); eq(sb.phase, "paused")
+    local before = { snap(a), snap(b) }
+    net.step(60 * 10)
+    eq(snap(a), before[1], "Alice's side did not move"); eq(snap(b), before[2], "Bob's side did not move")
+    b.M.combat = false; b.M.fire("PLAYER_REGEN_ENABLED"); b.ns.App:Resume()
+    play(net, a, b, 600, idle, idle)
+    eq(#sb.spell.landings, 1)
+    eq(sb.spell.landings[1].tick, castTick + S.DELIVERY_TICKS, "landed exactly at its tick, after the pause")
+    play(net, a, b, 10800, dropper(a), dropper(b))
+    finishBoth(net, a, b)
+    local why = function(m) return table.concat(m.check and m.check.reasons or {}, ",") .. (m.stall and (" stall " .. m.stall.stall .. "/" .. m.stall.allowed) or "") end
+    eq(ma.endReason, "checked", why(ma)); eq(mb.endReason, "checked", why(mb))
+    eq(ma.spell.diverged, false); eq(mb.spell.diverged, false)
+  end)
+
+  it("my run is over, the rival's isn't: their pause is still measured, no false clock rejection", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    local pa = spellPlayer(a, "pa", "elite")
+    play(net, a, b, 2400, pa, dropper(b))
+    eq(mb.state, "waiting", "Bob topped out")
+    a.M.combat = true; a.M.fire("PLAYER_REGEN_DISABLED")
+    play(net, a, b, 60 * 40, pa, idle)
+    a.M.combat = false; a.M.fire("PLAYER_REGEN_ENABLED"); a.ns.App:Resume()
+    play(net, a, b, 10800, pa, idle)
+    finishBoth(net, a, b)
+    ok((mb.rivalPausedSeen or 0) > 35, "Bob measured Alice's pause: " .. tostring(mb.rivalPausedSeen))
+    eq(mb.endReason, "checked", "honest pause after Bob's run: accepted")
+  end)
+
+  it("a slowed-down game (75 % speed, no pauses: easier to play) is caught by the clock check", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    local sa = a.ns.App.session
+    local real = sa.update
+    sa.update = function(self, dt) return real(self, dt * 0.75) end -- modified client: slow motion
+    -- Bob tops out at once (no spells to sink Alice); Alice plays on in slow motion
+    play(net, a, b, 10800 / 0.75 + 900, NS.autoplay(a, "fast"), dropper(b))
+    finishBoth(net, a, b)
+    print(string.format("    slow motion: Alice's run %d ticks, extra time %d s, allowed %d s", sa.state.tick, mb.stall.stall, mb.stall.allowed))
+    ok(sa.state.tick > 4000, "a run long enough to tell: " .. sa.state.tick)
+    eq(mb.endReason, "check_failed", mb.stall.stall .. " / " .. mb.stall.allowed)
+    eq(mb.check.reasons[1], "pause_limit")
+  end)
+
+  it("an honest slow PC (5 FPS, two 3 s freezes) on a bad network: both PCs check and agree", function()
+    local net, a, b = pair({ latency = { 0.3, 0.8 }, drop = 0.05, dup = 0.1 })
+    local ma, mb = startSpellDuel(net, a, b)
+    if ma.state ~= "playing" then return end -- a lost GO is covered by the duel tests
+    a.frameDt = 1 / 5
+    local pa, pb = spellPlayer(a, "pa", "contender"), spellPlayer(b, "pb", "contender")
+    play(net, a, b, 3000, pa, pb)
+    a.hangUntil = net.time + 3
+    play(net, a, b, 3000, pa, pb)
+    a.hangUntil = net.time + 3
+    play(net, a, b, 10800, pa, pb)
+    finishBoth(net, a, b)
+    agree(net, ma, mb)
+    eq(ma.endReason, "checked"); eq(mb.endReason, "checked", "Alice's slow PC is not a cheat")
+    eq(ma.myScore, mb.theirScore); eq(ma.theirScore, mb.myScore)
+    eq(ma.agreement, "agreed"); eq(mb.agreement, "agreed")
+    ok(mb.stall.stall <= mb.stall.allowed, mb.stall.stall .. " <= " .. mb.stall.allowed)
+  end)
+
+  it("pause messages 2-2.5 s late and both players in combat, overlapping: same result, checked, agreed", function()
+    local net, a, b = pair({ latency = { 2.0, 2.5 } })
+    local ma, mb = startSpellDuel(net, a, b)
+    local pa, pb = spellPlayer(a, "pa", "elite"), spellPlayer(b, "pb", "rival")
+    play(net, a, b, 1800, pa, pb)
+    a.M.combat = true; a.M.fire("PLAYER_REGEN_DISABLED")
+    play(net, a, b, 300, pa, pb)
+    b.M.combat = true; b.M.fire("PLAYER_REGEN_DISABLED")
+    play(net, a, b, 600, pa, pb)
+    a.M.combat = false; a.M.fire("PLAYER_REGEN_ENABLED"); a.ns.App:Resume()
+    play(net, a, b, 300, pa, pb)
+    eq(a.ns.App.session.phase, "paused", "Alice waits for Bob"); eq(a.ns.App.session.pauseReason, "rival")
+    b.M.combat = false; b.M.fire("PLAYER_REGEN_ENABLED"); b.ns.App:Resume()
+    play(net, a, b, 10800, pa, pb)
+    finishBoth(net, a, b)
+    agree(net, ma, mb)
+    eq(ma.endReason, "checked"); eq(mb.endReason, "checked")
+    eq(ma.myScore, mb.theirScore); eq(ma.agreement, "agreed"); eq(mb.agreement, "agreed")
+  end)
+
+  it("an old pause message that arrives after the resume does not pause the game again", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    play(net, a, b, 900)
+    local tick = a.ns.App.session.state.tick
+    a.ns.App:Pause("manual"); play(net, a, b, 120); a.ns.App:Resume(); play(net, a, b, 300)
+    local sb = b.ns.App.session
+    eq(sb.phase, "playing")
+    net.inject(b, "Alice-Realm", P.encode("PSE", ma.mid, 1, "manual", P.b36(tick)))
+    play(net, a, b, 30)
+    eq(sb.phase, "playing", "pause #1 is over: a late copy is ignored")
+  end)
+
+  it("the rival pauses, then goes silent: after 35 s I play on; lost contact, not a replay result", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    local pb = spellPlayer(b, "pb", "elite")
+    play(net, a, b, 900, nil, pb)
+    a.ns.App:Pause("manual")
+    play(net, a, b, 120, idle, pb)
+    eq(b.ns.App.session.pauseReason, "rival")
+    a.hangUntil = net.time + 3600 -- Alice's client freezes for good: no more messages (still "online")
+    play(net, a, b, 60 * 30, idle, pb)
+    eq(b.ns.App.session.phase, "paused", "within 35 s Bob still waits")
+    play(net, a, b, 60 * 10, idle, pb)
+    local sb = b.ns.App.session
+    ok(sb.phase == "playing" or sb.phase == "countdown", "Bob plays on: " .. sb.phase)
+    play(net, a, b, 10800, idle, pb)
+    for _ = 1, 400 do if mb.state == "done" then break end; net.step(30) end
+    ok(mb.endReason == "rival_disconnected" or mb.endReason == "rival_offline", mb.endReason)
+    eq(mb.basis, "timeout"); eq(b.ns.UI.duelOutcomeOf(mb)[1], "WALKOVER")
   end)
 end)
 

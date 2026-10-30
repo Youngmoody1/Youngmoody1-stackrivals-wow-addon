@@ -13,6 +13,10 @@ Session.__index = Session
 local STEP = 1 / 60
 local MAX_STEPS_PER_FRAME = 8
 local MAX_DT = 0.25
+-- Duels run on real time even at very low FPS (up to 1 s per frame is caught up): a slow PC must not
+-- play a slowed-down, easier game, and an honest run never trips the rival's clock check.
+local DUEL_MAX_STEPS_PER_FRAME = 60
+local DUEL_MAX_DT = 1.0
 local COUNTDOWN_TICKS = 180 -- 3 s before a new run
 local RESUME_TICKS = 120 -- 2 s when resuming
 
@@ -207,10 +211,12 @@ function Session:update(dt)
     return true
   end
   if self.phase ~= "playing" and self.phase ~= "countdown" then return false end
-  if dt > MAX_DT then dt = MAX_DT end
+  local maxDt, maxSteps = MAX_DT, MAX_STEPS_PER_FRAME
+  if self.duel then maxDt, maxSteps = DUEL_MAX_DT, DUEL_MAX_STEPS_PER_FRAME end
+  if dt > maxDt then dt = maxDt end
   self.acc = self.acc + dt
   local changed, n = false, 0
-  while self.acc >= STEP and n < MAX_STEPS_PER_FRAME do
+  while self.acc >= STEP and n < maxSteps do
     self.acc = self.acc - STEP
     n = n + 1
     if self.phase == "countdown" then
@@ -231,7 +237,7 @@ function Session:update(dt)
       break
     end
   end
-  if n >= MAX_STEPS_PER_FRAME then self.acc = 0 end -- never spiral after a long frame
+  if n >= maxSteps then self.acc = 0 end -- never spiral after a long frame
   return changed
 end
 
