@@ -29,7 +29,7 @@
                                                     tick; yours pauses too; repeated while it lasts. A score
                                                     heartbeat (SC) past that tick also means "resumed"
     1:RSM:<mid>:<n>                                 (0.5+) I'm ready again after pause #n (both resume together)
-    1:VER:<mid>:<w|l|d|v>:<my36>:<your36>:<basis>   (0.5+) my final verdict, so both PCs can confirm the same
+    1:VER:<mid>:<w|l|d|v>:<my36>:<your36>:<basis>[:<ack>]  (0.5+) my final verdict (ack 1 = I have yours), so both PCs can confirm the same
                                                     result. basis = what my verdict rests on: r = both games
                                                     replayed, x = your result failed my replay check,
                                                     f = forfeit / left / log never sent, t = lost contact or
@@ -127,8 +127,8 @@ local SPEC = {
   HEL = 2, HI = 3, INV = 4, ACC = 2, DEC = 2, RDY = 1, GO = 2, PNG = 1, SC = 5, END = 7, LOG = 4, BYE = 2, RQ = 2, FIN = 1,
   SP = 4, PSE = 3, RSM = 2, VER = 5,
 }
-P.PAUSE_REASONS = { combat = true, chat = true, manual = true, hidden = true, loading = true, settings = true, restored = true }
-local OPTIONAL = { RDY = 1, GO = 1, PSE = 1 } -- extra trailing fields a kind may carry (newer clients)
+P.PAUSE_REASONS = { combat = true, chat = true, manual = true, hidden = true, loading = true, settings = true, restored = true, frozen = true }
+local OPTIONAL = { RDY = 1, GO = 1, PSE = 1, VER = 1 } -- extra trailing fields a kind may carry (newer clients)
 --- VER basis codes (see the header). Scores are only compared when both verdicts rest on a replay.
 P.VER_BASIS = { r = "replay", x = "rejected", f = "forfeit", t = "timeout", v = "void", ["1"] = "replay", ["0"] = "rejected" }
 P.VER_CODE = { replay = "r", rejected = "x", forfeit = "f", timeout = "t", void = "v" }
@@ -190,6 +190,10 @@ function P.decode(s)
     if not isMid(f[3]) or not (f[4] == "w" or f[4] == "l" or f[4] == "d" or f[4] == "v") or not a or not b or not P.VER_BASIS[f[7]] then return nil, "bad" end
     m.mid, m.verdict, m.mine, m.yours, m.basis = f[3], f[4], a, b, P.VER_BASIS[f[7]]
     m.check = m.basis ~= "rejected"
+    if f[8] then
+      if f[8] ~= "0" and f[8] ~= "1" then return nil, "bad" end
+      m.ack = f[8] == "1"
+    end
   elseif kind == "SP" then
     local t, sp = P.unb36(f[5]), tonumber(f[6])
     if not isMid(f[3]) or not isInt(f[4], 1, 9999) or not t or not isInt(f[6], 0, 8) then return nil, "bad" end

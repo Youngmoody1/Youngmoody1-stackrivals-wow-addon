@@ -389,6 +389,7 @@ function UI:ShowDuelOver(m)
       note = "Your rival's spells or moves failed the replay check: their result is rejected."
     end
     if m.basis and m.basis ~= "replay" and m.basis ~= "void" and BASIS[m.basis] then note = note .. "\n" .. BASIS[m.basis] end
+    if m.noClock then note = note .. "\nYour rival's StackRivals has no shared pauses or clock check (older version)." end
     note = note .. "\n" .. (AGREEMENT[m.agreement] or "Confirming with your rival...")
     if m.agreement == "disputed" then
       self.overTitle:SetText("DISPUTED")

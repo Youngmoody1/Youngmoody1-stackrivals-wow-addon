@@ -163,7 +163,7 @@ function NS.new(opts)
           if not hung and c.acc >= (c.frameDt or dt) - 1e-9 then
             local fdt = c.acc
             c.acc = 0
-            c.M.time = net.time
+            c.M.time = net.time - fdt -- frames_step adds fdt: GetTime() = net.time in this frame
             c.M.frames_step(1, fdt)
           end
         end

@@ -685,4 +685,121 @@ describe("hardening: result classes, pauses, clocks and sync (simulated clients)
   end)
 end)
 
+
+describe("hardening, review round: fake pauses, loading screens, leaving, verdicts (simulated clients)", function()
+  it("fake micro-pauses can't buy clock allowance: a slowed-down client that fakes 35 pauses is still stopped", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    local sa = a.ns.App.session
+    local real = sa.update
+    sa.update = function(self, dt) return real(self, dt * 0.6) end -- slow motion...
+    local pa = NS.autoplay(a, "fast")
+    local n = 0
+    for f = 1, math.floor(10800 / 0.6 + 900) do
+      pa(); dropper(b)()
+      -- ...and once Bob waits, a fake PSE / RSM pair every 1.2 s (each "pause" 0.6 s long)
+      if mb.state == "waiting" and n < 35 and f % 72 == 0 then
+        n = n + 1
+        a.ns.Comm.send(P.encode("PSE", ma.mid, n, "manual", P.b36(sa.state.tick)), "WHISPER", "Bob-Realm")
+      end
+      if n > 0 and f % 72 == 36 then a.ns.Comm.send(P.encode("RSM", ma.mid, n), "WHISPER", "Bob-Realm") end
+      net.step(1)
+    end
+    for _ = 1, 400 do if mb.state == "done" then break end; net.step(30) end
+    -- each fake pause costs the 3 s minimum on Bob's PC too: past 70 s Bob stops counting them
+    ok(mb.rivalPauseLimit, "Bob saw the pause budget used up")
+    ok(mb.endReason == "rival_pause_limit" or (mb.endReason == "check_failed" and mb.check.reasons[1] == "pause_limit"), mb.endReason)
+    eq(mb.outcome, "win"); ok(mb.basis ~= "replay")
+  end)
+
+  it("an honest loading screen of 28 s (its pause message can only leave afterwards) is measured from its start", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    local pa, pb = NS.autoplay(a, "fast"), NS.autoplay(b, "fast")
+    play(net, a, b, 2400, pa, pb)
+    a.M.fire("LOADING_SCREEN_ENABLED") -- pauses Alice's run ("loading")...
+    a.hangUntil = net.time + 28         -- ...and no Lua runs until the loading screen is over
+    play(net, a, b, 28 * 60 + 30, idle, pb)
+    a.hangUntil = nil
+    a.ns.App:Resume()
+    play(net, a, b, 10800, pa, pb)
+    finishBoth(net, a, b)
+    ok((mb.rivalPausedSeen or 0) > 25, "Bob counted the whole pause: " .. tostring(mb.rivalPausedSeen))
+    eq(mb.endReason, "checked", mb.stall and (mb.stall.stall .. " / " .. mb.stall.allowed) or "")
+    eq(ma.endReason, "checked")
+  end)
+
+  it("an honest 28 s freeze without any pause event: announced as a pause ('frozen'), the rival accepts the run", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    local pa, pb = NS.autoplay(a, "fast"), NS.autoplay(b, "fast")
+    play(net, a, b, 2400, pa, pb)
+    a.hangUntil = net.time + 28
+    play(net, a, b, 28 * 60 + 30, idle, pb)
+    a.hangUntil = nil
+    eq(ma.myPauses, 1, "the freeze counts as one pause"); ok(ma.myPaused >= 26, "and uses the budget: " .. ma.myPaused)
+    eq(b.ns.App.session.phase, "playing", "Bob is not paused by a freeze that is already over")
+    play(net, a, b, 10800, pa, pb)
+    finishBoth(net, a, b)
+    eq(mb.endReason, "checked", mb.stall and (mb.stall.stall .. " / " .. mb.stall.allowed) or "")
+  end)
+
+  it("pausing after the rival forfeited costs nothing: still a walkover, never a draw or a loss", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    play(net, a, b, 1200)
+    b.ns.Duel.leave() -- Bob forfeits
+    play(net, a, b, 120, nil, idle)
+    a.M.combat = true; a.M.fire("PLAYER_REGEN_DISABLED")
+    play(net, a, b, 60 * 70, idle, idle) -- 70 s in combat
+    a.M.combat = false; a.M.fire("PLAYER_REGEN_ENABLED"); a.ns.App:Resume()
+    play(net, a, b, 10800, nil, idle)
+    for _ = 1, 400 do if ma.state == "done" then break end; net.step(30) end
+    eq(ma.endReason, "rival_forfeited"); eq(ma.outcome, "win")
+    agree(net, ma, mb)
+    eq(ma.agreement, "agreed")
+  end)
+
+  it("both wait for each other and every RSM copy is lost for a while: the repeated 'ready' gets both going", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    local pa, pb = NS.autoplay(a, "fast"), NS.autoplay(b, "fast")
+    play(net, a, b, 1500, pa, pb)
+    local blocked = true
+    for _, c in ipairs({ a, b }) do
+      local real = c.env.C_ChatInfo.SendAddonMessage
+      c.env.C_ChatInfo.SendAddonMessage = function(p1, text, ch, tg) if blocked and text:match("^1:RSM:") then return 0 end return real(p1, text, ch, tg) end
+    end
+    a.M.combat = true; a.M.fire("PLAYER_REGEN_DISABLED")
+    b.M.combat = true; b.M.fire("PLAYER_REGEN_DISABLED")
+    play(net, a, b, 300, pa, pb)
+    a.M.combat = false; a.M.fire("PLAYER_REGEN_ENABLED"); a.ns.App:Resume()
+    b.M.combat = false; b.M.fire("PLAYER_REGEN_ENABLED"); b.ns.App:Resume()
+    play(net, a, b, 300, pa, pb)
+    eq(a.ns.App.session.pauseReason, "rival"); eq(b.ns.App.session.pauseReason, "rival") -- deadlock while RSM is lost
+    blocked = false
+    play(net, a, b, 60 * 6, pa, pb)
+    ok(a.ns.App.session.phase ~= "paused" and b.ns.App.session.phase ~= "paused", "both run again")
+    play(net, a, b, 10800, pa, pb)
+    finishBoth(net, a, b)
+    eq(ma.endReason, "checked"); eq(mb.endReason, "checked")
+  end)
+
+  it("verdicts: the first copies lost both ways, still both 'agreed' (VER carries an ack)", function()
+    local net, a, b = pair()
+    local ma, mb = startSpellDuel(net, a, b)
+    for _, c in ipairs({ a, b }) do
+      local real, dropped = c.env.C_ChatInfo.SendAddonMessage, 0
+      c.env.C_ChatInfo.SendAddonMessage = function(p1, text, ch, tg)
+        if text:match("^1:VER:") and dropped < 2 then dropped = dropped + 1; return 0 end
+        return real(p1, text, ch, tg)
+      end
+    end
+    play(net, a, b, 2000, dropper(a), dropper(b))
+    finishBoth(net, a, b)
+    agree(net, ma, mb)
+    eq(ma.agreement, "agreed"); eq(mb.agreement, "agreed")
+  end)
+end)
+
 return H

@@ -345,7 +345,7 @@ ev:SetScript("OnEvent", function(_, event, arg1)
     end
   elseif event == "PLAYER_LOGOUT" then
     -- a running duel can't survive a reload: tell the rival (best effort)
-    if ns.Duel and ns.Duel.busy() then ns.Duel.leave() end
+    if ns.Duel and ns.Duel.busy() then ns.Duel.leave("logout") end
     -- keep an unfinished run so /reload or logout never loses it
     local s = App.session
     if s and s.spell then ns.SpellBattle.settleAll(s) end -- a finished Spell Battle is counted now

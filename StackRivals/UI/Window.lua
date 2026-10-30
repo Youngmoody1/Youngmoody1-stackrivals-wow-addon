@@ -785,6 +785,8 @@ function UI:OnUpdate(elapsed)
     self:RefreshPhase() -- listening window over: Space is a jump again
   end
   if self.goUntil and now >= self.goUntil then self.goUntil = nil; self.countBox:Hide() end
+  -- the spell status line comes back when a toast is over, also while nothing else redraws
+  if self.spellChipsHidden and now >= (self.spellToastUntil or 0) then self.spellChipsHidden = false; self.spellChipBox:SetAlpha(1) end
   if self.forfeitArmedAt and now - self.forfeitArmedAt >= 3 then self.forfeitArmedAt = nil; self:RefreshPhase() end
   if sess and sess.duel and sess.phase == "paused" and now - (self.pauseTextAt or 0) >= 1 then
     self.pauseTextAt = now; self:RefreshPhase() -- the duel's pause-time counter

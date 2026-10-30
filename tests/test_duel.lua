@@ -459,15 +459,37 @@ describe("review findings (regression tests, simulated clients)", function()
     eq(a.ns.db.duels.wins, 0)
   end)
 
-  it("#7 leaving after your own run ended: no result for you, a checked result for the rival", function()
+  it("#7 leaving after your own run ended: back to the menu, the duel is still decided (leaving never voids a loss)", function()
     local net, a, b = pair({ seed = 37 })
     startDuel(net, a, b)
     ok(bobTopsOut(net, a, b, function() return b.ns.Duel.current.state == "waiting" end), "Bob topped out")
-    b.ns.Duel.leave(); b.ns.App:ShowMenu()
-    eq(b.ns.db.duels.voids, 1); eq(b.ns.db.duels.losses, 0, "not counted as a forfeit loss")
-    eq(b.ns.db.duels.history[1].how, "you_left")
-    ok(bobTopsOut(net, a, b, function() return a.ns.Duel.current.state == "done" end), "Alice finished")
-    eq(a.ns.Duel.current.endReason, "checked", "Bob's result still reached Alice")
+    b.ns.Duel.leave()
+    local mb = b.ns.Duel.current
+    ok(mb.viewLeft, "Bob is back in the menu"); eq(b.ns.App.session, nil); eq(mb.state, "waiting")
+    local okC, why = b.ns.Duel.challenge("Alice", "b120")
+    eq(okC, false); eq(why, "deciding")
+    ok(bobTopsOut(net, a, b, function() return a.ns.Duel.current.state == "done" and mb.state == "done" end), "both decided")
+    local ma = a.ns.Duel.current
+    eq(ma.endReason, "checked", "Bob's result reached Alice"); eq(mb.endReason, "checked", "and Alice's reached Bob")
+    eq(mb.basis, "replay"); complementary(ma, mb)
+    for _ = 1, 60 do if ma.agreement and mb.agreement then break end net.step(30) end
+    eq(ma.agreement, "agreed"); eq(mb.agreement, "agreed")
+    eq(b.ns.db.duels.voids, 0)
+  end)
+
+  it("#7b /reload after your own run ended: no verdict from you, so the rival's checked result stands (not disputed)", function()
+    local net, a, b = pair({ seed = 47 })
+    startDuel(net, a, b)
+    ok(bobTopsOut(net, a, b, function() return b.ns.Duel.current.state == "waiting" end), "Bob topped out")
+    net.step(60 * 6) -- his log has streamed
+    local b2 = net.reload(b)
+    eq(b2.ns.db.duels.voids, 1, "Bob's own PC can't follow the result any more: no result for him")
+    ok(bobTopsOut(net, a, b2, function() return a.ns.Duel.current.state == "done" end), "Alice finished")
+    local ma = a.ns.Duel.current
+    eq(ma.endReason, "checked"); eq(ma.basis, "replay")
+    for _ = 1, 80 do if ma.agreement then break end net.step(30) end
+    eq(ma.agreement, "unconfirmed", "not disputed: Alice's result is counted")
+    eq(a.ns.db.duels.disputes, 0)
   end)
 
   it("#8 a rival who keeps talking but withholds their log forfeits: a walkover, never a checked win", function()
