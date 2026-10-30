@@ -74,6 +74,8 @@ er slået fra. `/sr version` viser "build vsbot (duels off)". Mappen hedder stad
 | B10 | Spil 3:00 færdigt (begge) ✱ | Samme to tal hos begge (spejlvendt). **VICTORY / DEFEAT** (kun her), "Both games replayed together on your PC" og efter et øjeblik **"Confirmed by both PCs."** | UTESTET |
 | B11 | **Rematch** | Ny lobby, Spell Battle igen, og spells vælges igen | UTESTET |
 | B12 | Midt i en kamp: B lukker WoW (Alt+F4) | A spiller videre og får **WALKOVER** ("Lost contact with your rival" / "went offline"), ikke VICTORY | UTESTET |
+| B12c | B topper ud tidligt og trykker **Leave duel**, mens A spiller videre | B er tilbage i menuen. Når A er færdig, står resultatet i B's chat (VICTORY/DEFEAT), ikke "NO RESULT". B kan ikke starte en ny duel imens ("still being decided") | UTESTET |
+| B12d | Midt i en kamp: A får en loading screen (fx portal) | B's spil venter. Bagefter kører begge videre, og resultatet er "Replay-checked" (ikke afvist) | UTESTET |
 | B12b | Duel-arket bagefter | "YOUR DUELS (PLAYED OUT, REPLAY-CHECKED)" tæller kun B10-kampe; under det "Forfeits: N won, M lost - Disputed: 0" | UTESTET |
 | B13 | Efter hver duel: begge skriver `/sr duel debug` ✱ | Screenshot. Viser beskeder, forsinkelser og resultat | UTESTET |
 

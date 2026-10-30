@@ -47,6 +47,7 @@
   - **Spell HUD.** One message lane under the board for spell toasts and the status line (INCOMING, FROZEN, SPEED UP, BLACKOUT): nothing spell-related covers the falling piece. Spell tiles are taller, with key and cost under the icon.
   - **Test builds.** `FLAVOR=vsbot` builds Spell Battle vs Bot with guild duels switched off; CI builds and keeps both builds.
   - **SR2 draft** (`docs/SR2_DRAFT.md`), nothing built; the two web bugs are listed as open dependencies.
+  - **Independent review, fixed:** fake micro-pauses no longer buy clock allowance (the rival's PC charges the 3 s minimum too, budget enforced at all times); loading screens are measured from their start; a hang during play is announced as a pause; your pauses cost nothing after the rival left; "Leave duel" after your run keeps deciding (leaving never voids a loss), and /reload sends no verdict (no dispute); 0.5 clients announce themselves so score races get the clock check; verdicts carry an ack; "ready" repeats while waiting.
 - Tests: 121 new (82 parity + rules + scenarios, 15 vs Bot in the WoW mock, 24 two-client duels, plus
   updated duel tests for the new pause and confirmation rules). All earlier tests and the 77 SR1 vectors pass.
 
