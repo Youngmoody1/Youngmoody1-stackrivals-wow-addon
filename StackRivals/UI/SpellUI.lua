@@ -66,7 +66,7 @@ local function makeTile(parent, w, h)
     b.edge[i] = l
   end
   b.icon = b:CreateTexture(nil, "ARTWORK")
-  local is = w - 10
+  local is = w - 12
   b.icon:SetSize(is, is)
   b.icon:SetPoint("TOP", 0, -4)
   -- cooldown: a dark curtain that shrinks from the top (no Cooldown frame needed)
@@ -79,8 +79,8 @@ local function makeTile(parent, w, h)
   b.manaFill = T.tex(b, "OVERLAY", C.red, 1, 2)
   b.manaFill:SetPoint("BOTTOMLEFT", 1, 1); b.manaFill:SetHeight(2); b.manaFill:SetWidth(1)
   -- key (left) and mana cost (right) under the icon, never on top of it: readable at any scale
-  b.key = T.display(b, SZ.body, C.paper, "OUTLINE", "OVERLAY"); b.key:SetPoint("BOTTOMLEFT", 4, 5)
-  b.cost = T.display(b, SZ.body, C.paper, "OUTLINE", "OVERLAY"); b.cost:SetPoint("BOTTOMRIGHT", -4, 5)
+  b.key = T.display(b, SZ.body, C.paper, "OUTLINE", "OVERLAY"); b.key:SetPoint("BOTTOMLEFT", 4, 4)
+  b.cost = T.display(b, SZ.body, C.paper, "OUTLINE", "OVERLAY"); b.cost:SetPoint("BOTTOMRIGHT", -4, 4)
   -- cooldown seconds over the icon while the curtain is down
   b.cdText = T.display(b, SZ.big, C.paper, "OUTLINE", "OVERLAY"); b.cdText:SetPoint("CENTER", b.icon, "CENTER", 0, 0)
   b.w, b.h = w, h
@@ -114,7 +114,7 @@ function UI:CreateSpell()
   local box = CreateFrame("Frame", nil, stats)
   box:SetPoint("TOPLEFT", stats, "TOPLEFT", 0, -58)
   box:SetPoint("TOPRIGHT", stats, "TOPRIGHT", 0, -58)
-  box:SetHeight(152)
+  box:SetHeight(156)
   self.spellBox = box
   local div = T.tex(box, "ARTWORK", C.line, 1); div:SetPoint("TOPLEFT", 10, 0); div:SetPoint("TOPRIGHT", -10, 0); div:SetHeight(1)
   local ml = T.label(box, "MANA"); ml:SetPoint("TOPLEFT", 10, -9)
@@ -130,7 +130,7 @@ function UI:CreateSpell()
     self.manaSegs[i] = seg
   end
   self.spellTiles = {}
-  local tw, th, tg = 42, 54, 4
+  local tw, th, tg = 42, 56, 4
   for i = 1, 4 do
     local t = makeTile(box, tw, th)
     local col, row = (i - 1) % 2, math.floor((i - 1) / 2)

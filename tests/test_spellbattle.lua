@@ -307,4 +307,37 @@ describe("Pick Spells", function()
   end)
 end)
 
+
+describe("Spell Battle HUD readability (simulated layout)", function()
+  it("spell messages never cover your board; tile key / cost and the lane are big enough", function()
+    local L = dofile(testdir .. "/layout.lua")
+    local M, ns = boot(nil)
+    local sess = startSpell(M, ns, "contender")
+    local UI = ns.UI
+    sess.spell.me.mana = 20
+    sess:press("spell1") -- a toast ("LINE BLAST")
+    M.frames_step(2)
+    local R = L.new(StackRivalsFrame)
+    local field = R.rect(UI.field)
+    for _, fs in ipairs({ UI.spellToast, UI.spellChips }) do
+      local r = R.rect(fs)
+      ok(r.t <= field.b + 0.5, "message lane under the board, not on it")
+    end
+    ok(UI.spellToast:GetText() ~= nil and UI.spellToast:GetText() ~= "", "a toast was shown")
+    eq(UI.spellChipBox:GetAlpha(), 0, "one message at a time: the status line waits for the toast")
+    eq(UI.hint:IsShown(), false, "the lane takes the controls hint's place")
+    for _, t in ipairs(UI.spellTiles) do
+      ok(select(2, t.key:GetFont()) >= 13 and select(2, t.cost:GetFont()) >= 13, "key and cost >= 13")
+      ok(select(2, t.cdText:GetFont()) >= 15, "cooldown >= 15")
+      local tile, icon, key = R.rect(t), R.rect(t.icon), R.rect(t.key)
+      ok(key.t <= icon.b + 0.5 and key.b >= tile.b - 0.5, "key under the icon, inside the tile")
+    end
+    ok(select(2, UI.manaText:GetFont()) >= 15 and select(2, UI.spellChips:GetFont()) >= 15, "mana and lane >= 15")
+    M.frames_step(120) -- the toast is over: the status line is back
+    eq(UI.spellChipBox:GetAlpha(), 1)
+    ns.App:ShowMenu()
+    eq(UI.hint:IsShown(), true, "the controls hint is back outside a Spell Battle")
+  end)
+end)
+
 return H
