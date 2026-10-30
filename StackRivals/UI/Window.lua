@@ -115,7 +115,8 @@ function UI:Create()
   -- one run of text like the site's wordmark: STACK in paper, RIVALS in brand red, no gap
   local word = T.text(F, 22, C.paper, "", nil, "italic")
   word:SetPoint("LEFT", mark, "RIGHT", 6, 0)
-  word:SetText("STACK|cffe0242fRIVALS|r")
+  word:SetText("STACK|cffe0242fRIVALS|r") -- #E0242F = the site's --brand-red; STACK = --foreground #F6F4F0
+  self.wordmark = word
   self.modeText = T.display(F, SZ.label, C.label)
   self.modeText:SetPoint("LEFT", word, "RIGHT", 12, -1)
 

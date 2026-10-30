@@ -75,6 +75,29 @@ describe("type scale", function()
   end
 end)
 
+describe("brand lockup (same as stackrivals.io: red X mark, STACK white, RIVALS red)", function()
+  it("the header wordmark is STACK in paper and RIVALS in the site's brand red, Chakra Petch Bold Italic, on every screen", function()
+    local M, ns = boot()
+    SlashCmdList.STACKRIVALS("")
+    local UI = ns.UI
+    local w = UI.wordmark
+    eq(w:GetText(), "STACK|cffe0242fRIVALS|r", "RIVALS in #E0242F (--brand-red), nothing else coloured")
+    local r, g, b = w:GetTextColor()
+    eq(string.format("%02X%02X%02X", math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5)), "F6F4F0", "STACK in --foreground")
+    ok(w:GetFont():find("ChakraPetch%-BoldItalic%.ttf"), "the site's wordmark font")
+    ok(tostring(UI.mark._tex):find("mark$"), "the red X mark beside it")
+    -- one shared header: the same lockup stays visible over the menu, a run, sheets and results
+    local function shown() return w:IsShown() and UI.mark:IsShown() and UI.frame:IsShown() end
+    ok(shown(), "menu")
+    for _, sheet in ipairs({ "help", "records", "spell", "duel" }) do UI:ShowSheet(sheet); ok(shown(), sheet) end
+    UI:ShowSettings(true); ok(shown(), "settings"); UI:ShowSettings(false)
+    for _, mode in ipairs({ "classic", "blitz", "daily", "spellbot" }) do
+      ns.App:Start(mode); M.frames_step(300); ok(shown(), mode)
+      ns.App:Pause("manual"); ok(shown(), mode .. " paused"); ns.App:Quit()
+    end
+  end)
+end)
+
 describe("brand font", function()
   it("display text uses the bundled Chakra Petch; body text uses WoW's own font", function()
     local M, ns = boot()

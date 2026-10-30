@@ -239,7 +239,8 @@ function L.dump(path, root, R, items, title)
         end
         fh:write(string.format("TEXT\t%.1f\t%.1f\t%.1f\t%.1f\t%.3f\t%.3f\t%.3f\t%.3f\t%d\t%s\t%s\t%s\t%s\n", rc.l, rc.b, rc.r, rc.t,
           o._tr or 1, o._tg or 1, o._tb or 1, a, fsz, justify, (o._font and o._font[3]) or "", fontName,
-          stripCodes(table.concat(lines, "\\n")):gsub("\t", " ")))
+          -- colour codes (|cAARRGGBB ... |r) are kept: the renderer draws them, as WoW does
+          (table.concat(lines, "\\n"):gsub("\t", " "))))
       end
     end
   end

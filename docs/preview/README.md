@@ -4,8 +4,9 @@ Every image is drawn from the addon's real layout code running in a WoW API mock
 (`tests/screens.lua` → `tests/layout.lua` → `tools/render_preview.py`). Each banner names the
 addon version (from the TOC), the branch and the commit it was drawn from.
 
-What is real: positions and sizes of every element, colours, the bundled Chakra Petch font and the
-addon's own textures (mark, icon). What is approximate: WoW's own body font (drawn with DejaVu),
+What is real: positions and sizes of every element, colours (including WoW's inline colour codes,
+e.g. the red RIVALS in the wordmark; previews before 2026-10-30 drew those in the text's base
+colour), the bundled Chakra Petch font and the addon's own textures (mark, icon). What is approximate: WoW's own body font (drawn with DejaVu),
 Blizzard textures, and animations (each shows its visible moment). The window is drawn at its base
 size; in WoW it is scaled to ~58% of the screen height (never below 1:1).
 

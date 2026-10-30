@@ -5,7 +5,7 @@ fonts and text metrics are approximations, Blizzard textures are placeholders.
     lua5.1 tests/dump_screens.lua <outdir>    (writes <name>.txt dumps)
     python3 tools/render_preview.py <outdir> <addon Media dir>
 """
-import glob, os, sys
+import glob, os, re, sys
 from PIL import Image, ImageDraw, ImageFont
 
 SCALE = 2  # render at 2x for crisp text
@@ -14,6 +14,7 @@ FONT_B = "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf"
 BANNER = "SIMULATED PREVIEW - addon layout code in a WoW API mock. NOT a screenshot from a WoW client."
 BANNER2 = "Brand font + textures are the real files; WoW's font is approximated. Animations: visible frame."
 ADDON_FONTS = "StackRivals/Media/Fonts"
+CODE = re.compile(r"\|c([0-9a-fA-F]{8})|\|r")
 
 
 def load_tex(media, path):
@@ -82,11 +83,25 @@ def render(dump, media, out_png):
                 font = ImageFont.truetype(FONT_B if size >= 14 else FONT, int(size * SCALE * 1.02))
             color = (int(cr * 255), int(cg * 255), int(cb * 255), int(a * 255))
             lines = text.split("\\n")
+            cur = color  # WoW colour codes: |cAARRGGBB starts a colour, |r goes back to the text colour
             x0, y0, x1, y1 = box(l, b, r, t)
             lh = size * 1.2 * SCALE
             total = lh * len(lines)
             y = (y0 + y1) / 2 - total / 2
             for line in lines:
+                segs, pos = [], 0
+                for mt in CODE.finditer(line):
+                    if mt.start() > pos:
+                        segs.append((line[pos:mt.start()], cur))
+                    if mt.group(1):
+                        hx = mt.group(1)
+                        cur = (int(hx[2:4], 16), int(hx[4:6], 16), int(hx[6:8], 16), color[3])
+                    else:
+                        cur = color
+                    pos = mt.end()
+                if pos < len(line):
+                    segs.append((line[pos:], cur))
+                line = "".join(t for t, _ in segs)
                 tw = d.textlength(line, font=font)
                 if justify == "LEFT":
                     x = x0
@@ -98,7 +113,10 @@ def render(dump, media, out_png):
                     for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
                         d.text((x + dx * SCALE, y + dy * SCALE), line, font=font, fill=(0, 0, 0, color[3]))
                 d.text((x + SCALE, y + SCALE), line, font=font, fill=(0, 0, 0, int(color[3] * 0.7)))
-                d.text((x, y), line, font=font, fill=color)
+                sx = x
+                for t, c in segs:
+                    d.text((sx, y), t, font=font, fill=c)
+                    sx += d.textlength(t, font=font)
                 y += lh
     # banner
     bf = ImageFont.truetype(FONT_B, 13 * SCALE)
