@@ -115,6 +115,19 @@ To spillere med 0.6.1 i samme guild. Alt er **UTESTET i WoW**. Previews er simul
 | D10 | B: **Mute** i chatpanelet. A skriver | B ser intet. A får ingen besked om det | UTESTET |
 | D11 | Hvis muligt: Alliance mod Horde (venner på samme realm) | Kun hurtigbeskeder. Notér, om de overhovedet kommer frem | UTESTET |
 
+## E. Konto (branch `feature/connected`, build 0.6.1, kun efter din godkendelse)
+
+Én spiller. Hjemmesiden har endnu ikke "Link WoW character", så kun addon-siden kan testes: at koden accepteres, og at linket forbliver **PENDING**.
+
+| # | Gør dette | Det skal ske | Resultat |
+|---|---|---|---|
+| E1 | `/sr` → **Account** | "STACKRIVALS ACCOUNT", status NOT LINKED. Ingen felter til e-mail eller adgangskode | UTESTET |
+| E2 | Skriv `A7K9-P2XJ` (testkode) → **Link** | Status PENDING og "Not linked yet". En lang SRL1-kode står i boksen | UTESTET |
+| E3 | Klik i boksen → Ctrl+C → indsæt i Notesblok ✱ | Hele koden (SRL1. …) kommer med. Notér, om kopiering virker i WoW | UTESTET |
+| E4 | Skriv `A7K9-P2XK` (én forkert) → Link | "That link code has a typo" | UTESTET |
+| E5 | `/reload` → Account | Stadig PENDING (i 15 min), derefter NOT LINKED med "The link request expired" | UTESTET |
+| E6 | Faneblad **Profile** | "Linking is not finished…" (ingen opdigtet profil) | UTESTET |
+
 ## Efter testen
 
 - Gem `WTF\Account\<KONTO>\SavedVariables\StackRivals.lua` fra **begge** maskiner (der ligger

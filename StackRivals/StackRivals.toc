@@ -22,6 +22,7 @@ Core\SpellBattle.lua
 Core\DB.lua
 Net\Protocol.lua
 Net\Codes.lua
+Net\AccountCodes.lua
 UI\Theme.lua
 Core\Sound.lua
 UI\Board.lua
@@ -29,6 +30,7 @@ UI\Window.lua
 UI\Minimap.lua
 Net\Comm.lua
 Core\Social.lua
+Core\Account.lua
 Core\Card.lua
 Core\Chat.lua
 Core\Quickplay.lua
@@ -37,5 +39,6 @@ Core\DuelDiag.lua
 UI\DuelUI.lua
 UI\QuickplayUI.lua
 UI\MatchChat.lua
+UI\AccountUI.lua
 UI\SpellUI.lua
 Core\Main.lua

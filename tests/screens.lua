@@ -326,6 +326,41 @@ S.list = {
     a.ns.UI:RefreshPhase()
     return a.M, a.ns, a.ns.UI.chat
   end },
+  { "23-account-pending", "Account - linking: code typed, request to copy (PENDING, not linked yet)", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS("")
+    M.serverTime = 1793000000
+    ns.Account.startLink(ns.AccountCodes.makeWebCode("A7K9P2X"))
+    M.serverTime = 1793000000 + 75
+    ns.UI:ShowSheet("account"); M.frames_step(1)
+    return M, ns
+  end },
+  { "23b-account-linked", "Account - LINKED after importing the stackrivals.io snapshot", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS("")
+    M.serverTime = 1793000000
+    local AC = ns.AccountCodes
+    local r = AC.parseLinkRequest(ns.Account.startLink(AC.makeWebCode("A7K9P2X")))
+    M.serverTime = 1793000000 + 300
+    ns.Account.import(AC.profile({ linkId = r.linkId, player = r.player, accountId = "acc_7f3k2", name = "Alice Stack",
+      issued = 1793000000 + 200, expires = 1793000000 + 8 * 86400, level = 12, xp = 1240, xpNext = 2000, rank = "Gold II",
+      season = "Season 3", seasonPct = 45, wins = 12, losses = 8, draws = 1, history = {} }))
+    ns.UI:ShowSheet("account"); M.frames_step(1)
+    return M, ns
+  end },
+  { "23c-profile", "Account - Profile tab (display only, from the snapshot)", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS("")
+    M.serverTime = 1793000000
+    local AC = ns.AccountCodes
+    local r = AC.parseLinkRequest(ns.Account.startLink(AC.makeWebCode("A7K9P2X")))
+    M.serverTime = 1793000000 + 300
+    local T0 = 1793000000
+    ns.Account.import(AC.profile({ linkId = r.linkId, player = r.player, accountId = "acc_7f3k2", name = "Alice Stack",
+      issued = T0 + 200, expires = T0 + 8 * 86400, level = 12, xp = 1240, xpNext = 2000, rank = "Gold II",
+      season = "Season 3", seasonPct = 45, wins = 12, losses = 8, draws = 1, achUnlocked = 14, achTotal = 60, cosOwned = 5, cosEquipped = "Neon Grid",
+      history = { { mode = "b120", res = "w", my = 12300, their = 9800, at = T0 - 3600 }, { mode = "s180", res = "l", my = 8000, their = 15000, at = T0 - 86400 },
+        { mode = "daily", res = "w", my = 21000, their = 0, at = T0 - 2 * 86400 }, { mode = "spellbot", res = "d", my = 9000, their = 9000, at = T0 - 3 * 86400 } } }))
+    ns.UI:ShowSheet("account"); ns.UI.accountTab = "profile"; ns.UI:RefreshAccount(); M.frames_step(1)
+    return M, ns
+  end },
   { "8-records", "Records", function()
     local M, ns = boot(); seedRecords(ns); SlashCmdList.STACKRIVALS(""); ns.UI:ShowSheet("records"); M.frames_step(1); return M, ns
   end },

@@ -266,6 +266,9 @@ function DB.sanitize(raw)
     end
   end
 
+  -- stackrivals.io account link + profile snapshot per character (Core/Account.lua; display data only)
+  db.accounts = ns.Account and ns.Account.sanitize(raw.accounts) or {}
+
   -- An unfinished run saved at logout / reload (mode + web-compatible input log).
   local su = raw.suspended
   if type(su) == "table" and ns.Session and ns.Session.MODES[su.mode] and su.mode == "spellbot" then

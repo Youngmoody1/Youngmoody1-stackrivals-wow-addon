@@ -185,6 +185,9 @@ local function newFrame(ftype, name, parent)
     f.HasFocus = function(o) return o._focus or false end
     f.SetJustifyH = function() end
     f.SetTextColor = function() end
+    f.HighlightText = function(o) o._highlighted = true end
+    f.SetCursorPosition = function() end
+    f.SetMultiLine = function() end
   end
   f = strict(f, ftype .. "(" .. tostring(name) .. ")")
   M.frames[#M.frames + 1] = f
@@ -257,6 +260,8 @@ function M.install(G)
   G.GetCursorPosition = function() return 0, 0 end
   G.UnitName = function() return M.playerName or "Tester" end
   G.GetNormalizedRealmName = function() return M.realm or "Realm" end
+  -- server time (unix s): fixed base + simulated time, or M.serverTime
+  G.GetServerTime = function() return M.serverTime or math.floor(1793000000 + (M.time or 0)) end
   -- your own character (Core/Card.lua): set M.faction / M.race / M.class / M.level in a test
   G.UnitFactionGroup = function(u) if u == "player" then local f = M.faction or "Alliance"; return f, f end end
   G.UnitRace = function(u) if u == "player" then local r = M.race or "Human"; return r, r end end

@@ -192,6 +192,13 @@ function L.collect(M, root)
   for _, o in ipairs(M.regions) do
     if R.inside(o) and R.visible(o) then items[#items + 1] = o end
   end
+  -- edit boxes with text: previews show what the box holds (one line, clipped like WoW does)
+  for _, f in ipairs(M.frames) do
+    if f._kind == "EditBox" and type(f._etext) == "string" and f._etext ~= "" and R.inside(f) and R.visible(f) then
+      f._layer = f._layer or "OVERLAY"; f._sub = f._sub or 0; f._order = f._order or 0
+      items[#items + 1] = f
+    end
+  end
   table.sort(items, function(a, b)
     local la, lb = R.level(a), R.level(b)
     if la ~= lb then return la < lb end
@@ -225,6 +232,13 @@ function L.dump(path, root, R, items, title)
       elseif o._r then
         fh:write(string.format("RECT\t%.1f\t%.1f\t%.1f\t%.1f\t%.3f\t%.3f\t%.3f\t%.3f\n", rc.l, rc.b, rc.r, rc.t, o._r, o._g, o._b, (o._a or 1) * a))
       end
+    elseif o._kind == "EditBox" then
+      local fsz = o._font and o._font[2] or 12
+      local fontName = (o._font and o._font[1] or ""):match("([%w%-]+)%.[tT][tT][fF]$") or ""
+      local txt, room = o._etext:gsub("[\t\n]", " "), (rc.r - rc.l) - 16
+      while #txt > 1 and L.textWidth(txt, fsz, o._font and o._font[1]) > room do txt = txt:sub(1, -2) end
+      fh:write(string.format("TEXT\t%.1f\t%.1f\t%.1f\t%.1f\t%.3f\t%.3f\t%.3f\t%.3f\t%d\t%s\t%s\t%s\t%s\n", rc.l + 8, rc.b, rc.r - 8, rc.t,
+        0.80, 0.82, 0.86, a, fsz, "LEFT", "", fontName, (txt:gsub("|", "||"))))
     else
       local lines = textLines(o)
       if #lines > 0 then

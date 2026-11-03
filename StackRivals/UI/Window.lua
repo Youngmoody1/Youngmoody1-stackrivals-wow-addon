@@ -218,6 +218,7 @@ function UI:Create()
   if ns.Duel and self.CreateDuel then self:CreateDuel() end
   if ns.Quickplay and self.CreateQuickplay then self:CreateQuickplay() end
   if ns.Chat and self.CreateMatchChat then self:CreateMatchChat() end
+  if ns.Account and self.CreateAccount then self:CreateAccount() end
   if ns.SpellBattle and self.CreateSpell then self:CreateSpell() end
 
   F:SetScript("OnShow", function() UI:OnShow() end)
@@ -456,9 +457,11 @@ function UI:CreateMenu()
   -- secondary navigation
   self.navRow = CreateFrame("Frame", nil, menu)
   self.navRow:SetSize(cw, 28); self.navRow:SetPoint("BOTTOM", menu, "BOTTOM", 0, 30)
-  self.howBtn = T.button(self.navRow, "How to play", 140, 28, "frame", function() UI:ShowSheet("help") end)
-  self.recBtn = T.button(self.navRow, "Records", 140, 28, "frame", function() UI:ShowSheet("records") end)
-  self:LayoutNav({ self.howBtn, self.recBtn })
+  self.howBtn = T.button(self.navRow, "How to play", 128, 28, "frame", function() UI:ShowSheet("help") end)
+  self.recBtn = T.button(self.navRow, "Records", 128, 28, "frame", function() UI:ShowSheet("records") end)
+  self.accBtn = T.button(self.navRow, "Account", 128, 28, "frame", function() UI:ShowSheet("account") end)
+  self.accBtn.tip = "Link this character to your stackrivals.io account (one-time code), import your profile, sync."
+  self:LayoutNav({ self.howBtn, self.recBtn, self.accBtn })
   self.statsLine = T.text(menu, SZ.label, C.label); self.statsLine:SetPoint("BOTTOM", 0, 10)
   self.statsLine:SetWidth(cw)
   self.menuFade = T.fadeInAnim(menu, 0.2)
@@ -716,6 +719,7 @@ function UI:OnHide()
   if self.help then self.help:Hide(); self.records:Hide() end
   if self.duelSheet then self.duelSheet:Hide() end
   if self.qpSheet then self.qpSheet:Hide() end
+  if self.accountSheet then self.accountSheet:Hide() end
   if self.spellSheet then self.spellSheet:Hide() end
   local sess = ns.App.session
   if sess and sess.spell and sess.spell.settling then
@@ -1329,13 +1333,14 @@ end
 function UI:SheetOpen()
   return (self.help and self.help:IsShown()) or (self.records and self.records:IsShown()) or (self.settings and self.settings:IsShown())
     or (self.duelSheet and self.duelSheet:IsShown()) or (self.spellSheet and self.spellSheet:IsShown())
-    or (self.qpSheet and self.qpSheet:IsShown()) or false
+    or (self.qpSheet and self.qpSheet:IsShown()) or (self.accountSheet and self.accountSheet:IsShown()) or false
 end
 
 function UI:HideSheets()
   if self.help then self.help:Hide(); self.records:Hide() end
   if self.duelSheet then self.duelSheet:Hide() end
   if self.qpSheet then self.qpSheet:Hide() end
+  if self.accountSheet then self.accountSheet:Hide() end
   if self.spellSheet then self.spellSheet:Hide() end
   if self.settings and self.settings:IsShown() then self:ShowSettings(false) end
 end
@@ -1347,6 +1352,7 @@ function UI:ShowSheet(which)
   self.records:SetShown(which == "records")
   if self.duelSheet then self.duelSheet:SetShown(which == "duel") end
   if self.qpSheet then self.qpSheet:SetShown(which == "quickplay") end
+  if self.accountSheet then self.accountSheet:SetShown(which == "account") end
   if self.spellSheet then self.spellSheet:SetShown(which == "spell"); if which == "spell" then self.spellSheetDuel = false; self:RefreshSpellSheet() end end
   if self.settings:IsShown() then self:ShowSettings(false) end
   self:RefreshPhase()
