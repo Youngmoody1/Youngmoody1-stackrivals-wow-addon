@@ -130,10 +130,16 @@ describe("Spell Battle vs Bot: the match ends when it is decided", function()
       if sp.me.game.tick % 30 == 0 then sess:press("hardDrop"); sess:release("hardDrop") end
       M.frames_step(1, 8 / 60)
     end
-    if not sp.me.game.gameOver then
-      eq(sp.me.game.tick, 10800); eq(sp.result.reason, "time")
-    end
     eq(sess.phase, "over")
+    if not sp.me.game.gameOver and not sp.opp.game.gameOver then
+      -- nobody topped out: 3:00 ends it, the higher score wins
+      eq(sp.me.game.tick, 10800); eq(sp.result.reason, "time")
+      eq(sp.result.outcome, (sp.result.me > sp.result.bot and "win") or (sp.result.me < sp.result.bot and "loss") or "draw")
+    elseif sp.result.reason == "decided" then
+      eq(sp.result.outcome, "win", "the bot topped out first")
+    else
+      eq(sp.result.reason, "topout")
+    end
   end)
 end)
 
