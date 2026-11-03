@@ -60,47 +60,95 @@ local function short(n) return ns.Duel.short(n) or "?" end
 local SZ = T.SIZE
 
 ------------------------------------------------------------------------------------------------
--- Duel sheet: find players + challenge (full window, like Records / How to play)
+-- Challenge Friends sheet (full window, like Records / How to play): pick a mode, a list (guild,
+-- WoW friends, Battle.net friends, group, recent rivals) or type a name, then Challenge.
+-- A player is "ready" only after their own StackRivals answered (HI); nobody is asked anything
+-- until you press Refresh, and invites are only ever sent by your click.
 ------------------------------------------------------------------------------------------------
-local ROWS = 6
+local ROWS = 4
+local SOURCE_LABEL = { guild = "Guild", friends = "Friends", bnet = "Battle.net", group = "Group", recent = "Recent" }
+local SOURCE_TIP = {
+  guild = "Online guild members. Refresh asks the guild once who has StackRivals.",
+  friends = "Your WoW friends list (online friends). Refresh asks each of them once.",
+  bnet = "Battle.net friends playing this WoW version on your realm (or a connected one). Refresh asks each once.",
+  group = "Your party or raid. Refresh asks the group once.",
+  recent = "Players you dueled before. Refresh asks each once.",
+}
+local EMPTY = {
+  guild = "You're not in a guild, or nobody else is online.",
+  friends = "No WoW friends online.",
+  bnet = "No Battle.net friends on WoW right now.",
+  group = "You're not in a party or raid.",
+  recent = "No duels yet: your rivals will show up here.",
+}
+
+local function setSegment(b, on)
+  local c = on and C.steelDeep or C.surface2
+  b.bgTex:SetColorTexture(c[1], c[2], c[3], 1)
+  local e = on and C.steel or C.line
+  b.border:SetColorTexture(e[1], e[2], e[3], 1)
+end
+
+local function challengeName(name)
+  name = (name or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  if name == "" then UI.duelFindNote = "Type a character name (Name or Name-Realm)."; UI:RefreshDuelSheet(); return end
+  name = name:sub(1, 1):upper() .. name:sub(2)
+  local okC, why = ns.Duel.challenge(name, UI.duelRuleset)
+  UI.duelFindNote = okC and ("Challenge sent to " .. name .. ".") or ("Can't challenge: " .. (ns.Duel.WHY_NOT[why] or tostring(why)) .. ".")
+  UI:RefreshDuelSheet()
+end
 
 function UI:CreateDuelSheet()
   local s = self:Body(40)
   self.duelSheet = s
   local L = 24
   local cw = self.frame:GetWidth() - 2 * L - 2
-  local title = T.display(s, SZ.title, C.paper); title:SetPoint("TOPLEFT", L, -14); title:SetText("DUEL")
+  local title = T.display(s, SZ.title, C.paper); title:SetPoint("TOPLEFT", L, -14); title:SetText("CHALLENGE FRIENDS")
   local sub = T.text(s, SZ.small, C.label); sub:SetPoint("TOPLEFT", L, -38)
   s.sub = sub
 
-  -- ruleset: a three-way segmented choice
+  -- mode: a three-way segmented choice
   self.duelRuleset = "b120"
-  local b120 = T.button(s, "Blitz 2:00", 96, 30, "frame", function() UI.duelRuleset = "b120"; UI:RefreshDuelSheet() end)
-  b120:SetPoint("TOPLEFT", L, -62)
+  local b120 = T.button(s, "Blitz 2:00", 96, 28, "frame", function() UI.duelRuleset = "b120"; UI:RefreshDuelSheet() end)
+  b120:SetPoint("TOPLEFT", L, -60)
   b120.tip = "Score race: 2 minutes, 3 s countdown."
-  local r180 = T.button(s, "3:00", 70, 30, "frame", function() UI.duelRuleset = "r180"; UI:RefreshDuelSheet() end)
+  local r180 = T.button(s, "3:00", 70, 28, "frame", function() UI.duelRuleset = "r180"; UI:RefreshDuelSheet() end)
   r180:SetPoint("LEFT", b120, "RIGHT", 4, 0)
   r180.tip = "Score race, 3 minutes and a 4 s countdown: the same rules as a 1v1 on stackrivals.io."
-  local s180 = T.button(s, "Spell Battle", 112, 30, "frame", function() UI.duelRuleset = "s180"; UI:RefreshDuelSheet() end)
+  local s180 = T.button(s, "Spell Battle", 112, 28, "frame", function() UI.duelRuleset = "s180"; UI:RefreshDuelSheet() end)
   s180:SetPoint("LEFT", r180, "RIGHT", 4, 0)
   s180.tip = "Spell Battle 3:00 with the web's spells: casts land on your rival's board. Both need StackRivals 0.5+."
   s.b120, s.r180, s.s180 = b120, r180, s180
 
-  local find = T.button(s, "Find players", 120, 30, "primary", function()
-    local okFind, why = ns.Duel.findPlayers()
-    UI.duelFindNote = okFind and "Asked your guild and group..." or (why == "cooldown" and "Just asked - wait a moment." or (ns.Duel.WHY_NOT[why] or "Join a guild or group to find players."))
-    UI:RefreshDuelSheet()
-  end)
-  find:SetPoint("TOPRIGHT", -L - 2, -62)
-  s.note = T.text(s, SZ.small, C.body); s.note:SetPoint("TOPLEFT", L, -102)
+  local refresh = T.button(s, "Refresh", 104, 28, "primary", function() UI:RefreshDuelPresence() end)
+  refresh:SetPoint("TOPRIGHT", -L - 2, -60)
+  refresh.tip = "Ask the players in this list (once) whether they have StackRivals. Nothing is sent before you press it."
+  s.refresh = refresh
+
+  -- where to look: five tabs
+  self.duelSource = "guild"
+  s.tabs = {}
+  local tw = math.floor((cw - 4 * 4) / 5)
+  for i, src in ipairs(ns.Social and ns.Social.SOURCES or { "guild" }) do
+    local tb = T.button(s, SOURCE_LABEL[src], tw, 24, "frame", function() UI.duelSource = src; UI.duelPage = 1; UI.duelFindNote = nil; UI:RefreshDuelSheet() end)
+    tb:SetPoint("TOPLEFT", L + (i - 1) * (tw + 4), -96)
+    tb.tip = SOURCE_TIP[src]
+    s.tabs[src] = tb
+  end
+  s.note = T.text(s, SZ.small, C.body); s.note:SetPoint("TOPLEFT", L, -128); s.note:SetWidth(cw - 70); s.note:SetJustifyH("LEFT")
+  local prev = T.button(s, "<", 28, 20, "frame", function() UI.duelPage = math.max(1, (UI.duelPage or 1) - 1); UI:RefreshDuelSheet() end)
+  local nxt = T.button(s, ">", 28, 20, "frame", function() UI.duelPage = (UI.duelPage or 1) + 1; UI:RefreshDuelSheet() end)
+  nxt:SetPoint("TOPRIGHT", -L - 2, -124); prev:SetPoint("RIGHT", nxt, "LEFT", -4, 0)
+  s.prev, s.next = prev, nxt
 
   s.rows = {}
   for i = 1, ROWS do
     local row = T.panel(s)
     row:SetSize(cw, 34)
-    row:SetPoint("TOPLEFT", L, -122 - (i - 1) * 38)
-    row.name = T.display(row, SZ.big, C.paper); row.name:SetPoint("LEFT", 12, 0); row.name:SetJustifyH("LEFT")
-    row.info = T.text(row, SZ.label, C.label); row.info:SetPoint("LEFT", 196, 0); row.info:SetJustifyH("LEFT")
+    row:SetPoint("TOPLEFT", L, -150 - (i - 1) * 38)
+    row.dot = T.tex(row, "ARTWORK", C.label, 1); row.dot:SetSize(8, 8); row.dot:SetPoint("LEFT", 12, 0)
+    row.name = T.display(row, SZ.big, C.paper); row.name:SetPoint("LEFT", 28, 0); row.name:SetJustifyH("LEFT")
+    row.info = T.text(row, SZ.label, C.label); row.info:SetPoint("LEFT", 196, 0); row.info:SetJustifyH("LEFT"); row.info:SetWidth(cw - 196 - 120)
     row.btn = T.button(row, "Challenge", 112, 26, "steel", function(b)
       local okC, why = ns.Duel.challenge(b.target, UI.duelRuleset)
       if not okC then UI.duelFindNote = "Can't challenge: " .. (ns.Duel.WHY_NOT[why] or tostring(why)) .. "." end
@@ -110,9 +158,25 @@ function UI:CreateDuelSheet()
     row:Hide()
     s.rows[i] = row
   end
-  s.empty = T.text(s, SZ.body, C.body); s.empty:SetPoint("TOPLEFT", L, -126); s.empty:SetWidth(cw); s.empty:SetJustifyH("LEFT")
+  s.empty = T.text(s, SZ.body, C.body); s.empty:SetPoint("TOPLEFT", L, -156); s.empty:SetWidth(cw); s.empty:SetJustifyH("LEFT")
   s.empty:SetSpacing(4)
-  s.empty:SetText("Press |cfff6f4f0Find players|r to see who in your guild or group has StackRivals.\nOr type |cffff4d5a/sr duel Name|r to challenge anyone on your realm.")
+
+  -- challenge by name (any realm you can whisper)
+  local nl = T.label(s, "OR BY NAME"); nl:SetPoint("TOPLEFT", L, -312)
+  local eb = CreateFrame("EditBox", nil, s)
+  eb:SetSize(196, 24); eb:SetPoint("TOPLEFT", L + 84, -306)
+  eb:SetAutoFocus(false); eb:SetMaxLetters(48)
+  eb:SetFont(T.FONT, SZ.body, ""); eb:SetTextInsets(8, 8, 0, 0)
+  local ebg = T.tex(eb, "BACKGROUND", C.ink, 1); ebg:SetAllPoints()
+  local ebo = T.tex(eb, "BORDER", C.line, 1); ebo:SetPoint("BOTTOMLEFT"); ebo:SetPoint("BOTTOMRIGHT"); ebo:SetHeight(1)
+  eb.hint = T.text(eb, SZ.small, C.label); eb.hint:SetPoint("LEFT", 8, 0); eb.hint:SetText("Name or Name-Realm")
+  eb:SetScript("OnTextChanged", function(self) self.hint:SetShown(self:GetText() == "") end)
+  eb:SetScript("OnEnterPressed", function(self) challengeName(self:GetText()); self:ClearFocus() end)
+  eb:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  s.nameBox = eb
+  local go = T.button(s, "Challenge", 112, 24, "steel", function() challengeName(eb:GetText()); eb:ClearFocus() end)
+  go:SetPoint("LEFT", eb, "RIGHT", 6, 0)
+  s.nameGo = go
 
   -- your record
   local rec = T.label(s, "YOUR DUELS (PLAYED OUT, REPLAY-CHECKED)"); rec:SetPoint("BOTTOMLEFT", L, 74)
@@ -123,14 +187,41 @@ function UI:CreateDuelSheet()
   s.trust = trust
   local close = T.button(s, "Close", 130, 32, "frame", function() s:Hide(); UI:RefreshPhase() end)
   close:SetPoint("BOTTOMRIGHT", -20, 16)
-  s:SetScript("OnShow", function() UI:RefreshDuelSheet() end)
+  s:SetScript("OnShow", function() if ns.Social and UI.duelSource == "guild" then ns.Social.requestGuild() end UI:RefreshDuelSheet() end)
+  if ns.Social then ns.Social.init(function() UI:RefreshDuelSheet() end) end
 end
 
-local function setSegment(b, on)
-  local c = on and C.steelDeep or C.surface2
-  b.bgTex:SetColorTexture(c[1], c[2], c[3], 1)
-  local e = on and C.steel or C.line
-  b.border:SetColorTexture(e[1], e[2], e[3], 1)
+--- Refresh: ask this list's players once whether they have StackRivals (never automatic).
+function UI:RefreshDuelPresence()
+  local src = self.duelSource or "guild"
+  local D = ns.Duel
+  local note
+  if src == "guild" or src == "group" then
+    if src == "guild" and ns.Social then ns.Social.requestGuild() end
+    local okFind, why = D.findPlayers()
+    note = okFind and ("Asked your " .. (src == "guild" and "guild" or "group") .. "...") or (why == "cooldown" and "Just asked - wait a moment." or (D.WHY_NOT[why] or "Join a guild or group to find players."))
+  else
+    local names = {}
+    for _, e in ipairs(ns.Social and ns.Social.list(src) or {}) do
+      if e.reach and e.online ~= false then names[#names + 1] = e.name end
+    end
+    local n, why = D.pingPresence(names)
+    note = why and (D.WHY_NOT[why] or why) or (n > 0 and ("Asked " .. n .. " player" .. (n == 1 and "" or "s") .. "...") or (#names > 0 and "Just asked - wait a moment." or EMPTY[src]))
+  end
+  self.duelFindNote = note
+  self:RefreshDuelSheet()
+end
+
+-- one row's status: text, colour of the dot, can it be challenged
+local function statusOf(e, minV)
+  if e.online == false then return "offline", C.line, false end
+  if not e.reach then return e.why or "can't be reached", C.line, false end
+  local p = ns.Duel.presence(e.name)
+  if not p then return (e.source == "recent" and "no answer yet (maybe offline)" or "no StackRivals answer yet"), C.label, false end
+  if not p.compatible then return "other StackRivals version", C.label, false end
+  if p.busy then return "in a duel", C.gold, false end
+  if minV and not P.versionAtLeast(p.addon, minV) then return "v" .. p.addon .. ", needs " .. minV, C.label, false end
+  return "StackRivals v" .. p.addon .. " - ready", C.green, true
 end
 
 function UI:RefreshDuelSheet()
@@ -139,30 +230,60 @@ function UI:RefreshDuelSheet()
   setSegment(s.b120, self.duelRuleset == "b120")
   setSegment(s.r180, self.duelRuleset == "r180")
   setSegment(s.s180, self.duelRuleset == "s180")
-  s.sub:SetText(self.duelRuleset == "s180" and "1v1 Spell Battle. Same pieces, spells hit each other's boards."
-    or "1v1 score race. Same pieces for both. Highest score wins.")
+  local src = self.duelSource or "guild"
+  for k, tb in pairs(s.tabs) do setSegment(tb, k == src) end
+  s.sub:SetText(self.duelRuleset == "s180" and "1v1 Spell Battle: spells hit each other's boards."
+    or "1v1 score race: same pieces, higher score wins.")
   local minV = P.RULESET_MIN_VERSION[self.duelRuleset]
-  s.note:SetText(not ns.Comm.enabled and "Addon messages are not available in this client."
-    or ns.Comm.trial and "Trial/Veteran account: Blizzard blocks addon messages, so duels can't work."
-    or (self.duelFindNote or ""))
-  local list = {}
-  for _, p in pairs(ns.Duel.players) do list[#list + 1] = p end
-  table.sort(list, function(a, b) return a.name < b.name end)
+  -- the list: from the client's own rosters (+ guild / group players who answered a broadcast)
+  local list = ns.Social and ns.Social.list(src) or {}
+  if src == "guild" or src == "group" then
+    local seen = {}
+    for _, e in ipairs(list) do seen[e.name:lower()] = true end
+    for name, p in pairs(ns.Duel.players) do
+      if not seen[name:lower()] and (src == "guild") then list[#list + 1] = { name = name, online = true, reach = true, source = src } end
+    end
+  end
+  local rows = {}
+  for _, e in ipairs(list) do
+    if e.online ~= false or src ~= "guild" then -- the guild list shows online members only
+      local text, col, can = statusOf(e, minV)
+      rows[#rows + 1] = { e = e, text = text, col = col, can = can, rank = can and 0 or (e.online == false and 3 or (ns.Duel.presence(e.name) and 1 or 2)) }
+    end
+  end
+  table.sort(rows, function(a, b) if a.rank ~= b.rank then return a.rank < b.rank end return a.e.name < b.e.name end)
+  local pages = math.max(1, math.ceil(#rows / ROWS))
+  self.duelPage = math.min(math.max(1, self.duelPage or 1), pages)
+  local first = (self.duelPage - 1) * ROWS
   local busy = ns.Duel.busy() or UI.inCombat()
   for i, row in ipairs(s.rows) do
-    local p = list[i]
-    if p then
-      row.name:SetText(short(p.name))
-      local old = minV and not P.versionAtLeast(p.addon, minV)
-      row.info:SetText(not p.compatible and "other version" or (p.busy and "in a duel") or (old and ("v" .. p.addon .. ", needs " .. minV)) or ("v" .. p.addon))
-      row.btn.target = p.name
-      if p.compatible and not p.busy and not busy and not old then row.btn:Enable() else row.btn:Disable() end
+    local r = rows[first + i]
+    if r then
+      row.name:SetText(short(r.e.name))
+      row.info:SetText(r.text)
+      row.dot:SetColorTexture(r.col[1], r.col[2], r.col[3], 1)
+      row.btn.target = r.e.name
+      if r.can and not busy then row.btn:Enable() else row.btn:Disable() end
       row:Show()
     else
       row:Hide()
     end
   end
-  s.empty:SetShown(#list == 0)
+  s.prev:SetShown(pages > 1); s.next:SetShown(pages > 1)
+  if pages > 1 then
+    if self.duelPage > 1 then s.prev:Enable() else s.prev:Disable() end
+    if self.duelPage < pages then s.next:Enable() else s.next:Disable() end
+  end
+  local ready = 0
+  for _, r in ipairs(rows) do if r.can then ready = ready + 1 end end
+  s.note:SetText(not ns.Comm.enabled and "Addon messages are not available in this client."
+    or ns.Comm.trial and "Trial/Veteran account: Blizzard blocks addon messages, so duels can't work."
+    or self.duelFindNote
+    or (#rows > 0 and string.format("%d listed, %d ready. Press Refresh to ask who has StackRivals.", #rows, ready))
+    or "")
+  s.empty:SetShown(#rows == 0)
+  s.empty:SetText(EMPTY[src] .. "\nOr type a name below to challenge anyone on your realm.")
+  if busy then s.nameGo:Disable() else s.nameGo:Enable() end
   local d = ns.db.duels
   s.won:SetText(d.wins .. " won"); s.lost:SetText(d.losses .. " lost"); s.draws:SetText(d.draws .. " draws")
   -- won / lost / draws count only played-out, replay-checked duels (peer-checked, not by a server)

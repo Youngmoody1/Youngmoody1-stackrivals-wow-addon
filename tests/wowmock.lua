@@ -111,6 +111,7 @@ local KNOWN_EVENTS = {
   CHAT_MSG_ADDON = 1, ADDON_LOADED = 1, PLAYER_LOGIN = 1, PLAYER_LOGOUT = 1, PLAYER_REGEN_DISABLED = 1, PLAYER_REGEN_ENABLED = 1,
   LOADING_SCREEN_ENABLED = 1, PLAYER_LEAVING_WORLD = 1, PLAYER_DEAD = 1,
   DISPLAY_SIZE_CHANGED = 1, UI_SCALE_CHANGED = 1,
+  GUILD_ROSTER_UPDATE = 1, FRIENDLIST_UPDATE = 1, BN_FRIEND_INFO_CHANGED = 1, GROUP_ROSTER_UPDATE = 1,
 }
 
 local function newFrame(ftype, name, parent)
@@ -170,6 +171,20 @@ local function newFrame(ftype, name, parent)
     f.SetEnabled = function(o, v) if v then o:Enable() else o:Disable() end end
     f.Click = function(o, button) if o._enabled and o._scripts.OnClick then o._scripts.OnClick(o, button or "LeftButton") end end
   end
+  if ftype == "EditBox" then
+    f._etext = ""
+    f.SetAutoFocus = function() end
+    f.SetMaxLetters = function(o, n) o._maxLetters = n end
+    f.SetFont = function(o, path, size, flags) o._font = { path, size, flags }; return true end
+    f.SetTextInsets = function() end
+    f.SetText = function(o, t) o._etext = t or ""; local sc = o._scripts.OnTextChanged; if sc then sc(o, true) end end
+    f.GetText = function(o) return o._etext end
+    f.SetFocus = function(o) o._focus = true end
+    f.ClearFocus = function(o) o._focus = false end
+    f.HasFocus = function(o) return o._focus or false end
+    f.SetJustifyH = function() end
+    f.SetTextColor = function() end
+  end
   f = strict(f, ftype .. "(" .. tostring(name) .. ")")
   M.frames[#M.frames + 1] = f
   if name then M.G[name] = f end
@@ -182,7 +197,7 @@ function M.install(G)
   G = G or _G
   M.G = G
   G.CreateFrame = function(ftype, name, parent, template)
-    assert(ftype == "Frame" or ftype == "Button", "mock: unsupported frame type " .. tostring(ftype))
+    assert(ftype == "Frame" or ftype == "Button" or ftype == "EditBox", "mock: unsupported frame type " .. tostring(ftype))
     return newFrame(ftype, name, parent)
   end
   G.UIParent = newFrame("Frame", "UIParent")
@@ -213,6 +228,26 @@ function M.install(G)
   G.date = os.date
   G.tinsert = table.insert
   G.IsInGuild = function() return M.inGuild or false end
+  -- social lists (Core/Social.lua): set M.guild / M.friends / M.bnet / M.ignored in a test
+  G.WOW_PROJECT_ID = 2 -- Classic Era
+  G.BNET_CLIENT_WOW = "WoW"
+  G.GetNumGuildMembers = function() return M.guild and #M.guild or 0 end
+  G.GetGuildRosterInfo = function(i) local e = M.guild and M.guild[i]; if e then return e.name, "Member", 1, 60, "Warrior", "Orgrimmar", "", "", e.online end end
+  G.C_GuildInfo = { GuildRoster = function() M.rosterRequests = (M.rosterRequests or 0) + 1 end }
+  G.C_FriendList = {
+    GetNumFriends = function() return M.friends and #M.friends or 0 end,
+    GetFriendInfoByIndex = function(i) local e = M.friends and M.friends[i]; if e then return { name = e.name, connected = e.online } end end,
+    IsIgnored = function(n) return M.ignored and M.ignored[n] or false end,
+  }
+  G.BNGetNumFriends = function() return M.bnet and #M.bnet or 0 end
+  G.C_BattleNet = { GetFriendAccountInfo = function(i)
+    local e = M.bnet and M.bnet[i]
+    if not e then return nil end
+    return { battleTag = "Friend#1234", gameAccountInfo = { isOnline = e.online ~= false, clientProgram = e.client or "WoW", characterName = e.name,
+      realmName = e.realm, wowProjectID = e.project or 2, gameAccountID = 100 + i } }
+  end }
+  G.GetAutoCompleteRealms = function() return M.connected or {} end
+  G.GetNumGroupMembers = function() return M.groupMembers and #M.groupMembers or 0 end
   G.IsInGroup = function() return false end
   G.IsInRaid = function() return false end
   G.IsInInstance = function() return M.inInstance or false, M.inInstance and "party" or "none" end

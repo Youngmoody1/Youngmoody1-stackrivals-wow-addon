@@ -48,6 +48,49 @@ function NS.new(opts)
     M.inInstance = net.instance
     env.IsInGuild = function() return o.guild ~= nil end
     env.IsInGroup = function() return o.group ~= nil end
+    -- the guild roster = every client in the same guild (+ o.guildOffline names); friends lists from
+    -- o.friends / o.bnet ({ name, realm, project }), online = that client is online here
+    local function isOn(n, realm)
+      if (o.alsoOnline or {})[n] then return true end -- online, but without StackRivals
+      local x = net.byName[(n:find("-", 1, true) and n or (n .. "-" .. (realm or "Realm"))):lower()]
+      return x ~= nil and x.online
+    end
+    local function groupMates()
+      local out = {}
+      if o.group then for _, x in ipairs(net.clients) do if x.o.group == o.group and x.o ~= o then out[#out + 1] = x end end end
+      return out
+    end
+    env.GetNumGroupMembers = function() local g = groupMates(); return #g > 0 and (#g + 1) or 0 end
+    env.UnitName = function(unit)
+      if unit == "player" or unit == nil then return o.name end
+      local k = tonumber((unit or ""):match("^party(%d+)$"))
+      local x = k and groupMates()[k]
+      if x then return x.o.name, x.o.realm end
+      return o.name
+    end
+    env.GetNumGuildMembers = function()
+      if not o.guild then return 0 end
+      local n = #(o.guildOffline or {})
+      for _, x in ipairs(net.clients) do if x.o.guild == o.guild then n = n + 1 end end
+      return n
+    end
+    env.GetGuildRosterInfo = function(i)
+      local k = 0
+      for _, x in ipairs(net.clients) do
+        if x.o.guild == o.guild then k = k + 1; if k == i then return x.name, "Member", 1, 60, "Mage", "", "", "", x.online end end
+      end
+      local off = (o.guildOffline or {})[i - k]
+      if off then return off .. "-Realm", "Member", 1, 60, "Mage", "", "", "", false end
+    end
+    env.C_FriendList.GetNumFriends = function() return #(o.friends or {}) end
+    env.C_FriendList.GetFriendInfoByIndex = function(i) local n = (o.friends or {})[i]; if n then return { name = n, connected = isOn(n) } end end
+    env.C_FriendList.IsIgnored = function(n) return (o.ignored or {})[n] or false end
+    env.BNGetNumFriends = function() return #(o.bnet or {}) end
+    env.C_BattleNet.GetFriendAccountInfo = function(i)
+      local e = (o.bnet or {})[i]
+      if not e then return nil end
+      return { gameAccountInfo = { isOnline = isOn(e.name, e.realm), clientProgram = "WoW", characterName = e.name, realmName = e.realm or "Realm", wowProjectID = e.project or 2, gameAccountID = 7000 + i } }
+    end
     env.IsInRaid = function() return false end
     env.StackRivalsDB = o.saved
     env.math = setmetatable({ random = function(a, b) return a + math.floor(net.random() * (b - a + 1)) end }, { __index = math })

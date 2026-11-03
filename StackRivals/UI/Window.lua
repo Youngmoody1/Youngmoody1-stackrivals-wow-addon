@@ -427,8 +427,8 @@ function UI:CreateMenu()
   end
   self.spellCard = vsCard("Spell Battle", "vs Bot", "frame", C.red, T.MEDIA .. "Spells\\bomb", function() UI:ShowSheet("spell") end)
   self.spellCard.tip = "Spells, mana and the stackrivals.io bot. Pick 2 spells for your board, 2 for the bot's."
-  self.duelBtn = vsCard("Duel", "1v1 with a guild member", "frame", C.steel, T.MEDIA .. "marksmall", function() UI:ShowSheet("duel") end)
-  self.duelBtn.tip = "Challenge a guild or group member: score race or Spell Battle."
+  self.duelBtn = vsCard("Challenge", "Guild, friends, group", "frame", C.steel, T.MEDIA .. "marksmall", function() UI:ShowSheet("duel") end)
+  self.duelBtn.tip = "Challenge Friends: guild members, WoW and Battle.net friends, your group or anyone by name. Score race or Spell Battle; both need StackRivals."
   if ns.BUILD and not ns.BUILD.duels then -- vs-Bot test build
     self.duelBtn:Disable(); self.duelBtn.desc:SetText("Off in this test build")
     self.duelBtn.tip = "This is a Spell Battle vs Bot test build: guild duels are switched off."
@@ -1047,7 +1047,7 @@ function UI:RefreshMenu()
     self.spellCard.desc:SetText("vs " .. (UI.DIFF_LABEL and UI.DIFF_LABEL[sd] or sd) .. " bot" .. rec)
   end
   local du = db.duels
-  if du and du.wins + du.losses + du.draws > 0 and (not ns.BUILD or ns.BUILD.duels) then self.duelBtn.desc:SetText(string.format("Guild 1v1  -  %d-%d", du.wins, du.losses)) end
+  if du and du.wins + du.losses + du.draws > 0 and (not ns.BUILD or ns.BUILD.duels) then self.duelBtn.desc:SetText(string.format("Friends & guild  -  %d-%d", du.wins, du.losses)) end
   if inCombat() then self.spellCard:Disable() else self.spellCard:Enable() end
   -- a brand-new player gets a default: Blitz is the short, forgiving way in
   local fresh = true

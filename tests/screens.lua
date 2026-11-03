@@ -143,12 +143,27 @@ S.list = {
   { "7-settings", "Settings", function()
     local M, ns = boot(); SlashCmdList.STACKRIVALS("settings"); M.frames_step(1); return M, ns
   end },
-  { "9-duel-sheet", "Duel - find players", function()
+  { "9-duel-sheet", "Challenge Friends - guild (after Refresh)", function()
     local net, a, b = duelPair()
     net.add({ name = "Carol", guild = "G", saved = { seenHelp = true } })
     a.env.SlashCmdList.STACKRIVALS("")
     a.ns.UI:ShowSheet("duel")
-    a.ns.Duel.findPlayers(); net.step(60)
+    a.ns.UI.duelSheet.refresh:Click(); net.step(60)
+    a.ns.UI:RefreshDuelSheet()
+    return a.M, a.ns, a.env.StackRivalsFrame
+  end },
+  { "9b-challenge-bnet", "Challenge Friends - Battle.net friends", function()
+    local _, _, _, NS = duelPair()
+    local net = NS.new({ seed = 9 })
+    local a = net.add({ name = "Alice", saved = { seenHelp = true }, alsoOnline = { Frank = true, Gina = true },
+      bnet = { { name = "Bob" }, { name = "Frank", realm = "Faraway" }, { name = "Gina", project = 5 }, { name = "Hana" } } })
+    net.add({ name = "Bob", saved = { seenHelp = true } })
+    a.env.UIParent:SetSize(1920, 1080)
+    net.step(30)
+    a.env.SlashCmdList.STACKRIVALS("")
+    a.ns.UI:ShowSheet("duel")
+    a.ns.UI.duelSource = "bnet"
+    a.ns.UI.duelSheet.refresh:Click(); net.step(60)
     a.ns.UI:RefreshDuelSheet()
     return a.M, a.ns, a.env.StackRivalsFrame
   end },

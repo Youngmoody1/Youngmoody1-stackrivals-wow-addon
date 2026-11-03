@@ -183,9 +183,45 @@ function Duel.findPlayers()
   return any, any and nil or "no_guild_or_group"
 end
 
+local function ignored(sender) return ns.Social and ns.Social.isIgnored(sender) end
+
 local function onHello(m, sender)
-  if ns.Comm.trial then return end
+  if ns.Comm.trial or ignored(sender) then return end -- someone you ignore never learns you have it
   reply(sender, P.encode("HI", ns.VERSION, E.ENGINE_VERSION, Duel.busy() and 1 or 0))
+end
+
+--- Ask specific players (friends, Battle.net friends on your realm, recent rivals) whether they have
+--- StackRivals: one hidden addon whisper (HEL) each, only when YOU press Refresh. Each player is asked
+--- at most once per PING_GAP, at most PING_MAX per press; whispers to offline players are hidden.
+--- Their addon answers HI (Duel.players); nobody is shown as available before that answer.
+Duel.PING_GAP = 60
+Duel.PING_MAX = 20
+Duel.pinged = {}
+function Duel.pingPresence(names)
+  if ns.Comm.trial then return 0, "trial" end
+  if not ns.Comm.enabled then return 0, "unavailable" end
+  local t, n = now(), 0
+  local msg = P.encode("HEL", ns.VERSION, E.ENGINE_VERSION)
+  for _, name in ipairs(names) do
+    if n >= Duel.PING_MAX then break end
+    local k = name:lower()
+    if not ignored(name) and (not Duel.pinged[k] or t - Duel.pinged[k] >= Duel.PING_GAP) then
+      Duel.pinged[k] = t
+      n = n + 1
+      ns.Comm.send(msg, "WHISPER", name, nil, { low = true })
+    end
+  end
+  return n
+end
+
+--- What we know about a player's StackRivals (from their HI), case-insensitive; nil = no answer.
+function Duel.presence(name)
+  if type(name) ~= "string" then return nil end
+  local p = Duel.players[name]
+  if p then return p end
+  local k = name:lower()
+  for n, x in pairs(Duel.players) do if n:lower() == k then return x end end
+  return nil
 end
 
 local function onHi(m, sender)
@@ -243,6 +279,7 @@ function Duel.challenge(name, rulesetId)
 end
 
 local function onInvite(msg, sender)
+  if ignored(sender) then return end -- no popups from players you ignore
   if answerClosed(msg, sender) then return end -- an invite we already declined, re-sent
   if ns.Comm.trial then
     if not Duel.trialNoted then Duel.trialNoted = true; emit("trial", sender) end

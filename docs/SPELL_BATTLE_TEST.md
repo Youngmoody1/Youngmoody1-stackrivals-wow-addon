@@ -81,6 +81,22 @@ er slået fra. `/sr version` viser "build vsbot (duels off)". Mappen hedder stad
 
 ✱ = tag screenshot.
 
+## C. Challenge Friends (branch `multiplayer`, build 0.6.0, kun efter din godkendelse)
+
+To spillere med 0.6.0, i samme guild **og** som WoW- eller Battle.net-venner. Alt er **UTESTET i WoW**.
+
+| # | Gør dette | Det skal ske | Resultat |
+|---|---|---|---|
+| C1 | A: `/sr` → kortet **Challenge** ✱ | Arket "CHALLENGE FRIENDS" med fanerne Guild, Friends, Battle.net, Group og Recent. Der står "Press Refresh to ask who has StackRivals". Ingen er "ready" endnu | UTESTET |
+| C2 | A: fanen **Guild** → **Refresh** ✱ | B står med en grøn prik og "StackRivals v0.6.0 - ready". Guildmedlemmer uden addon'et står med "no StackRivals answer yet", og deres knap er grå | UTESTET |
+| C3 | A: fanen **Friends** → **Refresh** | B er "ready". Offline venner står som "offline" og får ingen besked. Der kommer ingen "No player named…"-linjer i chatten | UTESTET |
+| C4 | A: fanen **Battle.net** → **Refresh** ✱ | B er "ready", hvis B spiller samme WoW-version på samme (eller en forbundet) realm. Venner på en anden realm står som "other realm", og venner i en anden WoW-version som "other WoW version" | UTESTET |
+| C5 | A: vælg **Spell Battle** → **Challenge** ud for B | B får en popup. Accept → lobby → Pick Spells → Ready → duel | UTESTET |
+| C6 | A: skriv B's navn i **OR BY NAME** → Challenge | Det samme som C5 | UTESTET |
+| C7 | B sætter A på ignore-listen (`/ignore A`). A: Refresh | B svarer ikke, og A kan ikke udfordre B. B får ingen popup | UTESTET |
+| C8 | Efter en duel: fanen **Recent** | Modstanderen står der. Refresh → "ready", hvis modstanderen er online | UTESTET |
+| C9 | Forskellige factions på samme realm (hvis muligt) | Notér, om B bliver "ready" | UTESTET |
+
 ## Efter testen
 
 - Gem `WTF\Account\<KONTO>\SavedVariables\StackRivals.lua` fra **begge** maskiner (der ligger

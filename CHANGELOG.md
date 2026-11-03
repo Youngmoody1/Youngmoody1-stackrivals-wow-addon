@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0 — Challenge Friends (branch `multiplayer`, development, not released)
+
+- **Challenge** card on the menu opens **Challenge Friends**: pick Blitz 2:00, 3:00 or Spell Battle, then a list — Guild, WoW Friends, Battle.net friends on WoW, Group, Recent rivals — or type a name. Uses the 0.5 duel protocol unchanged.
+- A player is "ready" only after their own StackRivals answered; nothing is sent until you press Refresh (each player asked at most once a minute, max 20 per click; guild / group: one broadcast). Invites only by your click. Ignored players are never listed, asked, answered or allowed to pop up an invite.
+- Battle.net friends are challengeable when they play the same WoW version on your realm or a connected one; others are listed with the reason ("other realm", "other WoW version"). A Battle.net transport for other realms is planned, not built (`docs/CHALLENGE_FRIENDS.md`). Game account IDs are never stored.
+- Includes everything from 0.5.1.
+
 ## 0.5.1 — vs Bot survival rule (branch `spellbattle`, not released)
 
 - **Spell Battle vs Bot follows the web's new rule** (stackrivals.io `ef71158`, checked at `8ddaad7`): whoever tops out first loses, whatever the score. The bot topping out while you play is a VICTORY at once; your top-out is a DEFEAT at once and the bot stops there (shown as the server shows it); the same tick or 3:00 → higher score. Ported line by line, with fixtures from the web's real code (every rule case + 40 full matches at all 5 levels) and live matches checked against the server's result at all 5 levels.

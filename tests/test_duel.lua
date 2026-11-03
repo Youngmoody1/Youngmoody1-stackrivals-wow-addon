@@ -913,4 +913,130 @@ describe("second review findings (simulated clients)", function()
   end)
 end)
 
+
+------------------------------------------------------------------------------------------------
+-- Challenge Friends: guild, WoW friends, Battle.net friends, group, recent rivals, by name
+------------------------------------------------------------------------------------------------
+describe("Challenge Friends (simulated clients)", function()
+  local function sent(net) return net.sent end
+  local function rowFor(c, name)
+    for _, row in ipairs(c.ns.UI.duelSheet.rows) do
+      if row:IsShown() and row.name:GetText() == name then return row end
+    end
+  end
+  local function open(c, src)
+    c.env.SlashCmdList.STACKRIVALS("")
+    c.ns.UI:ShowSheet("duel")
+    c.ns.UI.duelSource = src; c.ns.UI.duelFindNote = nil
+    c.ns.UI:RefreshDuelSheet()
+  end
+
+  it("opening the sheet and switching lists sends nothing; nobody is 'ready' before their addon answered", function()
+    local net = NS.new({ seed = 101 })
+    local a = net.add({ name = "Alice", guild = "G", friends = { "Bob", "Dave", "Erin" }, alsoOnline = { Dave = true } })
+    net.add({ name = "Bob", guild = "G" })
+    net.step(30)
+    local before = sent(net)
+    open(a, "guild")
+    for _, src in ipairs({ "friends", "bnet", "group", "recent", "guild" }) do a.ns.UI.duelSource = src; a.ns.UI:RefreshDuelSheet() end
+    net.step(30)
+    eq(sent(net), before, "no message without a click")
+    local row = rowFor(a, "Bob")
+    ok(row, "Bob is listed (online guild member)")
+    ok(not row.btn:IsEnabled(), "not challengeable before his addon answered")
+    ok(row.info:GetText():find("no StackRivals answer"), row.info:GetText())
+  end)
+
+  it("guild: Refresh asks the guild once; members with StackRivals become 'ready'; Challenge invites", function()
+    local net = NS.new({ seed = 102 })
+    local a = net.add({ name = "Alice", guild = "G", guildOffline = { "Zed" } })
+    local b = net.add({ name = "Bob", guild = "G" })
+    net.step(30)
+    open(a, "guild")
+    ok(not rowFor(a, "Zed"), "offline guild members are not listed")
+    a.ns.UI.duelSheet.refresh:Click()
+    net.step(60)
+    local row = rowFor(a, "Bob")
+    ok(row and row.btn:IsEnabled(), "Bob answered: ready")
+    ok(row.info:GetText():find("ready"), row.info:GetText())
+    row.btn:Click()
+    net.step(60)
+    eq(b.ns.Duel.current and b.ns.Duel.current.state, "invited", "Bob got the invite popup")
+  end)
+
+  it("WoW friends: Refresh asks each online friend once (never offline ones, never twice within a minute)", function()
+    local net = NS.new({ seed = 103 })
+    local a = net.add({ name = "Alice", friends = { "Bob", "Dave", "Erin" }, alsoOnline = { Dave = true } })
+    net.add({ name = "Bob" })
+    net.step(30)
+    open(a, "friends")
+    local whispers = {}
+    net.tap = function(c, text, ch, tgt) if c == a and text:match(":HEL:") then whispers[#whispers + 1] = tgt end end
+    a.ns.UI.duelSheet.refresh:Click()
+    net.step(60)
+    eq(#whispers, 2, "Bob and Dave (online), not Erin (offline)")
+    ok(rowFor(a, "Bob").btn:IsEnabled(), "Bob has StackRivals")
+    local dave = rowFor(a, "Dave")
+    ok(not dave.btn:IsEnabled() and dave.info:GetText():find("no StackRivals answer"), "Dave is online but has no StackRivals")
+    ok(rowFor(a, "Erin").info:GetText() == "offline")
+    a.ns.UI.duelSheet.refresh:Click()
+    net.step(60)
+    eq(#whispers, 2, "asked again only after a minute")
+    net.tap = nil
+  end)
+
+  it("Battle.net friends: same WoW version and a realm you can whisper -> challengeable; others say why", function()
+    local net = NS.new({ seed = 104 })
+    -- Frank (another realm) and Gina (another WoW version) are online on Battle.net
+    local a = net.add({ name = "Alice", bnet = { { name = "Bob" }, { name = "Frank", realm = "Faraway" }, { name = "Gina", project = 5 } }, alsoOnline = { Frank = true, Gina = true } })
+    local b = net.add({ name = "Bob" })
+    net.step(30)
+    open(a, "bnet")
+    a.ns.UI.duelSheet.refresh:Click()
+    net.step(60)
+    ok(rowFor(a, "Bob").btn:IsEnabled(), "Bob: same realm, has StackRivals")
+    local frank = rowFor(a, "Frank-Faraway")
+    ok(frank and not frank.btn:IsEnabled() and frank.info:GetText() == "other realm", "Frank: another realm (not whisperable)")
+    local gina = rowFor(a, "Gina")
+    ok(gina and not gina.btn:IsEnabled() and gina.info:GetText() == "other WoW version")
+    -- a Battle.net friend's game account ID is never stored
+    for k, v in pairs(a.ns.Duel.players) do ok(not tostring(k):find("7%d%d%d"), "no game account IDs kept") end
+    rowFor(a, "Bob").btn:Click()
+    net.step(60)
+    eq(b.ns.Duel.current and b.ns.Duel.current.state, "invited")
+  end)
+
+  it("group and recent rivals: listed from the party and the duel history", function()
+    local net = NS.new({ seed = 105 })
+    local a = net.add({ name = "Alice", group = "P" })
+    net.add({ name = "Bob", group = "P" })
+    net.step(30)
+    open(a, "group")
+    ok(rowFor(a, "Bob"), "party member listed")
+    a.ns.db.duels.history = { { rival = "Carol-Realm", res = "win" }, { rival = "Bob-Realm", res = "loss" } }
+    open(a, "recent")
+    ok(rowFor(a, "Carol") and rowFor(a, "Bob"), "recent rivals listed")
+  end)
+
+  it("by name: type it, press Challenge; ignored players are never listed, asked or answered", function()
+    local net = NS.new({ seed = 106 })
+    local a = net.add({ name = "Alice", guild = "G", ignored = { ["Mallory-Realm"] = true, Mallory = true } })
+    local b = net.add({ name = "Bob", guild = "G" })
+    local m = net.add({ name = "Mallory", guild = "G" })
+    net.step(30)
+    open(a, "guild")
+    ok(not rowFor(a, "Mallory"), "ignored: not listed")
+    -- Mallory asks who has StackRivals: Alice doesn't answer; Mallory's invite never pops up
+    m.ns.Duel.findPlayers(); net.step(60)
+    ok(not m.ns.Duel.presence("Alice-Realm"), "Alice stays invisible to Mallory")
+    ok(m.ns.Duel.challenge("Alice", "b120")); net.step(60)
+    eq(a.ns.Duel.current, nil, "no popup from an ignored player")
+    m.ns.Duel.decline("cancel"); net.step(30)
+    a.ns.UI.duelSheet.nameBox:SetText("bob")
+    a.ns.UI.duelSheet.nameGo:Click()
+    net.step(60)
+    eq(b.ns.Duel.current and b.ns.Duel.current.state, "invited", "Bob invited by name")
+  end)
+end)
+
 return H
