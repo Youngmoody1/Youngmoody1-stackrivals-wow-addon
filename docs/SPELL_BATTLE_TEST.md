@@ -1,4 +1,4 @@
-# Spell Battle 0.5.0: test i rigtige WoW-klienter
+# Spell Battle 0.5.x: test i rigtige WoW-klienter
 
 **Rækkefølge:** først 0.3.1 (solo) i en rigtig klient (`docs/TEST_DAY.md`). Når den test er bestået:
 procedure A (Spell Battle mod bot, én klient), derefter procedure B (to spillere).
@@ -11,8 +11,8 @@ krydset af her efter en rigtig klienttest.
 
 | Build | Fil | Til | Hvornår |
 |---|---|---|---|
-| **vs Bot-testbuild** | `StackRivals-0.5.0-vsbot.zip` (artifact **StackRivals-vsbot-test**) | procedure A | når 0.3.1-testen er godkendt |
-| **Fuld build (dueller)** | `StackRivals-0.5.0.zip` (artifact **StackRivals-build**) | procedure B | først efter din godkendelse af A |
+| **vs Bot-testbuild** | `StackRivals-0.5.1-vsbot.zip` (artifact **StackRivals-vsbot-test**) | procedure A | når 0.3.1-testen er godkendt |
+| **Fuld build (dueller)** | `StackRivals-0.5.1.zip` (artifact **StackRivals-build**) | procedure B | først efter din godkendelse af A |
 
 vs Bot-buildet er den samme kode, men guild-dueller er slået fra: addon'et registrerer og besvarer
 ingen addon-beskeder, Duel-kortet siger "Off in this test build", og `/sr duel` siger, at dueller
@@ -24,7 +24,7 @@ er slået fra. `/sr version` viser "build vsbot (duels off)". Mappen hedder stad
    `Interface\AddOns\StackRivals`. 0.3.1-installationen skal kunne lægges tilbage uændret.
 2. **Installér det rigtige build** (se tabellen ovenfor): pak ZIP'en ud, så mappen
    `Interface\AddOns\StackRivals` erstattes. Rør ikke andre addons.
-3. **Start WoW.** Skriv `/sr version` og tag screenshot: det skal vise "version 0.5.0, engine v1, interface …"
+3. **Start WoW.** Skriv `/sr version` og tag screenshot: det skal vise "version 0.5.1, engine v1, interface …"
    og, for procedure A, "build vsbot (duels off)".
 4. **Røde fejlvinduer:** tag screenshot med det samme. `/console scriptErrors 1` viser Lua-fejl.
 
@@ -43,10 +43,10 @@ er slået fra. `/sr version` viser "build vsbot (duels off)". Mappen hedder stad
 | A6 | Tryk en spell uden nok mana | "NOT ENOUGH MANA" vises, og der sker intet andet | UTESTET |
 | A7 | Kast **Garbage** (R) ✱ | "GARBAGE SENT". Efter ca. 1,5 s får bottens minibræt 2 grå rækker | UTESTET |
 | A8 | Lad botten kaste på dig (prøv Contender/Elite) ✱ | "INCOMING GARBAGE 1.4s" **under brættet**, en blå bjælke ved brættets venstre kant, derefter grå rækker. FROZEN / SPEED UP / BLACKOUT vises på samme linje under brættet. Intet spell-tekst dækker den faldende brik | UTESTET |
-| A9 | Vind: botten topper ud, mens du fører | **VICTORY** med det samme. Uret står stille, og taster/spells gør ikke mere i spillet | UTESTET |
-| A10 | Botten topper ud, mens du er bagud | Du spiller videre, og panelet viser "beat N to win". Når du passerer scoren: VICTORY | UTESTET |
-| A11 | Top selv ud | "FINISHED – The bot is finishing its run…" i et øjeblik, derefter VICTORY / DEFEAT | UTESTET |
-| A12 | Spil 3:00 færdigt | Kampen slutter ved 0:00. Rekorden står i Pick Spells | UTESTET |
+| A9 | Botten topper ud, mens du stadig spiller (også hvis du er bagud) | **VICTORY** med det samme, uanset score. Uret står stille, og taster/spells gør ikke mere | UTESTET |
+| A10 | Pick Spells ✱ | Under rekorden står "First to top out loses. At 3:00 the higher score wins." | UTESTET |
+| A11 | Top selv ud (også hvis du fører) | **DEFEAT** med det samme: "You topped out first: the bot wins, whatever the score." Botten stopper, hvor den var | UTESTET |
+| A12 | Spil 3:00 færdigt (ingen topper ud) | Kampen slutter ved 0:00, og den højeste score vinder. Rekorden står i Pick Spells | UTESTET |
 | A13 | Prøv alle 5 bot-niveauer (1 kamp hver) | Rookie er tydeligt lettere end Rival. Notér scorerne | UTESTET |
 | A14 | Gå i combat midt i en kamp | Begge brætter står stille. Resume virker først efter combat | UTESTET |
 | A15 | Midt i en kamp: `/reload` → **Continue your Spell Battle run** | Brættet, botten, mana og spells på vej er præcis som før | UTESTET |
@@ -60,8 +60,8 @@ er slået fra. `/sr version` viser "build vsbot (duels off)". Mappen hedder stad
 
 | # | Gør dette | Det skal ske | Resultat |
 |---|---|---|---|
-| B1 | Begge: `/sr version` | Begge viser 0.5.0 | UTESTET |
-| B2 | A: Duel → **Spell Battle** → Find players ✱ | B står på listen med "v0.5.0" (en 0.4-spiller vises som "needs 0.5.0") | UTESTET |
+| B1 | Begge: `/sr version` | Begge viser 0.5.1 | UTESTET |
+| B2 | A: Duel → **Spell Battle** → Find players ✱ | B står på listen med "v0.5.1" (en 0.4-spiller vises som "needs 0.5.0") | UTESTET |
 | B3 | A: Challenge. B: Accept | Begge lobbyer viser "SPELL DUEL - 3:00" og dine 4 spells | UTESTET |
 | B4 | Begge: **Change spells** → vælg → Done → **Ready** ✱ | Der står "locked" ud for dine spells. Nedtællingen starter samtidig (±1 s) | UTESTET |
 | B5 | Sammenlign NEXT lige efter start ✱ | Samme brikker hos begge (fælles seed) | UTESTET |
@@ -85,5 +85,5 @@ er slået fra. `/sr version` viser "build vsbot (duels off)". Mappen hedder stad
 
 - Gem `WTF\Account\<KONTO>\SavedVariables\StackRivals.lua` fra **begge** maskiner (der ligger
   `duelDiag` med diagnostik). Ingen kontooplysninger ligger i den fil.
-- Læg 0.3.1-backuppen tilbage, hvis 0.5.0 ikke skal blive liggende.
+- Læg 0.3.1-backuppen tilbage, hvis 0.5.x ikke skal blive liggende.
 - Send screenshots og de to SavedVariables-filer til Claude. Først derefter kan punkterne krydses af.

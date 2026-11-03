@@ -7,10 +7,11 @@
     2. your moves, then your casts (only castable ones are logged, like the web),
     3. your gravity tick,
     4. the bot plays the same tick (incoming, its decisions, its gravity).
-  The match ends when you top out, the time cap is reached, or the result can no longer change
-  (the bot topped out and you are ahead: Spells.botMatchDecided). After you top out the bot plays
-  on to the cap, like on the web: its final score decides. Nothing here touches WoW gameplay:
-  these are StackRivals spells on StackRivals boards. Pure Lua (no WoW API).
+  vs Bot is a survival duel, as on the web since ef71158 (Oct 2026): whoever tops out first loses,
+  whatever the score. The match ends the moment one side tops out (the bot: you win; you: you lose,
+  the bot stops there too) or at the time cap (higher score wins; the same tick for both: higher
+  score). The result is the web server's (Spells.botOutcome / botMatchEndTick, match.server.ts).
+  Nothing here touches WoW gameplay: these are StackRivals spells on StackRivals boards. Pure Lua.
 ]]
 local _, ns = ...
 ns = ns or {}
@@ -246,9 +247,21 @@ function SB.step(sess)
   end
 end
 
+local function copyOf(v, seen)
+  if type(v) ~= "table" then return v end
+  seen = seen or {}
+  if seen[v] then return seen[v] end
+  local c = {}
+  seen[v] = c
+  for k, x in pairs(v) do c[copyOf(k, seen)] = copyOf(x, seen) end
+  return setmetatable(c, getmetatable(v))
+end
+
 --- The last tick of each side, exactly as the verification (Spells.Sim) processes it: at a side's
 --- final tick (untilTick) incoming spells land and its codes run, but there is no gravity step.
 --- The web's live loop skips this tick; its server does not - we follow the server (the result).
+--- The bot's final tick is the cap, or your top-out tick if you topped out first (the bot is shown
+--- as it stood then, like the server's shown result).
 local function finalTick(sess)
   local sp = sess.spell
   if sp.finalDone then return end
@@ -258,7 +271,10 @@ local function finalTick(sess)
     local due = takeDue(sp.pendingMe, me.game.tick)
     if due then for _, inc in ipairs(due) do S.receive(me, inc) end end
   end
-  if not o.game.gameOver and o.game.tick == sess.capTicks then
+  local endT = sess.capTicks
+  if me.game.gameOver and not o.game.gameOver then endT = math.min(me.game.tick, sess.capTicks) end
+  sp.endTick = endT
+  if not o.game.gameOver and o.game.tick == endT then
     local due = takeDue(sp.pendingOpp, o.game.tick)
     if due then for _, inc in ipairs(due) do S.receive(o, inc) end end
     for _ = 1, 2 do
@@ -267,21 +283,27 @@ local function finalTick(sess)
       if c == nil then break end
       S.applyCode(o, c, nil)
     end
+    -- you topped out first: who was first is decided by the bot's FULL run (the server's), in which
+    -- this tick also has its gravity step. A copy takes that step, so a top-out on the very same
+    -- tick is a tie on score, exactly as on the server; the bot you see stays as it stood.
+    if endT < sess.capTicks and not o.game.gameOver then
+      local full = copyOf(o)
+      S.stepSide(full)
+      sp.botFull = { score = full.game.score, toppedOut = full.game.gameOver, ticks = full.game.tick }
+    end
   end
 end
 SB.finalTick = finalTick
 
---- Your run is over. The bot may still have ticks to play (after a top-out): it plays them over
---- the next frames (`settle`), then the result is final.
+--- The match is over (you topped out, the bot topped out, or 3:00): the result is final at once.
+--- (Since the survival rule the bot never plays on after your top-out; `settling` stays for
+--- matches suspended by an older version.)
 function SB.finish(sess, reason)
   local sp = sess.spell
   sp.endReason = reason
   sp.castQueue = {}
-  if reason == "topout" and not sp.opp.game.gameOver and sp.opp.game.tick < sess.capTicks then
-    sp.settling = true
-  end
   sess:finish(reason)
-  if not sp.settling then finalTick(sess); SB.decide(sess) end
+  finalTick(sess); SB.decide(sess)
 end
 
 --- Advance the bot after your top-out; returns true when the result is final.
@@ -302,8 +324,10 @@ end
 function SB.decide(sess)
   local sp = sess.spell
   local me, o = sp.me.game, sp.opp.game
-  local outcome = S.decideOutcome({ score = me.score }, { score = o.score })
-  sp.result = { outcome = outcome, me = me.score, bot = o.score, reason = sp.endReason, ticks = me.tick, botTicks = o.tick }
+  local meEnd = { score = me.score, toppedOut = me.gameOver, ticks = me.tick }
+  local botEnd = sp.botFull or { score = o.score, toppedOut = o.gameOver, ticks = o.tick }
+  local outcome = S.botOutcome(meEnd, botEnd)
+  sp.result = { outcome = outcome, me = me.score, bot = o.score, reason = sp.endReason, ticks = me.tick, botTicks = o.tick, rules = 2 }
   sess:emit("spellresult", outcome)
 end
 

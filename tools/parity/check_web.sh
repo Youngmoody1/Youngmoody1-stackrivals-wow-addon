@@ -20,7 +20,7 @@ HEAD=$(git -C "$WEB" rev-parse HEAD)
 echo "addon based on web commit: ${BASE:-unknown}"
 echo "web checkout HEAD:         $HEAD"
 
-GAMEPLAY_PATHS=(src/game/engine src/game/controls.ts src/game/bot src/lib/match/rules.ts)
+GAMEPLAY_PATHS=(src/game/engine src/game/controls.ts src/game/bot src/lib/match/rules.ts src/lib/match.server.ts src/components/game/VersusGame.tsx)
 if [ -n "$BASE" ] && git -C "$WEB" cat-file -e "$BASE^{commit}" 2>/dev/null; then
   echo
   echo "== gameplay commits since the base =="
@@ -59,12 +59,16 @@ bun tools/parity/gen-spell-fixtures.ts "$WEB" > "$TMP2"
 TMP3=$(mktemp)
 trap 'rm -f "$TMP" "$TMP2" "$TMP3"' EXIT
 bun tools/parity/gen-spell-scenarios.ts "$WEB" > "$TMP3"
+TMP4=$(mktemp)
+trap 'rm -f "$TMP" "$TMP2" "$TMP3" "$TMP4"' EXIT
+bun tools/parity/gen-bot-outcome.ts "$WEB" > "$TMP4"
 echo
 echo "== Spell Battle + bots: Lua vs web @ ${HEAD:0:7} =="
-if SR_SPELL_FIXTURES="$TMP2" SR_SPELL_SCENARIOS="$TMP3" "$LUA" -e 'local H=assert(loadfile("tests/test_spells.lua"))("StackRivals","tests"); if not H.report("spells") then os.exit(1) end'; then
+if SR_SPELL_FIXTURES="$TMP2" SR_SPELL_SCENARIOS="$TMP3" SR_BOT_OUTCOME_FIXTURES="$TMP4" "$LUA" -e 'local H=assert(loadfile("tests/test_spells.lua"))("StackRivals","tests"); if not H.report("spells") then os.exit(1) end'; then
   echo "PASS: spells and bots play identically."
   echo "To move the base forward: bun tools/parity/gen-spell-fixtures.ts \"$WEB\" > tests/fixtures/spells.lua"
   echo "                           bun tools/parity/gen-spell-scenarios.ts \"$WEB\" > tests/fixtures/spell_scenarios.lua"
+  echo "                           bun tools/parity/gen-bot-outcome.ts \"$WEB\" > tests/fixtures/bot_outcome.lua"
 else
   echo "FAIL: Spell Battle or the bot differs. Port the change (docs/SPELL_BATTLE.md), then regenerate."
   exit 1

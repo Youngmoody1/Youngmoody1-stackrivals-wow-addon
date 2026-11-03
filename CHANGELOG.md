@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1 — vs Bot survival rule (branch `spellbattle`, not released)
+
+- **Spell Battle vs Bot follows the web's new rule** (stackrivals.io `ef71158`, checked at `8ddaad7`): whoever tops out first loses, whatever the score. The bot topping out while you play is a VICTORY at once; your top-out is a DEFEAT at once and the bot stops there (shown as the server shows it); the same tick or 3:00 → higher score. Ported line by line, with fixtures from the web's real code (every rule case + 40 full matches at all 5 levels) and live matches checked against the server's result at all 5 levels.
+- Guild duels unchanged (the web keeps "higher score wins" for 1v1).
+- Saved W/L/D now count under the new rule; 0.5.0 results kept apart (`statsV1`), best scores kept.
+- Pick Spells and the result screen say the rule ("First to top out loses. At 3:00 the higher score wins."); "beat N to win" and "the bot is finishing its run" are gone.
+
 ## 0.5.0 — Spell Battle preview (branch `spellbattle`, not released)
 
 - **Spell Battle** from stackrivals.io Play 2.0 (web `48fdf46`): the same 9 spells (Bomb, Line

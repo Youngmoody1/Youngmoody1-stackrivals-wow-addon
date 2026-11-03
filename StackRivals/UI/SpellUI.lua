@@ -401,11 +401,11 @@ function UI:RenderSpell(sess)
   rp.over:SetShown(o.game.gameOver)
   if rp.score._n ~= o.game.score then rp.score._n = o.game.score; rp.score:SetText(T.commas(o.game.score)) end
   local lead = me.game.score - o.game.score
-  local beat = o.game.gameOver and not me.game.gameOver and lead <= 0
-  local lkey = (beat and "b" or "l") .. lead
+  local lkey = "l" .. lead
   if rp.lead._k ~= lkey then
     rp.lead._k = lkey
-    local lt = (beat and ("beat " .. T.commas(o.game.score) .. " to win")) or (lead > 0 and ("you +" .. T.commas(lead))) or (lead < 0 and ("you -" .. T.commas(-lead))) or "level"
+    -- vs Bot: survive the bot (first to top out loses); the score only decides at 3:00
+    local lt = (lead > 0 and ("you +" .. T.commas(lead))) or (lead < 0 and ("you -" .. T.commas(-lead))) or "level"
     rp.lead._s = lt; rp.lead:SetText(lt)
     local c = lead > 0 and C.green or (lead < 0 and C.redLight or C.label)
     rp.lead:SetTextColor(c[1], c[2], c[3])
@@ -499,9 +499,9 @@ end
 ------------------------------------------------------------------------------------------------
 local OUTCOME = { win = { "VICTORY", C.gold }, loss = { "DEFEAT", C.redLight }, draw = { "DRAW", C.paper } }
 local REASON = {
-  decided = "The bot topped out and you were ahead.",
-  topout = "You topped out.",
-  time = "Time's up.",
+  decided = "The bot topped out first: you win, whatever the score.",
+  topout = "You topped out first: the bot wins, whatever the score.",
+  time = "Time's up: the higher score wins.",
 }
 
 function UI:ShowSpellOver(sess)
@@ -519,7 +519,7 @@ function UI:ShowSpellOver(sess)
     self.overScore:SetText(T.commas(sp.me.game.score))
     self.overBadge:SetText(bot .. ": " .. T.commas(sp.opp.game.score))
     self.overBadge:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
-    self.overDetail:SetText("You topped out. The bot is finishing its run...")
+    self.overDetail:SetText("You topped out.")
     return
   end
   local r = sp.result
@@ -532,7 +532,7 @@ function UI:ShowSpellOver(sess)
   local st = ns.db.spell.stats[sp.difficulty]
   local rec = st and string.format("\nvs %s: %d won, %d lost", DIFF_LABEL[sp.difficulty], st.wins, st.losses) or ""
   local why = REASON[r.reason] or ""
-  if r.reason == "topout" and r.outcome == "win" then why = "You topped out, but the bot finished lower." end
+  if r.reason == "topout" and r.outcome ~= "loss" then why = "You both topped out on the same tick: the higher score decides." end
   self.overDetail:SetText(why .. rec)
   if r.outcome == "win" then self.badgePulse:Stop(); self.badgePulse:Play() end
 end
@@ -670,5 +670,5 @@ function UI:RefreshSpellSheet()
   local d = ns.db.spell.difficulty
   local st = ns.db.spell.stats[d]
   self.spellRecord:SetText(string.format("3:00 vs the %s bot: %d won, %d lost, %d draws%s", DIFF_LABEL[d], st.wins, st.losses, st.draws,
-    st.best > 0 and (", best " .. T.commas(st.best)) or ""))
+    st.best > 0 and (", best " .. T.commas(st.best)) or "") .. "\nFirst to top out loses. At 3:00 the higher score wins.")
 end

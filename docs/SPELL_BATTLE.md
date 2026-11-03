@@ -64,18 +64,31 @@ only checks that a loadout is valid, so this changes no rule.
 So a live match **is** the lockstep replay of your log against the bot. The tests check this hash
 for hash, at three bot levels.
 
-**The match ends correctly** (the web's `botMatchDecided` fix):
+**Who wins: first to top out loses** (the web's survival rule since `ef71158`, Oct 2026; ported in
+0.5.1 and checked against web `8ddaad7`):
 
-- **The bot tops out while you lead:** the match ends at once. You get VICTORY, the timer stops, and no more input or casts are taken. Tested: nothing is logged after the end.
-- **The bot tops out while you're behind or level:** you play on. The rival panel says "beat N to win", and passing that score wins.
-- **You top out:** the bot plays on to 3:00, as on the web. It does so over a few frames (600 ticks per frame, no hitch) while "The bot is finishing its run…" shows. Then the result appears.
-- **3:00:** the match ends for both.
+- **The bot tops out while you are still playing:** VICTORY at once, **whatever the score**. The timer stops; no more input or casts are taken.
+- **You top out first:** DEFEAT at once, **whatever the score**. The bot stops there too and is shown as it stood at that tick (the server's shown result). It no longer plays on to 3:00.
+- **Both on the same tick:** the higher score wins (equal: draw). Whether the bot also topped out on that tick is decided by the bot's full run, like the server (a copy takes the tick's gravity step; the shown bot doesn't).
+- **3:00, both still playing:** the higher score wins.
+- **A run that stops without a top-out** (on the web: a disconnect) is never an automatic win: the scores decide.
+- **Guild duels are not affected:** between players, topping out only ends your own run and the higher score wins (the web keeps `decideOutcome` for 1v1).
+
+The rule is the web's code ported line by line (`Spells.botOutcome`, `botMatchEndTick`,
+`botMatchDecided`; the server's result in `Spells.botResult`). `tools/parity/gen-bot-outcome.ts`
+generates every rule case and 40 full matches (5 bot levels × early top-out, a good player, a run
+stopped early, an idle player) from the web's real code; the Lua tests must reproduce outcome, end
+tick and the shown bot board. Live matches at all 5 levels are checked against the same result.
+
+**Saved results.** W/L/D are now counted under the survival rule (`spell.rules = 2`). Results from
+0.5.0 (higher score wins) are kept apart in `statsV1`, never mixed in and never deleted; best
+scores are kept.
 
 **The last tick follows the server, not the web's live loop.** The web server's verification
 processes each side's final tick:
 
 - incoming spells land at that tick;
-- the bot's moves at tick 10800 are applied, without a gravity step.
+- the bot's moves at its final tick (3:00, or your top-out tick) are applied, without a gravity step.
 
 The web's live loop skips that tick. The addon follows the server, because the server decides the
 result. See the web report, item 1.

@@ -151,7 +151,8 @@ describe("verifySpellMatch: human logs vs the bot and vs each other", function()
         bot = { actor = Bot.SpellBot.new(h.seed, h.difficulty, h.createdAtMs), loadout = Bot.LOADOUTS[h.difficulty] } })
       verifyEq(res[1], h.vsBot, "vs bot")
       checkSide(botSide, h.bot, "bot")
-      eq(S.botMatchDecided({ score = res[1].score, gameOver = res[1].toppedOut }, botSide.game), h.decided, "decided")
+      -- (the generator passes { gameOver = true } when the log is unusable: no final state)
+      eq(S.botMatchDecided({ score = res[1].score, gameOver = res[1].toppedOut or res[1].hash == nil }, botSide.game), h.decided, "decided")
       local p2 = { v = 1, seed = h.seed, startLevel = 1, ticks = h.ticks2, log = h.log2, loadout = h.loadout2, elapsedMs = h.elapsedMs2 }
       local r2 = S.verifyMatch({ seed = h.seed, capTicks = 10800, players = { p1, p2 } })
       verifyEq(r2[1], h.vsHuman[1], "human 1")
@@ -291,13 +292,39 @@ describe("spell rules (ported from the web's spells.test.ts behaviour)", functio
     eq(select(1, S.decideOutcome({ score = 99, forfeited = true }, { score = 1 })), "loss")
     eq(select(1, S.decideOutcome({ score = 1, forfeited = true }, { score = 99, forfeited = true })), "loss")
   end)
-  it("botMatchDecided only when the bot is out, the player is not, and the player leads", function()
+  it("botMatchDecided: the bot is out and the player isn't, whatever the score (survival rule)", function()
     ok(S.botMatchDecided({ score = 10, gameOver = false }, { score = 5, gameOver = true }))
-    ok(not S.botMatchDecided({ score = 5, gameOver = false }, { score = 5, gameOver = true }), "level: keep playing")
-    ok(not S.botMatchDecided({ score = 4, gameOver = false }, { score = 5, gameOver = true }), "behind")
+    ok(S.botMatchDecided({ score = 5, gameOver = false }, { score = 5, gameOver = true }), "level")
+    ok(S.botMatchDecided({ score = 4, gameOver = false }, { score = 5, gameOver = true }), "behind: still a win")
     ok(not S.botMatchDecided({ score = 10, gameOver = true }, { score = 5, gameOver = true }), "both out")
     ok(not S.botMatchDecided({ score = 10, gameOver = false }, { score = 5, gameOver = false }), "bot alive")
   end)
+end)
+
+-- The vs-Bot win rule from the web's real code (tools/parity/gen-bot-outcome.ts).
+local bo = dofile(os.getenv("SR_BOT_OUTCOME_FIXTURES") or (testdir .. "/fixtures/bot_outcome.lua"))
+describe("vs Bot win rule = the web (" .. bo.webCommit:sub(1, 7) .. "): first to top out loses", function()
+  it(#bo.cases .. " rule cases: botOutcome, botMatchEndTick, botMatchDecided", function()
+    for i, c in ipairs(bo.cases) do
+      local label = string.format("case %d (me %s %d %d%s, bot %s %d %d)", i, tostring(c.me.toppedOut), c.me.ticks, c.me.score,
+        c.me.forfeited and " forfeit" or "", tostring(c.bot.toppedOut), c.bot.ticks, c.bot.score)
+      eq(S.botOutcome(c.me, c.bot), c.outcome, label .. " outcome")
+      eq(S.botMatchEndTick(c.me, c.bot, 10800), c.endTick, label .. " end tick")
+      eq(S.botMatchDecided({ gameOver = c.me.toppedOut }, { gameOver = c.bot.toppedOut }), c.decided, label .. " decided")
+    end
+  end)
+  for _, m in ipairs(bo.matches) do
+    it(m.seed .. ": the server's result (who topped out first, the bot shown at the end tick)", function()
+      local p = { v = 1, seed = m.seed, startLevel = 1, ticks = m.ticks, log = m.log, loadout = S.DEFAULT_LOADOUT, elapsedMs = m.ticks * 17 + 5000 }
+      local outcome, shown, r, full = S.botResult(m.seed, 10800, p, function() return Bot.SpellBot.new(m.seed, m.difficulty, m.createdAtMs) end, Bot.LOADOUTS[m.difficulty])
+      eq(r.score, m.me.score, "player score"); eq(r.toppedOut, m.me.toppedOut, "player topped out"); eq(r.ticks, m.me.ticks, "player ticks")
+      eq(full.score, m.bot.score, "bot full score"); eq(full.gameOver, m.bot.toppedOut, "bot topped out"); eq(full.tick, m.bot.ticks, "bot ticks")
+      eq(S.botMatchEndTick({ score = r.score, toppedOut = r.toppedOut, ticks = r.ticks }, { score = full.score, toppedOut = full.gameOver, ticks = full.tick }, 10800), m.endTick, "end tick")
+      eq(outcome, m.outcome, "outcome")
+      eq(shown.score, m.shown.score, "shown bot score"); eq(shown.tick, m.shown.tick, "shown bot tick")
+      eq(shown.gameOver, m.shown.gameOver, "shown bot topped out"); eq(E.hashState(shown), m.shown.hash, "shown bot board")
+    end)
+  end
 end)
 
 return H

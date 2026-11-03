@@ -395,7 +395,8 @@ function Sim:run()
 end
 
 ------------------------------------------------------------------------------------------------
--- Results (port of src/lib/match/rules.ts: verifySpellMatch, decideOutcome, botMatchDecided)
+-- Results (port of src/lib/match/rules.ts @ 8ddaad7: verifySpellMatch, decideOutcome,
+-- botMatchDecided, botOutcome, botMatchEndTick; and the vs-Bot result of src/lib/match.server.ts)
 ------------------------------------------------------------------------------------------------
 
 --- Higher score wins; equal is a draw. A forfeit always loses (both forfeited: draw).
@@ -407,10 +408,28 @@ function S.decideOutcome(a, b)
   return "loss", "win"
 end
 
---- vs Bot: decided once the bot has topped out (its score can't change) and the player is
---- strictly ahead. Behind or level, the player keeps playing.
+--- vs Bot is a survival duel (the web's rule since ef71158, Oct 2026): whoever tops out first
+--- loses. So the match is over the moment the bot tops out while the player is still alive,
+--- whatever the score. (Duels between players keep decideOutcome: higher score wins.)
 function S.botMatchDecided(me, bot)
-  return (not me.gameOver) and bot.gameOver and me.score > bot.score
+  return (not me.gameOver) and bot.gameOver
+end
+
+--- vs-Bot result. me / bot = { score, toppedOut, ticks } (+ me.forfeited):
+---   forfeit -> loss; the bot topped out first while the player was still going -> win; the player
+---   topped out first -> loss (whatever the scores); both on the same tick, or neither (time cap,
+---   or a run that stopped without a top-out: never an automatic win) -> higher score wins.
+function S.botOutcome(me, bot)
+  if me.forfeited then return "loss" end
+  if bot.toppedOut and me.ticks >= bot.ticks and ((not me.toppedOut) or bot.ticks < me.ticks) then return "win" end
+  if me.toppedOut and ((not bot.toppedOut) or me.ticks < bot.ticks) then return "loss" end
+  return (S.decideOutcome({ score = me.score }, { score = bot.score }))
+end
+
+--- The tick a vs-Bot match ends on (for the bot's shown result): the player's top-out if first, else the cap.
+function S.botMatchEndTick(me, bot, capTicks)
+  if me.toppedOut and ((not bot.toppedOut) or me.ticks < bot.ticks) then return me.ticks end
+  return capTicks
 end
 
 --- Shape/timing checks for one player's log (the web's checkLog with Spell Battle codes).
@@ -441,7 +460,7 @@ end
 local function contains(list, x) for _, v in ipairs(list) do if v == x then return true end end return false end
 
 --- Replay both logs in lockstep and return the authoritative result per player.
---- opts = { seed, capTicks, players = { p1, p2? }, bot = { actor, loadout }? }
+--- opts = { seed, capTicks, players = { p1, p2? }, bot = { actor, loadout, untilTick? }? }
 --- p = { v, seed, startLevel, ticks, log, loadout, elapsedMs? }
 --- Returns results[i] = { ok, reasons, score, lines, level, ticks, hash, toppedOut, mana, casts,
 --- bestCombo, invalidCasts }, and the bot's side (or nil).
@@ -460,7 +479,7 @@ function S.verifyMatch(opts)
     local p = opts.players[i]
     return { loadout = pre[i].loadout, log = pre[i].usable and p.log or {}, untilTick = pre[i].usable and math.min(p.ticks, cap) or 0, landings = p.landings }
   end
-  local second = opts.bot and { loadout = opts.bot.loadout, log = nil, actor = opts.bot.actor, untilTick = cap } or simPlayer(2)
+  local second = opts.bot and { loadout = opts.bot.loadout, log = nil, actor = opts.bot.actor, untilTick = math.min(opts.bot.untilTick or cap, cap) } or simPlayer(2)
   local run = Sim.new(opts.seed, { simPlayer(1), second }):run()
   local results = {}
   for i, p in ipairs(opts.players) do
@@ -482,6 +501,24 @@ function S.verifyMatch(opts)
     end
   end
   return results, opts.bot and run.sides[2] or nil
+end
+
+--- The server's vs-Bot Spell Battle result (src/lib/match.server.ts): the bot's full run decides who
+--- topped out first; the bot is shown as it stood when the match ended. makeActor() = a fresh bot.
+--- Returns outcome, shownBotGame, result (the player's verification), fullBotGame.
+function S.botResult(seed, capTicks, player, makeActor, botLoadout)
+  local res, full = S.verifyMatch({ seed = seed, capTicks = capTicks, players = { player }, bot = { actor = makeActor(), loadout = botLoadout } })
+  local r = res[1]
+  local fg = full.game
+  local meEnd = { score = r.score, toppedOut = r.toppedOut, ticks = r.ticks, forfeited = player.forfeited }
+  local botEnd = { score = fg.score, toppedOut = fg.gameOver, ticks = fg.tick }
+  local endTick = S.botMatchEndTick(meEnd, botEnd, capTicks)
+  local shown = fg
+  if endTick < fg.tick then
+    local _, b2 = S.verifyMatch({ seed = seed, capTicks = capTicks, players = { player }, bot = { actor = makeActor(), loadout = botLoadout, untilTick = endTick } })
+    shown = b2.game
+  end
+  return S.botOutcome(meEnd, botEnd), shown, r, fg
 end
 
 return S

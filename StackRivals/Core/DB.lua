@@ -33,6 +33,7 @@ DB.BIND_LABEL = {
   spell1 = "Spell 1", spell2 = "Spell 2", spell3 = "Spell 3", spell4 = "Spell 4",
 }
 DB.SPELL_DIFFICULTIES = { "rookie", "challenger", "contender", "elite", "rival" }
+DB.SPELL_RULES = 2 -- vs-Bot win rule of the counted W/L/D (2 = first to top out loses)
 
 local function defaultSettings()
   return { sound = true, ghost = true, hideInCombat = true, scale = 1.0, minimapHide = false, minimapAngle = 215 }
@@ -223,17 +224,32 @@ function DB.sanitize(raw)
   local rsp = (type(raw.spell) == "table") and raw.spell or {}
   local Sp = ns.Spells
   local lo = str(rsp.loadout, 4)
+  -- `rules`: the vs-Bot win rule the W/L/D were counted under. 2 = survival (first to top out loses,
+  -- the web's rule since Oct 2026); 1 = higher score (0.5.0). Results under rule 1 are kept apart in
+  -- statsV1 (never mixed with rule 2, never deleted); best scores stay (a score is a score).
   db.spell = {
     loadout = (Sp and lo and Sp.decodeLoadout(lo)) and lo or (Sp and Sp.encodeLoadout(Sp.DEFAULT_LOADOUT) or "1057"),
-    difficulty = "challenger", stats = {},
+    difficulty = "challenger", stats = {}, rules = DB.SPELL_RULES,
   }
+  local oldRules = (rsp.rules == nil and type(rsp.stats) == "table") or (type(rsp.rules) == "number" and rsp.rules < DB.SPELL_RULES)
+  local function wld(r)
+    return { wins = math.floor(num(r.wins, 0, 0, 1e9)), losses = math.floor(num(r.losses, 0, 0, 1e9)), draws = math.floor(num(r.draws, 0, 0, 1e9)) }
+  end
   for _, d in ipairs(DB.SPELL_DIFFICULTIES) do
     if rsp.difficulty == d then db.spell.difficulty = d end
     local r = (type(rsp.stats) == "table" and type(rsp.stats[d]) == "table") and rsp.stats[d] or {}
-    db.spell.stats[d] = {
-      wins = math.floor(num(r.wins, 0, 0, 1e9)), losses = math.floor(num(r.losses, 0, 0, 1e9)),
-      draws = math.floor(num(r.draws, 0, 0, 1e9)), best = math.floor(num(r.best, 0, 0, 1e12)),
-    }
+    local st = wld(r)
+    st.best = math.floor(num(r.best, 0, 0, 1e12))
+    local v1 = (type(rsp.statsV1) == "table" and type(rsp.statsV1[d]) == "table") and wld(rsp.statsV1[d]) or nil
+    if oldRules then
+      if st.wins + st.losses + st.draws > 0 then v1 = st end
+      st = { wins = 0, losses = 0, draws = 0, best = st.best }
+    end
+    db.spell.stats[d] = st
+    if v1 and v1.wins + v1.losses + v1.draws > 0 then
+      db.spell.statsV1 = db.spell.statsV1 or {}
+      db.spell.statsV1[d] = { wins = v1.wins, losses = v1.losses, draws = v1.draws }
+    end
   end
 
   -- An unfinished run saved at logout / reload (mode + web-compatible input log).

@@ -88,7 +88,11 @@ describe("Spell Battle vs Bot: live play = the web's verification", function()
         -- topped out and you play on to beat its score; the seed depends on earlier tests)
         eq(sp.opp.game.tick, sp.me.game.tick)
       else
-        eq(ns.Engine.hashState(botSide.game), ns.Engine.hashState(sp.opp.game), "bot board")
+        -- the match is over: the bot as the server shows it (stopped at your top-out if you were first)
+        local p = { v = 1, seed = sess.seed, startLevel = 1, ticks = sp.me.game.tick, log = sp.me.log, loadout = sp.me.loadout }
+        local _, shown = ns.Spells.botResult(sess.seed, 10800, p, function() return ns.Bot.SpellBot.new(sess.seed, sp.difficulty, sp.createdAtMs) end, ns.Bot.LOADOUTS[sp.difficulty])
+        eq(ns.Engine.hashState(shown), ns.Engine.hashState(sp.opp.game), "bot board")
+        ok(botSide, "verified")
       end
     end)
   end
@@ -116,41 +120,6 @@ describe("Spell Battle vs Bot: the match ends when it is decided", function()
     eq(ns.db.spell.stats.rookie.wins, 1, "counted once")
     M.frames_step(200)
     eq(ns.db.spell.stats.rookie.wins, 1, "still once")
-  end)
-  it("bot tops out while you are behind: keep playing ('beat N to win'), then win by passing it", function()
-    local M, ns = boot(nil)
-    local sess = startSpell(M, ns, "rookie")
-    local sp = sess.spell
-    bury(sp.opp.game)
-    sp.opp.game.score = 900
-    M.frames_step(120)
-    eq(sp.opp.game.gameOver, true)
-    eq(sess.phase, "playing", "not decided while behind")
-    ok(ns.UI.spellRival.lead:GetText():find("beat 900 to win"), ns.UI.spellRival.lead:GetText())
-    sp.me.game.score = 901
-    M.frames_step(2)
-    eq(sess.phase, "over"); eq(sp.result.outcome, "win")
-  end)
-  it("you top out: the bot plays on to 3:00 over a few frames (no hitch), then the result", function()
-    local M, ns = boot(nil)
-    local sess = startSpell(M, ns, "challenger")
-    local sp = sess.spell
-    for _ = 1, 400 do
-      if sess.phase ~= "playing" then break end
-      sess:press("hardDrop"); M.frames_step(1); sess:release("hardDrop")
-    end
-    eq(sp.me.game.gameOver, true, "you topped out")
-    ok(sp.settling or sp.result, "bot still playing or done")
-    ok(ns.UI.overTitle:GetText() == "FINISHED" or sp.result, "waiting screen")
-    local frames = 0
-    while sp.settling and frames < 100 do M.frames_step(1); frames = frames + 1 end
-    ok(not sp.settling, "bot finished")
-    ok(frames <= 20, "spread over " .. frames .. " frames")
-    eq(sp.opp.game.tick == 10800 or sp.opp.game.gameOver, true)
-    local r, botSide = verifyLive(ns, sess)
-    eq(ns.Engine.hashState(botSide.game), ns.Engine.hashState(sp.opp.game), "same bot result as the web verification")
-    eq(sp.result.outcome, (r.score > botSide.game.score) and "win" or (r.score < botSide.game.score and "loss" or "draw"))
-    ok(ns.UI.overTitle:GetText() == "VICTORY" or ns.UI.overTitle:GetText() == "DEFEAT" or ns.UI.overTitle:GetText() == "DRAW")
   end)
   it("time cap: 3:00 ends the match for both", function()
     local M, ns = boot(nil)
@@ -231,18 +200,84 @@ describe("Spell Battle vs Bot: robustness", function()
     local r = verifyLive(ns, sess)
     for _, why in ipairs(r.reasons) do ok(why ~= "inhuman_input_rate", "rate flagged") end
   end)
-  it("closing the window while the bot finishes its run still counts the result", function()
+  it("closing the window right after you top out: the result is already counted", function()
     local M, ns = boot(nil)
     local sess = startSpell(M, ns, "challenger")
     for _ = 1, 400 do
       if sess.phase ~= "playing" then break end
       sess:press("hardDrop"); M.frames_step(1); sess:release("hardDrop")
     end
-    ok(sess.spell.settling, "bot still playing")
+    ok(not sess.spell.settling and sess.spell.result, "decided at once")
     StackRivalsFrame:Hide()
-    ok(not sess.spell.settling and sess.spell.result, "finished on hide")
     local st = ns.db.spell.stats.challenger
-    eq(st.wins + st.losses + st.draws, 1, "counted")
+    eq(st.wins + st.losses + st.draws, 1, "counted once")
+  end)
+end)
+
+describe("Spell Battle vs Bot: first to top out loses (the web's rule), live = the server's result", function()
+  local function serverResult(ns, sess)
+    local S, Bot = ns.Spells, ns.Bot
+    local sp = sess.spell
+    local p = { v = 1, seed = sess.seed, startLevel = 1, ticks = sp.me.game.tick, log = sp.me.log, loadout = sp.me.loadout }
+    return S.botResult(sess.seed, 10800, p, function() return Bot.SpellBot.new(sess.seed, sp.difficulty, sp.createdAtMs) end, Bot.LOADOUTS[sp.difficulty])
+  end
+  for _, diff in ipairs({ "rookie", "challenger", "contender", "elite", "rival" }) do
+    it(diff .. ": you top out first -> DEFEAT at once, whatever the score; the bot stops where it stood", function()
+      local M, ns = boot(nil)
+      local sess = startSpell(M, ns, diff)
+      local sp = sess.spell
+      for _ = 1, 400 do
+        if sess.phase ~= "playing" then break end
+        sess:press("hardDrop"); M.frames_step(1); sess:release("hardDrop")
+      end
+      eq(sp.me.game.gameOver, true, "you topped out")
+      ok(not sp.settling and sp.result, "no bot run-out: the result is there at once")
+      local outcome, shown = serverResult(ns, sess)
+      eq(outcome, "loss"); eq(sp.result.outcome, outcome)
+      eq(sp.opp.game.tick, shown.tick, "the bot stops at your top-out tick")
+      eq(ns.Engine.hashState(sp.opp.game), ns.Engine.hashState(shown), "the bot shown exactly as on the server")
+      eq(ns.UI.overTitle:GetText(), "DEFEAT")
+      ok(ns.UI.overDetail:GetText():find("topped out first", 1, true), ns.UI.overDetail:GetText())
+    end)
+    it(diff .. ": a played match (the web's bot on your keys) ends and is decided exactly as on the server", function()
+      local M, ns = boot(nil)
+      local sess = startSpell(M, ns, diff, { "lineBlast", "bomb", "garbage", "blackout" })
+      local step = player(ns, sess, "p2-" .. diff)
+      for _ = 1, 10800 + 60 do
+        if sess.phase ~= "playing" then break end
+        step(); M.frames_step(1)
+      end
+      local sp = sess.spell
+      ok(sp.result, "decided")
+      local outcome, shown, r = serverResult(ns, sess)
+      eq(r.ok, true, table.concat(r.reasons, ","))
+      eq(sp.result.outcome, outcome, "outcome (" .. tostring(sp.result.reason) .. ")")
+      eq(ns.Engine.hashState(sp.opp.game), ns.Engine.hashState(shown), "bot as the server shows it")
+      if sp.result.reason == "decided" then eq(outcome, "win", "the bot topped out first: a win whatever the score") end
+    end)
+  end
+  it("the bot tops out while you are behind: you win at once (no 'beat N to win' any more)", function()
+    local M, ns = boot(nil)
+    local sess = startSpell(M, ns, "rookie")
+    local sp = sess.spell
+    bury(sp.opp.game)
+    sp.opp.game.score = 900
+    M.frames_step(120)
+    eq(sp.opp.game.gameOver, true)
+    eq(sess.phase, "over"); eq(sp.result.outcome, "win"); eq(sp.result.reason, "decided")
+    ok(sp.me.game.score < 900, "while behind")
+    eq(ns.UI.overTitle:GetText(), "VICTORY")
+  end)
+  it("saved results: counted under the survival rule; 0.5.0 results are kept apart, best scores kept", function()
+    local M, ns = boot({ spell = { loadout = "1057", difficulty = "elite", stats = { elite = { wins = 3, losses = 2, draws = 1, best = 45000 } } } })
+    local sp = ns.db.spell
+    eq(sp.rules, 2)
+    eq(sp.stats.elite.wins + sp.stats.elite.losses + sp.stats.elite.draws, 0, "fresh W/L/D for the new rule")
+    eq(sp.stats.elite.best, 45000, "best score kept")
+    eq(sp.statsV1.elite.wins, 3); eq(sp.statsV1.elite.losses, 2); eq(sp.statsV1.elite.draws, 1)
+    -- saved again and loaded again: nothing moves twice, nothing is lost
+    local M2, ns2 = boot(ns.db)
+    eq(ns2.db.spell.statsV1.elite.wins, 3); eq(ns2.db.spell.stats.elite.best, 45000); eq(ns2.db.spell.rules, 2)
   end)
 end)
 

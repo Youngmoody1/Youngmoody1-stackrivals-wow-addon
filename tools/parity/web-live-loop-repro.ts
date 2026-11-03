@@ -6,8 +6,10 @@
  * `liveMatch` follows src/components/game/VersusGame.tsx step by step (the Spell Battle block of
  * the frame loop + advanceOpp, with the bot as opponent): per tick, incoming spells land on the
  * player, the player's inputs are applied (break after a top-out), then the player's gravity step,
- * then advanceOpp(player tick); when the player's run ends, advanceOpp(capTicks). The result is
- * compared with the server's verifySpellMatch on the same log.
+ * then advanceOpp(player tick). When the player's run ends: before ef71158 advanceOpp(capTicks);
+ * since ef71158 (vs Bot, survival rule) the bot stops at the player's tick if the player topped out.
+ * The bot is compared with what the server shows (match.server.ts: verifySpellMatch with
+ * bot.untilTick = botMatchEndTick), the log with verifySpellMatch.
  */
 const web = process.argv[2];
 if (!web) throw new Error("usage: bun web-live-loop-repro.ts <web repo>");
@@ -55,13 +57,20 @@ function liveMatch(seed: string, diff: string, ms: number, loadout: string[], hu
     const s = me.game;
     if (s.gameOver || s.tick >= CAP || rules.botMatchDecided(s, o.game)) break;
   }
-  advanceOpp(CAP); // after the player's run: f.lockstep -> upTo = capTicks
-  const v = rules.verifySpellMatch({
-    seed, timeCapMs: 180000,
-    players: [{ log: { v: 1, seed, startLevel: 1, ticks: me.game.tick, inputs: me.log }, loadout, elapsedMs: me.game.tick * 17 + 10000 }],
-    bot: { actor: new sbot.SpellBot(seed, diff, ms), loadout: sbot.BOT_LOADOUTS[diff] },
-  });
-  return { me, o, v, loggedAfterTopout };
+  const survival = typeof rules.botMatchEndTick === "function"; // web >= ef71158
+  // after the player's run: upTo = capTicks, except (survival rule) when the player topped out
+  if (!(survival && me.game.gameOver)) advanceOpp(CAP);
+  const player = { log: { v: 1, seed, startLevel: 1, ticks: me.game.tick, inputs: me.log }, loadout, elapsedMs: me.game.tick * 17 + 10000 };
+  const v = rules.verifySpellMatch({ seed, timeCapMs: 180000, players: [player], bot: { actor: new sbot.SpellBot(seed, diff, ms), loadout: sbot.BOT_LOADOUTS[diff] } });
+  let shown = v.bot!.game; // what the server shows for the bot (and, before ef71158, decides with)
+  if (survival) {
+    const r = v.results[0]!;
+    const meEnd = { score: r.score, toppedOut: r.toppedOut, ticks: r.final?.tick ?? 0 };
+    const fg = v.bot!.game;
+    const endTick = rules.botMatchEndTick(meEnd, { score: fg.score, toppedOut: fg.gameOver, ticks: fg.tick }, CAP);
+    if (endTick < fg.tick) shown = rules.verifySpellMatch({ seed, timeCapMs: 180000, players: [player], bot: { actor: new sbot.SpellBot(seed, diff, ms), loadout: sbot.BOT_LOADOUTS[diff], untilTick: endTick } }).bot!.game;
+  }
+  return { me, o, v, loggedAfterTopout, shown };
 }
 
 const V2 = Date.parse("2026-10-29T12:00:00Z");
@@ -70,13 +79,26 @@ const V2 = Date.parse("2026-10-29T12:00:00Z");
 //   QUICK=1 bun tools/parity/web-live-loop-repro.ts <web repo>
 if (process.env.QUICK) {
   const r1 = liveMatch("final-tick-1132", "elite", V2, sp.DEFAULT_LOADOUT, (t) => (t % 20 === 0 ? [5] : []));
-  console.log(`1. final tick: seed "final-tick-1132", bot elite: live bot score ${r1.o.game.score}, server bot score ${r1.v.bot!.game.score}`);
+  console.log(`1. final tick: seed "final-tick-1132", bot elite: live bot tick ${r1.o.game.tick} score ${r1.o.game.score} hash ${eng.hashState(r1.o.game)}, server shows tick ${r1.shown.tick} score ${r1.shown.score} hash ${eng.hashState(r1.shown)}`);
   const me = new sbot.SpellBot("topout-6:me", "rookie", V2);
   const r2 = liveMatch("topout-6", "rival", V2, sp.DEFAULT_LOADOUT, (t, side) => {
     const c = side.game.gameOver ? null : me.act(side, { game: { score: 0 } } as any);
     return [c !== null && c < 100 ? c : 2];
   });
   console.log(`2. input after incoming top-out: seed "topout-6", bot rival: logged after top-out ${JSON.stringify(r2.loggedAfterTopout)}, server reasons [${r2.v.results[0]!.reasons.join(", ")}]`);
+  // since ef71158 the final-tick difference remains at the time cap (both still alive at 3:00)
+  if (process.env.CAPSEARCH) {
+    for (let k = 0; k < Number(process.env.CAPSEARCH); k++) {
+      const seed = `cap-${k}`;
+      const pl = new sbot.SpellBot(`${seed}:me`, "elite", V2);
+      const r = liveMatch(seed, "rookie", V2, sp.DEFAULT_LOADOUT, (t, side) => {
+        const c = side.game.gameOver ? null : pl.act(side, { game: { score: 0 } } as any);
+        return c !== null && c < 100 ? [c] : [];
+      });
+      const same = eng.hashState(r.o.game) === eng.hashState(r.shown);
+      console.log(`  ${seed}: player ${r.me.game.gameOver ? "topped out" : "alive"} at ${r.me.game.tick}, bot ${r.o.game.gameOver ? "topped out" : "alive"}; live bot score ${r.o.game.score} / server ${r.shown.score}${same ? "" : "  <-- DIFFERS"}`);
+    }
+  }
   process.exit(0);
 }
 
@@ -89,13 +111,13 @@ for (let k = 0; k < 2000 && found1 < 2; k++) {
   for (const diff of ["rival", "elite", "contender"]) {
     const seed = `final-tick-${k}`;
     const r = liveMatch(seed, diff, V2, sp.DEFAULT_LOADOUT, (t) => (t % 20 === 0 ? [5] : []));
-    const live = r.o.game.score, server = r.v.bot!.game.score;
-    if (eng.hashState(r.o.game) !== eng.hashState(r.v.bot!.game)) boards++;
-    if (want ? live !== server : eng.hashState(r.o.game) !== eng.hashState(r.v.bot!.game)) {
+    const live = r.o.game.score, server = r.shown.score;
+    if (eng.hashState(r.o.game) !== eng.hashState(r.shown)) boards++;
+    if (want ? live !== server : eng.hashState(r.o.game) !== eng.hashState(r.shown)) {
       found1++;
       console.log(`seed "${seed}", bot ${diff}, tuning v2, player drops a piece every 20 ticks:`);
       console.log(`  live bot: tick ${r.o.game.tick}, score ${live}, hash ${eng.hashState(r.o.game)}`);
-      console.log(`  server bot: tick ${r.v.bot!.game.tick}, score ${server}, hash ${eng.hashState(r.v.bot!.game)}`);
+      console.log(`  server shows the bot: tick ${r.shown.tick}, score ${server}, hash ${eng.hashState(r.shown)}`);
       console.log(`  player score ${r.v.results[0]!.score} -> outcome live ${live > r.v.results[0]!.score ? "loss" : "?"} / server ${server > r.v.results[0]!.score ? "loss" : "?"}`);
       break;
     }

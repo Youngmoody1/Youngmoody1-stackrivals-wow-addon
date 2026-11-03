@@ -199,7 +199,7 @@ S.list = {
     M.frames_step(200)
     return M, ns
   end },
-  { "16-spell-finishing", "Spell Battle vs Bot - you topped out, the bot plays on", function()
+  { "16-spell-defeat", "Spell Battle vs Bot - you topped out first: the bot wins", function()
     local M, ns = boot(); SlashCmdList.STACKRIVALS("")
     ns.App:Start("spellbot"); M.frames_step(241)
     local sess = ns.App.session

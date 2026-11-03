@@ -6,11 +6,16 @@ repository was changed.
 - Web base: `48fdf46` ("Release candidate A: Play 2.0").
 - WoW branch: `spellbattle` (addon 0.5.0 preview).
 
-## Open dependencies (status 2026-10-30)
+## Open dependencies (status 2026-11-03, web `8ddaad7`)
+
+The web changed the vs-Bot rule in `ef71158` (first to top out loses). The WoW addon 0.5.1 ports it
+exactly (`Spells.botOutcome`, `botMatchEndTick`, `botMatchDecided`; fixtures from the web's code in
+`tools/parity/gen-bot-outcome.ts`). Engine, spells, bot and `verifySpellMatch` are unchanged since
+`48fdf46` (the regenerated fixtures are identical).
 
 | # | Item | Status | Closed when |
 |---|---|---|---|
-| 1 | Bug 1: the final tick (live loop vs `SpellSim`) | **OPEN** on the web | the web project names a commit that fixes it **and** adds the regression test below; `check_web.sh` and the repro script pass against that commit |
+| 1 | Bug 1: the final tick (live loop vs `SpellSim`) | **OPEN, smaller**: since the survival rule the bot stops at your top-out, and live and server agree there (seed "final-tick-1132" now matches). It remains at the 3:00 cap: the server lets the bot act at tick 10800, the live loop (`advanceOpp`, `tick < capTicks`) doesn't. Rare: none of 12 full-length matches searched differed | the web project names a commit that fixes it **and** adds the regression test below; `check_web.sh` and the repro script pass against that commit |
 | 2 | Bug 2: an input logged after an incoming top-out (`inputs_after_topout` for an honest player) | **OPEN** on the web | the same |
 | 3 | `decideOutcome`: both forfeited, draw or score? | **OPEN** (question) | the web says which rule is intended; WoW follows it |
 | 4 | SR2 for Spell Battle vs Bot results | **PROPOSAL** (`docs/SR2_DRAFT.md`), nothing built | both sides agree on the field list and share `docs/vectors/sr2.json` |
