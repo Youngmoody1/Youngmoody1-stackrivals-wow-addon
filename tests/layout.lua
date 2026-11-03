@@ -160,6 +160,7 @@ function L.new(root)
     local cur = o
     while cur do
       if cur == root then return true end
+      if cur._layoutRoot then return false end -- a panel outside the window: its own screen
       cur = cur._parent
     end
     return false

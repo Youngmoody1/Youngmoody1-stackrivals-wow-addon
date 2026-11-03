@@ -82,6 +82,13 @@ describe("layout of every screen", function()
           end
         end
       end
+      -- 5) the game-mode names (0.6.1): no screen shows a retired name (internal ids stay)
+      for _, o in ipairs(texts) do
+        local t = L.stripCodes(o._text)
+        if t:find("Blitz") or t:find("BLITZ") or t:find("Challenge Friends") or t:find("CHALLENGE FRIENDS") then
+          problems[#problems + 1] = "retired mode name on screen: " .. name(o)
+        end
+      end
       if #problems > 0 then error(table.concat(problems, "\n    ")) end
     end)
   end

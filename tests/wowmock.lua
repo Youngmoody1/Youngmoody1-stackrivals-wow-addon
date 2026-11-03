@@ -81,6 +81,7 @@ local function newTexture(parent, layer, sub)
     SetColorTexture = function(o, r, g, b, a) assert(type(r) == "number" and type(g) == "number" and type(b) == "number", "SetColorTexture needs numbers"); o._r, o._g, o._b, o._a = r, g, b, a end,
     SetTexture = function(o, path) o._tex = path end,
     SetDesaturated = function(o, v) o._desat = v and true or false end,
+    SetTexCoord = function(o, ...) o._coords = { ... } end,
     SetDrawLayer = function() end,
   }), "Texture")
 end
@@ -256,6 +257,16 @@ function M.install(G)
   G.GetCursorPosition = function() return 0, 0 end
   G.UnitName = function() return M.playerName or "Tester" end
   G.GetNormalizedRealmName = function() return M.realm or "Realm" end
+  -- your own character (Core/Card.lua): set M.faction / M.race / M.class / M.level in a test
+  G.UnitFactionGroup = function(u) if u == "player" then local f = M.faction or "Alliance"; return f, f end end
+  G.UnitRace = function(u) if u == "player" then local r = M.race or "Human"; return r, r end end
+  G.UnitClass = function(u) if u == "player" then local c = M.class or "WARRIOR"; return c:sub(1, 1) .. c:sub(2):lower(), c end end
+  G.UnitLevel = function(u) if u == "player" then return M.level or 60 end end
+  G.LOCALIZED_CLASS_NAMES_MALE = { WARRIOR = "Warrior", MAGE = "Mage", SHAMAN = "Shaman", PRIEST = "Priest", ROGUE = "Rogue",
+    HUNTER = "Hunter", WARLOCK = "Warlock", PALADIN = "Paladin", DRUID = "Druid" }
+  G.CLASS_ICON_TCOORDS = { WARRIOR = { 0, 0.25, 0, 0.25 }, MAGE = { 0.25, 0.5, 0, 0.25 }, ROGUE = { 0.5, 0.75, 0, 0.25 },
+    DRUID = { 0.75, 1, 0, 0.25 }, HUNTER = { 0, 0.25, 0.25, 0.5 }, SHAMAN = { 0.25, 0.5, 0.25, 0.5 }, PRIEST = { 0.5, 0.75, 0.25, 0.5 },
+    WARLOCK = { 0.75, 1, 0.25, 0.5 }, PALADIN = { 0, 0.25, 0.5, 0.75 } }
   G.GetRealmName = function() return M.realm or "Realm" end
   -- addon messages: recorded; tests/netsim.lua replaces SendAddonMessage with a network bus
   M.addonOut = {}

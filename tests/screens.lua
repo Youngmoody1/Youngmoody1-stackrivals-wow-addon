@@ -122,10 +122,10 @@ S.list = {
     local M, ns = boot(); seedRecords(ns); play(M, ns, "classic")
     ns.UI:OnEvent({ kind = "clear", a = 4, b = { points = 1800, combo = 2, backToBack = true } }); M.frames_step(3); return M, ns
   end },
-  { "4-blitz", "Blitz 2:00 - timer", function()
+  { "4-blitz", "Time Trial (2:00) - timer", function()
     local M, ns = boot(); seedRecords(ns); play(M, ns, "blitz"); M.frames_step(1); return M, ns
   end },
-  { "4b-blitz-last-seconds", "Blitz - last seconds", function()
+  { "4b-blitz-last-seconds", "Time Trial - last seconds", function()
     local M, ns = boot(); seedRecords(ns); play(M, ns, "blitz")
     local sess = ns.App.session
     sess.state.tick = sess.mode.limitTicks - 4 * 60 + 1 -- the 4-second mark (no play needed)
@@ -135,7 +135,7 @@ S.list = {
     local M, ns = boot(); play(M, ns, "classic")
     M.fire("PLAYER_REGEN_DISABLED"); M.fire("PLAYER_REGEN_ENABLED"); M.frames_step(1); return M, ns
   end },
-  { "6-game-over", "Blitz finished - new best", function()
+  { "6-game-over", "Time Trial finished - new best", function()
     local M, ns = boot(); seedRecords(ns); M.inGuild = true
     play(M, ns, "blitz"); ns.App.session.state.score = 21300
     ns.App.session:finish("time"); M.frames_step(70); return M, ns
@@ -143,7 +143,7 @@ S.list = {
   { "7-settings", "Settings", function()
     local M, ns = boot(); SlashCmdList.STACKRIVALS("settings"); M.frames_step(1); return M, ns
   end },
-  { "9-duel-sheet", "Challenge Friends - guild (after Refresh)", function()
+  { "9-duel-sheet", "Guild Duels - guild (after Refresh)", function()
     local net, a, b = duelPair()
     net.add({ name = "Carol", guild = "G", saved = { seenHelp = true } })
     a.env.SlashCmdList.STACKRIVALS("")
@@ -152,7 +152,7 @@ S.list = {
     a.ns.UI:RefreshDuelSheet()
     return a.M, a.ns, a.env.StackRivalsFrame
   end },
-  { "9b-challenge-bnet", "Challenge Friends - Battle.net friends", function()
+  { "9b-challenge-bnet", "Guild Duels - Battle.net friends", function()
     local _, _, _, NS = duelPair()
     local net = NS.new({ seed = 9 })
     local a = net.add({ name = "Alice", saved = { seenHelp = true }, alsoOnline = { Frank = true, Gina = true },
@@ -260,6 +260,71 @@ S.list = {
     net.step(120)
     a.ns.UI:RefreshPhase()
     return a.M, a.ns, a.env.StackRivalsFrame
+  end },
+  { "20-quickplay-search", "Quickplay - searching (guild + group + friends you can reach)", function()
+    local _, _, _, NS = duelPair()
+    local net = NS.new({ seed = 20 })
+    local a = net.add({ name = "Alice", guild = "G", group = "P", saved = { seenHelp = true } })
+    net.add({ name = "Bob", guild = "G", saved = { seenHelp = true } })
+    net.step(30)
+    a.env.SlashCmdList.STACKRIVALS("")
+    a.ns.UI:ShowSheet("quickplay")
+    a.ns.Quickplay.start("b120")
+    net.step(60 * 42)
+    a.ns.UI:RefreshQuickplay()
+    return a.M, a.ns, a.env.StackRivalsFrame
+  end },
+  { "20b-quickplay-menu", "Main menu while Quickplay searches", function()
+    local _, _, _, NS = duelPair()
+    local net = NS.new({ seed = 21 })
+    local a = net.add({ name = "Alice", guild = "G", saved = { seenHelp = true } })
+    net.step(30)
+    a.env.SlashCmdList.STACKRIVALS("")
+    a.ns.Quickplay.start("s180")
+    net.step(60 * 17)
+    return a.M, a.ns, a.env.StackRivalsFrame
+  end },
+  { "21-quickplay-found", "Quickplay - match found: lobby with both character cards (ready check)", function()
+    local _, _, _, NS = duelPair()
+    local net = NS.new({ seed = 22 })
+    local a = net.add({ name = "Alice", guild = "G", faction = "Alliance", race = "Human", class = "WARRIOR", level = 42, saved = { seenHelp = true } })
+    local b = net.add({ name = "Bob", guild = "G", faction = "Horde", race = "Orc", class = "SHAMAN", level = 38, saved = { seenHelp = true } })
+    net.step(30)
+    a.env.SlashCmdList.STACKRIVALS("")
+    a.ns.Quickplay.start("b120"); b.ns.Quickplay.start("b120")
+    net.step(300)
+    b.ns.Duel.ready(); net.step(30)
+    a.ns.UI:RefreshPhase()
+    return a.M, a.ns, a.env.StackRivalsFrame
+  end },
+  { "22-match-chat", "Match chat panel (beside the window, same faction)", function()
+    local _, _, _, NS = duelPair()
+    local net = NS.new({ seed = 23 })
+    local a = net.add({ name = "Alice", guild = "G", saved = { seenHelp = true } })
+    local b = net.add({ name = "Bob", guild = "G", saved = { seenHelp = true } })
+    net.step(30)
+    a.env.SlashCmdList.STACKRIVALS("")
+    a.ns.Quickplay.start("b120"); b.ns.Quickplay.start("b120")
+    net.step(300)
+    b.ns.Chat.quick(b.ns.Duel.current, 1); net.step(120)
+    a.ns.Chat.send(a.ns.Duel.current, "You too! Best of luck, see you at the top"); net.step(120)
+    b.ns.Chat.send(b.ns.Duel.current, "gg in advance :)"); net.step(60)
+    a.ns.UI:RefreshPhase()
+    return a.M, a.ns, a.ns.UI.chat
+  end },
+  { "22b-match-chat-factions", "Match chat across factions: quick messages only", function()
+    local _, _, _, NS = duelPair()
+    local net = NS.new({ seed = 24 })
+    local a = net.add({ name = "Alice", guild = "G", faction = "Alliance", saved = { seenHelp = true } })
+    local b = net.add({ name = "Bob", guild = "G", faction = "Horde", saved = { seenHelp = true } })
+    net.step(30)
+    a.env.SlashCmdList.STACKRIVALS("")
+    a.ns.Quickplay.start("b120"); b.ns.Quickplay.start("b120")
+    net.step(300)
+    b.ns.Chat.quick(b.ns.Duel.current, 1); net.step(120)
+    a.ns.Chat.quick(a.ns.Duel.current, 2); net.step(60)
+    a.ns.UI:RefreshPhase()
+    return a.M, a.ns, a.ns.UI.chat
   end },
   { "8-records", "Records", function()
     local M, ns = boot(); seedRecords(ns); SlashCmdList.STACKRIVALS(""); ns.UI:ShowSheet("records"); M.frames_step(1); return M, ns

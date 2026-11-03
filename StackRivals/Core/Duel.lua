@@ -252,7 +252,7 @@ local function pauseSolo()
 end
 
 --- Challenge a player by full name ("Name-Realm" or "Name" on your realm).
-function Duel.challenge(name, rulesetId)
+function Duel.challenge(name, rulesetId, opts)
   rulesetId = rulesetId or "b120"
   if not P.RULESETS[rulesetId] then return false, "ruleset" end
   -- a player we know runs an older addon can't play this ruleset (they would never see the invite)
@@ -270,16 +270,23 @@ function Duel.challenge(name, rulesetId)
   m.nonceA = P.token(8, rnd)
   m.commitA = P.commit(m.mid, m.nonceA)
   m.state = "inviting"
+  m.quickplay = opts and opts.quickplay or nil
   Duel.current = m
   diagBegin(m)
   pauseSolo()
-  send(m, "INV", m.mid, rulesetId, E.ENGINE_VERSION, m.commitA)
+  send(m, "INV", m.mid, rulesetId, E.ENGINE_VERSION, m.commitA, m.quickplay and "q" or nil)
   emit("changed", m)
   return true
 end
 
 local function onInvite(msg, sender)
   if ignored(sender) then return end -- no popups from players you ignore
+  -- a Quickplay invite only counts while I'm searching for that mode and heard them search;
+  -- otherwise: no popup, no answer (nobody can push a "match" on you)
+  if msg.quickplay and not (ns.Quickplay and ns.Quickplay.wants(msg.ruleset, sender)) then
+    local cur = Duel.current
+    if not (cur and cur.mid == msg.mid) then return end
+  end
   if answerClosed(msg, sender) then return end -- an invite we already declined, re-sent
   if ns.Comm.trial then
     if not Duel.trialNoted then Duel.trialNoted = true; emit("trial", sender) end
@@ -309,6 +316,13 @@ local function onInvite(msg, sender)
     Duel.accept() -- both wanted this duel
     return
   end
+  if msg.quickplay then
+    -- both were searching for this: accept at once; the lobby (Ready) is the ready check
+    m.quickplay = true
+    Duel.accept()
+    if ns.Quickplay then ns.Quickplay.onMatched(m) end
+    return
+  end
   emit("invite", m)
   emit("changed", m)
 end
@@ -323,6 +337,7 @@ function Duel.accept()
   diagBegin(m)
   pauseSolo()
   send(m, "ACC", m.mid, m.nonceB)
+  if ns.Card then ns.Card.onLobby(m) end
   emit("changed", m)
   return true
 end
@@ -478,6 +493,7 @@ local function servedMatch(msg, sender)
   local p = Duel.past
   if p and p.mid == msg.mid and ns.Comm.same(p.rival, sender) then return p end
 end
+Duel.matchOf = servedMatch -- for Card (PRF) and Chat (CH / QM)
 
 --- The rival's pause as I see it: from their first PSE to their RSM (or a score heartbeat that
 --- shows their clock moving again). Measured on my clock, for the clock check and their budget.
@@ -516,6 +532,7 @@ HANDLERS.ACC = function(msg, sender)
   m.nonceB = msg.nonce
   m.state = "lobby"
   m.lobbyAt = now()
+  if ns.Card then ns.Card.onLobby(m) end
   emit("changed", m)
 end
 
@@ -772,6 +789,9 @@ function Duel.init()
   ns.Comm.on("INV", onInvite)
   ns.Comm.on("@offline", onOffline)
   for kind, fn in pairs(HANDLERS) do ns.Comm.on(kind, fn) end
+  if ns.Card then ns.Card.init() end
+  if ns.Chat then ns.Chat.init() end
+  if ns.Quickplay then ns.Quickplay.init() end
 end
 
 ------------------------------------------------------------------------------------------------
@@ -1079,6 +1099,8 @@ end
 
 function Duel.update()
   local t = now()
+  if ns.Quickplay then ns.Quickplay.update(t) end
+  if ns.Card and Duel.current then ns.Card.tick(Duel.current, t) end
   local dt = t - (Duel.lastT or t)
   Duel.lastT = t
   diag(Duel.current); diag(Duel.past)
@@ -1156,7 +1178,7 @@ function Duel.update()
     m.lastSent = t
     local s = session()
     if m.state == "inviting" then
-      send(m, "INV", m.mid, m.rulesetId, E.ENGINE_VERSION, m.commitA)
+      send(m, "INV", m.mid, m.rulesetId, E.ENGINE_VERSION, m.commitA, m.quickplay and "q" or nil)
     elseif m.state == "lobby" then
       if m.role == "guest" then send(m, "ACC", m.mid, m.nonceB) end
       if m.myReady then send(m, "RDY", m.mid, m.myLoadout) elseif m.role == "host" then send(m, "PNG", m.mid) end

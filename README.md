@@ -32,8 +32,16 @@ During the beta, if the AddOns list shows "Out of date", tick **Load out of date
 | Mode | What it is |
 |---|---|
 | Classic | Endless. The speed goes up every 10 lines. |
-| Blitz 2:00 | Highest score in two minutes — made for queue timers and waiting for the group. |
-| Daily Blitz | Blitz with the **same piece sequence for every player** on the same UTC day. Compare scores with your guild. |
+| Time Trial | Solo: highest score in two minutes — made for queue timers and waiting for the group. |
+| Daily Challenge | A 2:00 run with the **same piece sequence for every player** on the same UTC day. Compare scores with your guild. |
+| Spell Battle | Spells and mana vs the stackrivals.io bot, 3:00 (0.5+). |
+| Duel 2:00 / Duel 3:00 | 1v1 score race against another StackRivals player (0.4+). |
+| Spell Duel | 1v1 with spells and mana (0.5+). |
+| Quick Duel | The **QUICKPLAY** button: a random StackRivals player who is searching too (0.6.1, development). |
+| Guild Duel | Challenge a guild member, friend, Battle.net friend or your group (0.6.0, development). |
+
+StackRivals duels are puzzle matches inside the addon, not WoW's own `/duel`. Older notes and
+internal ids still say `blitz` / `b120`; that is the same mode.
 
 ## Controls (rebindable in Settings)
 
@@ -52,7 +60,7 @@ always works.
 
 ## Commands
 
-`/sr` or `/stackrivals` open/close · `/sr blitz | classic | daily` start a mode ·
+`/sr` or `/stackrivals` open/close · `/sr classic | trial | daily` start a mode · `/sr quickplay` ·
 `/sr pause` · `/sr settings` · `/sr minimap` show/hide the button · `/sr scale 0.8` ·
 `/sr reset` window position/size · `/sr sound` · `/sr stats` · `/sr version`
 

@@ -38,7 +38,7 @@ function App:RecordDiag()
   d.firstSeen = d.firstSeen or c.last
 end
 
---- Seconds until the next Daily Blitz seed (00:00 UTC).
+--- Seconds until the next Daily Challenge seed (00:00 UTC).
 function App:SecondsToUtcMidnight()
   local t = date("!*t")
   return 86400 - (t.hour * 3600 + t.min * 60 + t.sec)
@@ -246,8 +246,11 @@ local function slash(msg)
   local cmd, arg = msg:match("^(%S*)%s*(.*)$")
   if cmd == "" or cmd == "toggle" then
     ns.UI:Toggle()
-  elseif cmd == "classic" or cmd == "blitz" or cmd == "daily" then
-    App:Start(cmd)
+  elseif cmd == "classic" or cmd == "blitz" or cmd == "daily" or cmd == "trial" then
+    App:Start(cmd == "trial" and "blitz" or cmd) -- "blitz" = Time Trial (internal mode id kept)
+  elseif cmd == "quickplay" or cmd == "qp" then
+    if ns.BUILD and not ns.BUILD.duels then App:Print("Quickplay is switched off in this test build (Spell Battle vs Bot only).")
+    else ns.UI:Create(); ns.UI.frame:Show(); App:ShowMenu(); ns.UI:ShowSheet("quickplay") end
   elseif cmd == "spell" or cmd == "spells" then
     ns.UI:Create(); ns.UI.frame:Show(); App:ShowMenu(); ns.UI:ShowSheet("spell")
   elseif cmd == "pause" then
@@ -285,7 +288,7 @@ local function slash(msg)
     else
       name = name:sub(1, 1):upper() .. name:sub(2)
       local okDuel, why = ns.Duel.challenge(name, (three == "3" or three == "web") and "r180" or "b120")
-      if okDuel then App:Print("Challenge sent to " .. name .. ".")
+      if okDuel then App:Print("Duel challenge sent to " .. name .. ".")
       else App:Print("Can't challenge now: " .. (ns.Duel.WHY_NOT[why] or tostring(why)) .. ".") end
     end
   elseif cmd == "leave" then
@@ -294,7 +297,7 @@ local function slash(msg)
     local flavour = (ns.BUILD and ns.BUILD.flavour ~= "full") and (", build " .. ns.BUILD.flavour .. (ns.BUILD.duels and "" or " (duels off)")) or ""
     App:Print("version " .. ns.VERSION .. ", engine v" .. E.ENGINE_VERSION .. ", interface " .. tostring(select(4, GetBuildInfo())) .. flavour)
   else
-    App:Print("commands: /sr (open), /sr blitz | classic | daily, /sr spell, /sr duel [Name] [3], /sr leave, /sr pause, /sr settings, /sr minimap, /sr scale 0.8, /sr reset, /sr sound, /sr stats, /sr version")
+    App:Print("commands: /sr (open), /sr classic | trial | daily, /sr spell, /sr quickplay, /sr duel [Name] [3], /sr leave, /sr pause, /sr settings, /sr minimap, /sr scale 0.8, /sr reset, /sr sound, /sr stats, /sr version")
   end
 end
 

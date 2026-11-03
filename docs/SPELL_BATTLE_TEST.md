@@ -97,6 +97,24 @@ To spillere med 0.6.0, i samme guild **og** som WoW- eller Battle.net-venner. Al
 | C8 | Efter en duel: fanen **Recent** | Modstanderen står der. Refresh → "ready", hvis modstanderen er online | UTESTET |
 | C9 | Forskellige factions på samme realm (hvis muligt) | Notér, om B bliver "ready" | UTESTET |
 
+## D. Quickplay, karakterkort og match-chat (branch `feature/connected`, build 0.6.1, kun efter din godkendelse)
+
+To spillere med 0.6.1 i samme guild. Alt er **UTESTET i WoW**. Previews er simulerede, ikke screenshots.
+
+| # | Gør dette | Det skal ske | Resultat |
+|---|---|---|---|
+| D1 | A: `/sr` | Menuen viser Classic, Time Trial, Daily Challenge, den røde **QUICKPLAY**-knap, Spell Battle og Guild Duel | UTESTET |
+| D2 | A: **QUICKPLAY** → Duel 2:00 → **Search** ✱ | "SEARCHING" med tid og "Looking in: your guild…". "Web players (stackrivals.io): not connected" | UTESTET |
+| D3 | B: **QUICKPLAY** → Duel 2:00 → **Search** ✱ | Inden for ca. 20 s: begge får lobbyen "QUICK DUEL - MATCH FOUND". Ingen popup | UTESTET |
+| D4 | Kig på kortene | Navn, realm, faction i farve, race/class/level. B's kort hos A siger "unverified" | UTESTET |
+| D5 | Chat i lobbyen: tryk **GL**, skriv en linje + Enter | Den anden ser linjen i StackRivals-chatpanelet. **Intet** i WoW's chatvindue | UTESTET |
+| D6 | Begge **Ready** → spil → skriv i chatten under kampen ✱ | Brikkerne bevæger sig **ikke**, mens du skriver i chatboksen. Notér, hvad der sker | UTESTET |
+| D7 | Efter resultatet: **Rematch** | Den anden får en almindelig popup og skal acceptere | UTESTET |
+| D8 | A: Search. B: lad være med at søge i 5 min | A får "NO OPPONENT" med forklaringen | UTESTET |
+| D9 | Match igen, men B trykker ikke Ready | Efter ca. 1 min søger A igen. B's søgning stopper ("You didn't press Ready…") | UTESTET |
+| D10 | B: **Mute** i chatpanelet. A skriver | B ser intet. A får ingen besked om det | UTESTET |
+| D11 | Hvis muligt: Alliance mod Horde (venner på samme realm) | Kun hurtigbeskeder. Notér, om de overhovedet kommer frem | UTESTET |
+
 ## Efter testen
 
 - Gem `WTF\Account\<KONTO>\SavedVariables\StackRivals.lua` fra **begge** maskiner (der ligger

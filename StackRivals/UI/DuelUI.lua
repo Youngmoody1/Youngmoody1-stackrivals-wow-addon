@@ -103,21 +103,21 @@ function UI:CreateDuelSheet()
   self.duelSheet = s
   local L = 24
   local cw = self.frame:GetWidth() - 2 * L - 2
-  local title = T.display(s, SZ.title, C.paper); title:SetPoint("TOPLEFT", L, -14); title:SetText("CHALLENGE FRIENDS")
+  local title = T.display(s, SZ.title, C.paper); title:SetPoint("TOPLEFT", L, -14); title:SetText("GUILD DUELS")
   local sub = T.text(s, SZ.small, C.label); sub:SetPoint("TOPLEFT", L, -38)
   s.sub = sub
 
   -- mode: a three-way segmented choice
   self.duelRuleset = "b120"
-  local b120 = T.button(s, "Blitz 2:00", 96, 28, "frame", function() UI.duelRuleset = "b120"; UI:RefreshDuelSheet() end)
+  local b120 = T.button(s, "Duel 2:00", 96, 28, "frame", function() UI.duelRuleset = "b120"; UI:RefreshDuelSheet() end)
   b120:SetPoint("TOPLEFT", L, -60)
   b120.tip = "Score race: 2 minutes, 3 s countdown."
-  local r180 = T.button(s, "3:00", 70, 28, "frame", function() UI.duelRuleset = "r180"; UI:RefreshDuelSheet() end)
+  local r180 = T.button(s, "Duel 3:00", 96, 28, "frame", function() UI.duelRuleset = "r180"; UI:RefreshDuelSheet() end)
   r180:SetPoint("LEFT", b120, "RIGHT", 4, 0)
   r180.tip = "Score race, 3 minutes and a 4 s countdown: the same rules as a 1v1 on stackrivals.io."
-  local s180 = T.button(s, "Spell Battle", 112, 28, "frame", function() UI.duelRuleset = "s180"; UI:RefreshDuelSheet() end)
+  local s180 = T.button(s, "Spell Duel", 104, 28, "frame", function() UI.duelRuleset = "s180"; UI:RefreshDuelSheet() end)
   s180:SetPoint("LEFT", r180, "RIGHT", 4, 0)
-  s180.tip = "Spell Battle 3:00 with the web's spells: casts land on your rival's board. Both need StackRivals 0.5+."
+  s180.tip = "Spell Duel 3:00 with the web's spells and mana: casts land on your rival's board. Both need StackRivals 0.5+."
   s.b120, s.r180, s.s180 = b120, r180, s180
 
   local refresh = T.button(s, "Refresh", 104, 28, "primary", function() UI:RefreshDuelPresence() end)
@@ -232,7 +232,7 @@ function UI:RefreshDuelSheet()
   setSegment(s.s180, self.duelRuleset == "s180")
   local src = self.duelSource or "guild"
   for k, tb in pairs(s.tabs) do setSegment(tb, k == src) end
-  s.sub:SetText(self.duelRuleset == "s180" and "1v1 Spell Battle: spells hit each other's boards."
+  s.sub:SetText(self.duelRuleset == "s180" and "Spell Duel: 1v1 with spells and mana. First to top out loses."
     or "1v1 score race: same pieces, higher score wins.")
   local minV = P.RULESET_MIN_VERSION[self.duelRuleset]
   -- the list: from the client's own rosters (+ guild / group players who answered a broadcast)
@@ -304,7 +304,7 @@ function UI:CreateInvitePopup()
   local p = T.panel(f, C.steel, 0.97); p:SetAllPoints()
   local mark = f:CreateTexture(nil, "ARTWORK")
   mark:SetTexture(T.MEDIA .. "marksmall"); mark:SetSize(26, 26); mark:SetPoint("TOPLEFT", 14, -14)
-  f.kind = T.label(f, "DUEL CHALLENGE"); f.kind:SetPoint("TOPLEFT", 50, -12); f.kind:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
+  f.kind = T.label(f, "STACKRIVALS DUEL"); f.kind:SetPoint("TOPLEFT", 50, -12); f.kind:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
   f.title = T.display(f, SZ.title, C.paper); f.title:SetPoint("TOPLEFT", 50, -26); f.title:SetJustifyH("LEFT")
   f.sub = T.text(f, SZ.small, C.body); f.sub:SetPoint("TOPLEFT", 50, -50); f.sub:SetJustifyH("LEFT")
   -- time left, as a shrinking bar under the text
@@ -334,13 +334,64 @@ end
 ------------------------------------------------------------------------------------------------
 -- Lobby: a full-window "YOU vs RIVAL" screen; rival panel under NEXT while playing
 ------------------------------------------------------------------------------------------------
+-- A WoW character card: name, faction (colour + Blizzard's faction emblem), race / class / level,
+-- realm, played-out duel record. Yours comes from WoW's API; your rival's is self-reported by
+-- their addon (PRF) and marked "unverified" - only the character name is checked by WoW.
+local FACTION_ICON = { Alliance = "Interface\\TargetingFrame\\UI-PVP-Alliance", Horde = "Interface\\TargetingFrame\\UI-PVP-Horde" }
 local function playerCard(parent, edge, w)
   local c = T.panel(parent, edge)
-  c:SetSize(w, 92)
-  c.who = T.label(c, ""); c.who:SetPoint("TOP", 0, -12)
-  c.name = T.display(c, SZ.title, C.paper); c.name:SetPoint("TOP", 0, -28)
-  c.state = T.display(c, SZ.small, C.label); c.state:SetPoint("TOP", 0, -60)
+  c:SetSize(w, 126)
+  c.who = T.label(c, ""); c.who:SetPoint("TOP", 0, -10)
+  c.name = T.display(c, SZ.title, C.paper); c.name:SetPoint("TOP", 0, -24)
+  c.faction = T.display(c, SZ.small, C.label); c.faction:SetPoint("TOP", 0, -50)
+  c.line2 = T.text(c, SZ.label, C.body); c.line2:SetPoint("TOP", 0, -65)
+  c.line3 = T.text(c, SZ.label, C.label); c.line3:SetPoint("TOP", 0, -79)
+  c.line4 = T.text(c, SZ.label, C.label); c.line4:SetPoint("TOP", 0, -93)
+  c.state = T.display(c, SZ.small, C.label); c.state:SetPoint("TOP", 0, -108)
+  c.fIcon = c:CreateTexture(nil, "ARTWORK"); c.fIcon:SetSize(24, 24); c.fIcon:SetPoint("TOPLEFT", 6, -6)
+  c.fIcon:SetTexCoord(0, 0.625, 0, 0.625)
+  c.cIcon = c:CreateTexture(nil, "ARTWORK"); c.cIcon:SetSize(22, 22); c.cIcon:SetPoint("TOPRIGHT", -7, -7)
+  c.cIcon:SetTexture("Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES")
+  c:EnableMouse(true)
+  c:SetScript("OnEnter", function(self)
+    if not self.tip then return end
+    GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:SetText(self.tip, 1, 1, 1, 1, true); GameTooltip:Show()
+  end)
+  c:SetScript("OnLeave", function() GameTooltip:Hide() end)
   return c
+end
+
+--- Fill a card from a profile { faction, race, class, level, wins, losses } (nil = Unknown).
+local function fillCard(c, name, p, own, waiting)
+  local base, realm = name:match("^([^%-]+)%-(.+)$")
+  local myRealm = (ns.Comm.me() or ""):match("%-(.+)$")
+  c.name:SetText(base or name)
+  if waiting then
+    c.faction:SetText("waiting for card...")
+    c.faction:SetTextColor(C.label[1], C.label[2], C.label[3])
+    c.line2:SetText(""); c.line3:SetText(""); c.line4:SetText("")
+    c.fIcon:Hide(); c.cIcon:Hide()
+    c.tip = nil
+    return
+  end
+  p = p or {}
+  local fc = p.faction and ns.Card.FACTION_COLOR[p.faction] or C.label
+  c.faction:SetText(string.upper(p.faction or "Unknown faction"))
+  c.faction:SetTextColor(fc[1], fc[2], fc[3])
+  c.line2:SetText(ns.Card.who(p))
+  c.line3:SetText(realm or myRealm or "")
+  local games = (p.wins or 0) + (p.losses or 0)
+  local rec = games > 0 and string.format("Duels %d-%d (%d%%)", p.wins, p.losses, math.floor(100 * p.wins / games + 0.5)) or "No duels yet"
+  c.line4:SetText(own and rec or (rec .. "  -  unverified"))
+  local fi = FACTION_ICON[p.faction or ""]
+  c.fIcon:SetShown(fi ~= nil)
+  if fi then c.fIcon:SetTexture(fi) end
+  local tc = p.class and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[p.class]
+  c.cIcon:SetShown(tc ~= nil)
+  if tc then c.cIcon:SetTexCoord(tc[1], tc[2], tc[3], tc[4]) end
+  c.tip = (own and "Your character, from WoW." or "Self-reported by your rival's StackRivals: not verified (only the name is checked by WoW).")
+    .. "\nStackRivals rank / level: Unknown (needs a linked stackrivals.io account)."
+    .. "\nDuels count played-out, replay-checked duels on that PC."
 end
 
 function UI:CreateDuelOverlays()
@@ -348,19 +399,19 @@ function UI:CreateDuelOverlays()
   self.lobby = o
   local w = self.frame:GetWidth()
   o.rules = T.display(o, SZ.small, C.steel); o.rules:SetPoint("TOP", 0, -20)
-  local cardW = 160
-  o.meCard = playerCard(o, C.red, cardW); o.meCard:SetPoint("TOPRIGHT", o, "TOP", -34, -48)
-  o.themCard = playerCard(o, C.steel, cardW); o.themCard:SetPoint("TOPLEFT", o, "TOP", 34, -48)
+  local cardW = 176
+  o.meCard = playerCard(o, C.red, cardW); o.meCard:SetPoint("TOPRIGHT", o, "TOP", -30, -44)
+  o.themCard = playerCard(o, C.steel, cardW); o.themCard:SetPoint("TOPLEFT", o, "TOP", 30, -44)
   o.meCard.who:SetText("YOU")
   o.themCard.who:SetText("RIVAL")
-  local vs = T.text(o, 30, C.red, "", nil, "italic"); vs:SetPoint("TOP", 0, -74); vs:SetText("VS")
+  local vs = T.text(o, 30, C.red, "", nil, "italic"); vs:SetPoint("TOP", 0, -88); vs:SetText("VS")
   o.rival = o.themCard.name
-  o.status = T.text(o, SZ.body, C.body); o.status:SetPoint("TOP", 0, -162); o.status:SetWidth(w - 80)
+  o.status = T.text(o, SZ.body, C.body); o.status:SetPoint("TOP", 0, -180); o.status:SetWidth(w - 80)
   o.ready = T.button(o, "Ready", 220, 36, "primary", function() ns.Duel.ready() end)
-  o.ready:SetPoint("TOP", 0, -202)
+  o.ready:SetPoint("TOP", 0, -214)
   -- Spell Battle: your 4 spells (locked at Ready) and a way to change them
   local sr = CreateFrame("Frame", nil, o)
-  sr:SetSize(4 * 32 + 10 + 120, 30); sr:SetPoint("TOP", 0, -190)
+  sr:SetSize(4 * 32 + 10 + 120, 30); sr:SetPoint("TOP", 0, -204)
   sr.icons = {}
   for i = 1, 4 do
     local ic = sr:CreateTexture(nil, "ARTWORK"); ic:SetSize(28, 28); ic:SetPoint("LEFT", (i - 1) * 32, 0)
@@ -416,9 +467,11 @@ function UI:RefreshDuel(phase)
     -- the lobby covers the window: never let a solo run keep falling underneath it
     if s and not s.duel and s:isActive() then s:pause("manual") end
     if not o:IsShown() then o:Show(); o.fade:Play() end
-    o.meCard.name:SetText(short(ns.Comm.me()) or "You")
-    o.themCard.name:SetText(short(m.rival))
-    o.rules:SetText(string.upper(m.ruleset.name) .. "  -  SAME PIECES FOR BOTH")
+    local mine = ns.Card and ns.Card.mine() or {}
+    fillCard(o.meCard, short(ns.Comm.me()) or "You", ns.Card and ns.Card.sharing() and mine or { wins = mine.wins, losses = mine.losses }, true)
+    fillCard(o.themCard, short(m.rival) or "?", m.rivalCard, false, m.state == "lobby" and not m.rivalCard)
+    o.rules:SetText(m.quickplay and ("QUICK DUEL  -  MATCH FOUND  -  " .. string.upper(m.ruleset.name))
+      or (string.upper(m.ruleset.name) .. "  -  SAME PIECES FOR BOTH"))
     o.ready:Hide()
     o.cancel:SetLabel("Cancel")
     if m.state == "inviting" then
@@ -445,7 +498,7 @@ function UI:RefreshDuel(phase)
     end
     local spell = m.ruleset and m.ruleset.spell and m.state == "lobby"
     o.spells:SetShown(spell and true or false)
-    o.ready:ClearAllPoints(); o.ready:SetPoint("TOP", 0, spell and -232 or -202)
+    o.ready:ClearAllPoints(); o.ready:SetPoint("TOP", 0, spell and -244 or -214)
     self.menu:Hide(); self.pause:Hide(); self.over:Hide()
   else
     o:Hide()
@@ -455,6 +508,7 @@ function UI:RefreshDuel(phase)
   self.nextPanel:SetHeight(self.field:GetHeight() - (showRival and 82 or 0))
   self.nextPreviews[5]:SetShown(not showRival)
   self:RenderRival()
+  if self.RefreshChat then self:RefreshChat() end
   return o:IsShown()
 end
 
@@ -551,7 +605,7 @@ function UI:CreateDuel()
   D.on("players", function() UI:RefreshDuelSheet() end)
   D.on("invite", function(m)
     local f = UI.invite
-    f.title:SetText((m.rematch and "Rematch from " or "Duel challenge from ") .. short(m.rival))
+    f.title:SetText((m.rematch and "Rematch from " or "Duel from ") .. short(m.rival))
     f.left = nil
     f:Show()
     if PlaySound and SOUNDKIT and SOUNDKIT.READY_CHECK then pcall(PlaySound, SOUNDKIT.READY_CHECK) end

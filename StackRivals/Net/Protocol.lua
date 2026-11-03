@@ -34,6 +34,17 @@
                                                     replayed, x = your result failed my replay check,
                                                     f = forfeit / left / log never sent, t = lost contact or
                                                     out of time, v = no result (0 / 1 = x / r, older builds)
+    1:INV:...:<nonce>[:q]                           (0.6.1+) q = a Quickplay match (both players were searching)
+    1:QS:<qid>:<ruleset>:<version>                  (0.6.1+) Quickplay: I'm searching for a <ruleset> match
+                                                    (broadcast to GUILD / PARTY / RAID, whispered to friends
+                                                    whose StackRivals answered); repeated while searching
+    1:PRF:<mid>:<faction>:<race>:<class>:<level>:<w36>:<l36>:<chat>
+                                                    (0.6.1+) my character card for this match, self-reported:
+                                                    A / H / N(eutral) / -, race and class tokens (UnitRace /
+                                                    UnitClass file names) or "-", level 0-200 (0 = hidden),
+                                                    my played-out duel W / L, chat 1 = match chat on
+    1:CH:<mid>:<n>:<hex>                            (0.6.1+) match chat line n (UTF-8 as hex, max 80 bytes)
+    1:QM:<mid>:<n>:<code>                           (0.6.1+) quick message n: 1 GL, 2 GG, 3 WP, 4 Rematch?
   Older clients ignore kinds they don't know (decode -> "kind"), so these never break a 0.4 duel.
 
   Spell Battle (ruleset s180) uses the same flow; only clients 0.5+ know s180, SP and the cast
@@ -53,10 +64,10 @@ P.CHUNK_PAYLOAD = 200
 
 P.RULESETS = {
   -- id = { name, ticks, countdown ticks }
-  b120 = { id = "b120", name = "Duel - Blitz 2:00", limitTicks = 7200, countdownTicks = 180 },
-  r180 = { id = "r180", name = "Duel - 3:00 (web rules)", limitTicks = 10800, countdownTicks = 240 },
+  b120 = { id = "b120", name = "Duel 2:00", limitTicks = 7200, countdownTicks = 180 },
+  r180 = { id = "r180", name = "Duel 3:00", limitTicks = 10800, countdownTicks = 240 },
   -- Spell Battle: the web's 3:00 cap and 4 s countdown; the result = lockstep replay of both logs
-  s180 = { id = "s180", name = "Spell Duel - 3:00 (web rules)", limitTicks = 10800, countdownTicks = 240, spell = true },
+  s180 = { id = "s180", name = "Spell Duel 3:00", limitTicks = 10800, countdownTicks = 240, spell = true },
 }
 --- Oldest addon version that knows each ruleset (for the duel sheet: who can play what).
 P.RULESET_MIN_VERSION = { s180 = "0.5.0" }
@@ -126,9 +137,13 @@ end
 local SPEC = {
   HEL = 2, HI = 3, INV = 4, ACC = 2, DEC = 2, RDY = 1, GO = 2, PNG = 1, SC = 5, END = 7, LOG = 4, BYE = 2, RQ = 2, FIN = 1,
   SP = 4, PSE = 3, RSM = 2, VER = 5,
+  QS = 3, PRF = 8, CH = 3, QM = 3,
 }
+P.FACTIONS = { A = "Alliance", H = "Horde", N = "Neutral" }
+P.QUICK = { "Good luck!", "GG!", "Well played!", "Rematch?" }
+P.CHAT_MAX = 80 -- bytes of UTF-8 text per chat line
 P.PAUSE_REASONS = { combat = true, chat = true, manual = true, hidden = true, loading = true, settings = true, restored = true, frozen = true }
-local OPTIONAL = { RDY = 1, GO = 1, PSE = 1, VER = 1 } -- extra trailing fields a kind may carry (newer clients)
+local OPTIONAL = { RDY = 1, GO = 1, PSE = 1, VER = 1, INV = 1 } -- extra trailing fields a kind may carry (newer clients)
 --- VER basis codes (see the header). Scores are only compared when both verdicts rest on a replay.
 P.VER_BASIS = { r = "replay", x = "rejected", f = "forfeit", t = "timeout", v = "void", ["1"] = "replay", ["0"] = "rejected" }
 P.VER_CODE = { replay = "r", rejected = "x", forfeit = "f", timeout = "t", void = "v" }
@@ -154,6 +169,27 @@ function P.decode(s)
   elseif kind == "INV" then
     if not isMid(f[3]) or not P.RULESETS[f[4]] or not isInt(f[5], 1, 9999) or not isNonce(f[6]) then return nil, "bad" end
     m.mid, m.ruleset, m.engine, m.nonce = f[3], f[4], tonumber(f[5]), f[6]
+    if f[7] then
+      if f[7] ~= "q" then return nil, "bad" end
+      m.quickplay = true
+    end
+  elseif kind == "QS" then
+    if not isMid(f[3]) or not P.RULESETS[f[4]] or not isVer(f[5]) then return nil, "bad" end
+    m.qid, m.ruleset, m.addon = f[3], f[4], f[5]
+  elseif kind == "PRF" then
+    local tok = function(x) return x == "-" or (type(x) == "string" and #x <= 16 and x:match("^%a+$") ~= nil) end
+    local w, l = P.unb36(f[8]), P.unb36(f[9])
+    if not isMid(f[3]) or not (f[4] == "-" or P.FACTIONS[f[4]]) or not tok(f[5]) or not tok(f[6]) or not isInt(f[7], 0, 200)
+      or not w or not l or w > 1e7 or l > 1e7 or (f[10] ~= "0" and f[10] ~= "1") then return nil, "bad" end
+    m.mid, m.faction, m.race, m.class, m.level, m.wins, m.losses, m.chat = f[3], P.FACTIONS[f[4]], f[5] ~= "-" and f[5] or nil,
+      f[6] ~= "-" and f[6] or nil, tonumber(f[7]), w, l, f[10] == "1"
+  elseif kind == "CH" then
+    local hex = f[5]
+    if not isMid(f[3]) or not isInt(f[4], 1, 9999) or type(hex) ~= "string" or #hex < 2 or #hex > 2 * P.CHAT_MAX or #hex % 2 ~= 0 or not hex:match("^[0-9a-f]+$") then return nil, "bad" end
+    m.mid, m.n, m.text = f[3], tonumber(f[4]), (hex:gsub("..", function(x) return string.char(tonumber(x, 16)) end))
+  elseif kind == "QM" then
+    if not isMid(f[3]) or not isInt(f[4], 1, 9999) or not isInt(f[5], 1, #P.QUICK) then return nil, "bad" end
+    m.mid, m.n, m.code = f[3], tonumber(f[4]), tonumber(f[5])
   elseif kind == "ACC" then
     if not isMid(f[3]) or not isNonce(f[4]) then return nil, "bad" end
     m.mid, m.nonce = f[3], f[4]

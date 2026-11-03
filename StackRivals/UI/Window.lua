@@ -216,6 +216,8 @@ function UI:Create()
   self:CreateSettings()
   self:CreateKeyboard()
   if ns.Duel and self.CreateDuel then self:CreateDuel() end
+  if ns.Quickplay and self.CreateQuickplay then self:CreateQuickplay() end
+  if ns.Chat and self.CreateMatchChat then self:CreateMatchChat() end
   if ns.SpellBattle and self.CreateSpell then self:CreateSpell() end
 
   F:SetScript("OnShow", function() UI:OnShow() end)
@@ -377,7 +379,7 @@ function UI:CreateMenu()
   local menu = self:Body(30, true)
   self.menu = menu
   local cw = self.frame:GetWidth() - 2 * 24 - 2
-  local CARD, GAP = 56, 6
+  local CARD, GAP = 48, 4
   local mt = T.display(menu, SZ.title, C.paper); mt:SetPoint("TOPLEFT", 24, -14); mt:SetText("PICK A MODE")
   local ms = T.text(menu, SZ.small, C.label); ms:SetPoint("TOPLEFT", 24, -38); ms:SetText("Same rules and pieces as stackrivals.io. Click a mode to play.")
   self.menuSub = ms
@@ -388,15 +390,15 @@ function UI:CreateMenu()
     local b = T.button(menu, "", cw, CARD, key == "daily" and "gold" or "frame", function() ns.App:Start(key) end)
     b:SetPoint("TOP", menu, "TOP", 0, y)
     b.noPress = true
-    b.fs:ClearAllPoints(); b.fs:SetPoint("TOPLEFT", 62, -10); b.fs:SetJustifyH("LEFT")
+    b.fs:ClearAllPoints(); b.fs:SetPoint("TOPLEFT", 62, -7); b.fs:SetJustifyH("LEFT")
     T.setFont(b.fs, T.DISPLAY, SZ.title)
     b.fs:SetText(mode.name)
-    b.desc = T.text(b, SZ.small, C.body); b.desc:SetPoint("TOPLEFT", 62, -34)
+    b.desc = T.text(b, SZ.small, C.body); b.desc:SetPoint("TOPLEFT", 62, -29)
     b.desc:SetWidth(200); b.desc:SetJustifyH("LEFT")
     b.desc:SetText(mode.short)
-    b.bestLabel = T.label(b, key == "daily" and "TODAY" or "BEST"); b.bestLabel:SetPoint("TOPRIGHT", -16, -6); b.bestLabel:SetJustifyH("RIGHT")
-    b.best = T.display(b, SZ.heading, C.gold); b.best:SetPoint("TOPRIGHT", -16, -20); b.best:SetJustifyH("RIGHT")
-    b.side = T.text(b, SZ.label, C.label); b.side:SetPoint("TOPRIGHT", -16, -40); b.side:SetJustifyH("RIGHT")
+    b.best = T.display(b, SZ.heading, C.gold); b.best:SetPoint("TOPRIGHT", -16, -8); b.best:SetJustifyH("RIGHT")
+    b.bestLabel = T.label(b, key == "daily" and "TODAY" or "BEST"); b.bestLabel:SetPoint("RIGHT", b.best, "LEFT", -6, 0); b.bestLabel:SetJustifyH("RIGHT")
+    b.side = T.text(b, SZ.label, C.label); b.side:SetPoint("TOPRIGHT", -16, -30); b.side:SetJustifyH("RIGHT")
     local edgeC = C[MODE_EDGE[key]]
     local e = T.tex(b, "ARTWORK", edgeC, 1); e:SetPoint("TOPLEFT", 1, -1); e:SetPoint("BOTTOMLEFT", 1, 1); e:SetWidth(4)
     -- a piece in the mode colour: the cards read as things to play, not form fields
@@ -409,40 +411,55 @@ function UI:CreateMenu()
     self.modeButtons[key] = b
   end
   self.cardStep = CARD + GAP
+  -- QUICKPLAY: one wide red bar between the solo modes and the VERSUS row
+  local qp = T.button(menu, "", cw, 34, "primary", function() UI:ShowSheet("quickplay") end)
+  qp.noPress = true
+  qp.fs:ClearAllPoints(); qp.fs:SetPoint("LEFT", 44, 0); qp.fs:SetJustifyH("LEFT")
+  T.setFont(qp.fs, T.DISPLAY_ITALIC, SZ.title)
+  qp.fs:SetText("QUICKPLAY")
+  qp.icon = qp:CreateTexture(nil, "ARTWORK"); qp.icon:SetSize(24, 24); qp.icon:SetPoint("LEFT", 12, 0); qp.icon:SetTexture(T.MEDIA .. "marksmall")
+  qp.desc = T.text(qp, SZ.small, C.paper); qp.desc:SetPoint("RIGHT", -14, 0); qp.desc:SetJustifyH("RIGHT")
+  qp.desc:SetText("Quick Duel  -  a random rival")
+  qp.tip = "Quick Duel: meet a random StackRivals player who is searching right now and that WoW lets you reach (your guild, your group, friends with StackRivals). A StackRivals puzzle duel, not WoW's /duel. Not connected to stackrivals.io yet."
+  self.qpBar = qp
+  if ns.BUILD and not ns.BUILD.duels then
+    qp:Disable(); qp.desc:SetText("Off in this test build")
+    qp.tip = "This is a Spell Battle vs Bot test build: Quickplay and duels are switched off."
+  end
   -- VERSUS row: Spell Battle (vs the web's bot) and Duel (a guild / group member)
   local half = math.floor((cw - 8) / 2)
   local function vsCard(name, desc, style, edgeC, iconPath, onClick)
-    local b = T.button(menu, "", half, 54, style, onClick)
+    local b = T.button(menu, "", half, 46, style, onClick)
     b.noPress = true
-    b.fs:ClearAllPoints(); b.fs:SetPoint("TOPLEFT", 52, -9); b.fs:SetJustifyH("LEFT")
+    b.fs:ClearAllPoints(); b.fs:SetPoint("TOPLEFT", 50, -6); b.fs:SetJustifyH("LEFT")
     T.setFont(b.fs, T.DISPLAY, SZ.heading)
     b.fs:SetText(name)
-    b.desc = T.text(b, SZ.label, C.body); b.desc:SetPoint("TOPLEFT", 52, -31); b.desc:SetWidth(half - 60); b.desc:SetJustifyH("LEFT")
+    b.desc = T.text(b, SZ.label, C.body); b.desc:SetPoint("TOPLEFT", 50, -26); b.desc:SetWidth(half - 58); b.desc:SetJustifyH("LEFT")
     b.desc:SetText(desc)
     local e = T.tex(b, "ARTWORK", edgeC, 1); e:SetPoint("TOPLEFT", 1, -1); e:SetPoint("BOTTOMLEFT", 1, 1); e:SetWidth(4)
-    b.icon = b:CreateTexture(nil, "ARTWORK"); b.icon:SetSize(34, 34); b.icon:SetPoint("LEFT", 12, 0); b.icon:SetTexture(iconPath)
+    b.icon = b:CreateTexture(nil, "ARTWORK"); b.icon:SetSize(30, 30); b.icon:SetPoint("LEFT", 12, 0); b.icon:SetTexture(iconPath)
     b:HookScript("OnEnter", function(self) self.border:SetColorTexture(edgeC[1], edgeC[2], edgeC[3], 1) end)
     b:HookScript("OnLeave", function(self) local c = self.style.border; self.border:SetColorTexture(c[1], c[2], c[3], 1) end)
     return b
   end
   self.spellCard = vsCard("Spell Battle", "vs Bot", "frame", C.red, T.MEDIA .. "Spells\\bomb", function() UI:ShowSheet("spell") end)
   self.spellCard.tip = "Spells, mana and the stackrivals.io bot. Pick 2 spells for your board, 2 for the bot's."
-  self.duelBtn = vsCard("Challenge", "Guild, friends, group", "frame", C.steel, T.MEDIA .. "marksmall", function() UI:ShowSheet("duel") end)
-  self.duelBtn.tip = "Challenge Friends: guild members, WoW and Battle.net friends, your group or anyone by name. Score race or Spell Battle; both need StackRivals."
+  self.duelBtn = vsCard("Guild Duel", "Guild, friends, group", "frame", C.steel, T.MEDIA .. "marksmall", function() UI:ShowSheet("duel") end)
+  self.duelBtn.tip = "Guild Duels: challenge guild members, WoW and Battle.net friends, your group or anyone by name to a Duel or Spell Duel. A StackRivals puzzle duel, not WoW's /duel; both need StackRivals."
   if ns.BUILD and not ns.BUILD.duels then -- vs-Bot test build
     self.duelBtn:Disable(); self.duelBtn.desc:SetText("Off in this test build")
-    self.duelBtn.tip = "This is a Spell Battle vs Bot test build: guild duels are switched off."
+    self.duelBtn.tip = "This is a Spell Battle vs Bot test build: Guild Duels are switched off."
   end
   self.continueBtn = T.button(menu, "Continue last run", cw, 30, "primary", function() ns.App:ContinueSuspended() end)
   self.continueBtn:SetPoint("TOP", menu, "TOP", 0, -40) -- above the cards when there is a run to continue
   self.continueBtn.tip = "Your unfinished run from before /reload or logout, restored exactly."
   -- secondary navigation
   self.navRow = CreateFrame("Frame", nil, menu)
-  self.navRow:SetSize(cw, 28); self.navRow:SetPoint("BOTTOM", menu, "BOTTOM", 0, 34)
+  self.navRow:SetSize(cw, 28); self.navRow:SetPoint("BOTTOM", menu, "BOTTOM", 0, 30)
   self.howBtn = T.button(self.navRow, "How to play", 140, 28, "frame", function() UI:ShowSheet("help") end)
   self.recBtn = T.button(self.navRow, "Records", 140, 28, "frame", function() UI:ShowSheet("records") end)
   self:LayoutNav({ self.howBtn, self.recBtn })
-  self.statsLine = T.text(menu, SZ.label, C.label); self.statsLine:SetPoint("BOTTOM", 0, 12)
+  self.statsLine = T.text(menu, SZ.label, C.label); self.statsLine:SetPoint("BOTTOM", 0, 10)
   self.statsLine:SetWidth(cw)
   self.menuFade = T.fadeInAnim(menu, 0.2)
 end
@@ -698,6 +715,7 @@ function UI:OnHide()
   if self.settings and self.settings:IsShown() then self.settings:Hide() end
   if self.help then self.help:Hide(); self.records:Hide() end
   if self.duelSheet then self.duelSheet:Hide() end
+  if self.qpSheet then self.qpSheet:Hide() end
   if self.spellSheet then self.spellSheet:Hide() end
   local sess = ns.App.session
   if sess and sess.spell and sess.spell.settling then
@@ -1031,12 +1049,15 @@ function UI:RefreshMenu()
   end
   -- with a run to continue the subtitle makes room for the Continue button
   self.menuSub:SetShown(su == nil)
-  local y = su and -78 or -62
+  local y = su and -74 or -62
   for _, key in ipairs(Session.MODE_ORDER) do
     local b = self.modeButtons[key]
     b:ClearAllPoints(); b:SetPoint("TOP", self.menu, "TOP", 0, y)
     y = y - self.cardStep
   end
+  self.qpBar:ClearAllPoints(); self.qpBar:SetPoint("TOP", self.menu, "TOP", 0, y)
+  y = y - 38
+  if self.RefreshQuickplayBar then self:RefreshQuickplayBar() end
   local cw = self.spellCard:GetWidth()
   self.spellCard:ClearAllPoints(); self.spellCard:SetPoint("TOPLEFT", self.menu, "TOP", -cw - 4, y)
   self.duelBtn:ClearAllPoints(); self.duelBtn:SetPoint("TOPLEFT", self.menu, "TOP", 4, y)
@@ -1225,7 +1246,7 @@ function UI:CreateHelp()
   st:SetWidth(stripW - 24); st:SetJustifyH("LEFT"); st:SetSpacing(2)
   st:SetText("Keys are only taken while you play. Combat pauses the game at once and gives every key back. /reload never loses a run.")
   -- play straight from here
-  local play = T.button(s, "Play Blitz 2:00", 170, 32, "primary", function() s:Hide(); ns.App:Start("blitz") end)
+  local play = T.button(s, "Play Time Trial", 170, 32, "primary", function() s:Hide(); ns.App:Start("blitz") end)
   play:SetPoint("RIGHT", s.done, "LEFT", -10, 0)
   s.play = play
   s:SetScript("OnShow", function()
@@ -1307,12 +1328,14 @@ end
 
 function UI:SheetOpen()
   return (self.help and self.help:IsShown()) or (self.records and self.records:IsShown()) or (self.settings and self.settings:IsShown())
-    or (self.duelSheet and self.duelSheet:IsShown()) or (self.spellSheet and self.spellSheet:IsShown()) or false
+    or (self.duelSheet and self.duelSheet:IsShown()) or (self.spellSheet and self.spellSheet:IsShown())
+    or (self.qpSheet and self.qpSheet:IsShown()) or false
 end
 
 function UI:HideSheets()
   if self.help then self.help:Hide(); self.records:Hide() end
   if self.duelSheet then self.duelSheet:Hide() end
+  if self.qpSheet then self.qpSheet:Hide() end
   if self.spellSheet then self.spellSheet:Hide() end
   if self.settings and self.settings:IsShown() then self:ShowSettings(false) end
 end
@@ -1323,6 +1346,7 @@ function UI:ShowSheet(which)
   self.help:SetShown(which == "help")
   self.records:SetShown(which == "records")
   if self.duelSheet then self.duelSheet:SetShown(which == "duel") end
+  if self.qpSheet then self.qpSheet:SetShown(which == "quickplay") end
   if self.spellSheet then self.spellSheet:SetShown(which == "spell"); if which == "spell" then self.spellSheetDuel = false; self:RefreshSpellSheet() end end
   if self.settings:IsShown() then self:ShowSettings(false) end
   self:RefreshPhase()

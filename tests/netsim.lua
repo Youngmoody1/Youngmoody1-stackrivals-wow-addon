@@ -36,7 +36,7 @@ function NS.new(opts)
     return math.floor(net.rng / 65536) / 32768
   end
 
-  local function full(name) return name:find("-", 1, true) and name or (name .. "-Realm") end
+  local function full(name, realm) return name:find("-", 1, true) and name or (name .. "-" .. (realm or "Realm")) end
 
   --- Add a client. o: name, realm, guild, group, engine (override ENGINE_VERSION), flavor
   function net.add(o)
@@ -45,6 +45,7 @@ function NS.new(opts)
     local M = dofile(testdir .. "/wowmock.lua")
     M.install(env)
     M.playerName, M.realm = o.name, o.realm or "Realm"
+    M.faction, M.race, M.class, M.level = o.faction, o.race, o.class, o.level -- your character (defaults: Alliance Human Warrior 60)
     M.inInstance = net.instance
     env.IsInGuild = function() return o.guild ~= nil end
     env.IsInGroup = function() return o.group ~= nil end
@@ -94,7 +95,7 @@ function NS.new(opts)
     env.IsInRaid = function() return false end
     env.StackRivalsDB = o.saved
     env.math = setmetatable({ random = function(a, b) return a + math.floor(net.random() * (b - a + 1)) end }, { __index = math })
-    local c = { name = full(o.name), env = env, M = M, o = o, bucket = { tokens = 10, at = 0 }, online = true, lockdownUntil = -1 }
+    local c = { name = full(o.name, o.realm), env = env, M = M, o = o, bucket = { tokens = 10, at = 0 }, online = true, lockdownUntil = -1 }
     env.C_ChatInfo.SendAddonMessage = function(prefix, text, channel, target) return net.send(c, prefix, text, channel, target) end
     local ns = {}
     for _, f in ipairs(tocFiles()) do

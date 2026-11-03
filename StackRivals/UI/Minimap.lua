@@ -68,7 +68,7 @@ function M:Create()
     GameTooltip:AddLine("Right-click: settings", 1, 1, 1)
     GameTooltip:AddLine("Drag: move button", 0.6, 0.6, 0.6)
     local best = ns.App:BestFor("blitz")
-    if best > 0 then GameTooltip:AddLine("Blitz best: " .. T.commas(best), 0.95, 0.81, 0.42) end
+    if best > 0 then GameTooltip:AddLine("Time Trial best: " .. T.commas(best), 0.95, 0.81, 0.42) end
     GameTooltip:Show()
   end)
   b:SetScript("OnLeave", function() GameTooltip:Hide() end)

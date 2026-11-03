@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.1 — Connected multiplayer (branch `feature/connected`, development, not released)
+
+- **QUICKPLAY** (Quick Duel): a big button on the menu. Pick Duel 2:00 or Spell Duel 3:00 → Search → match found → ready check (the duel lobby) → countdown → match → result → rematch. It finds only players who are searching too and that WoW lets the addon reach (guild, party / raid, friends and Battle.net friends whose StackRivals answered, recent rivals). There is no global or fake queue. Cancel, 5-minute timeout, fall-through (back to searching, the no-show rival is skipped for 2 min), lobby cancel. The stackrivals.io adapter exists and honestly reports "not connected".
+- **Character cards** in the lobby: name, realm, faction (colour + emblem), race, class, level, duel record. Yours comes from WoW's API; the rival's is self-reported by their addon and marked "unverified". "Share my card" can switch it off. StackRivals rank / level shows Unknown until an account can be linked.
+- **Match chat** beside the window during a duel: text + Send, quick messages GL / GG / WP / Rematch?, Mute (remembered), Chat on/off, fold-away tab. Both must have chat on. Free text only within one faction (quick messages across factions). Rate-limited, escaped, never posted to any WoW channel.
+- **WoW-style mode names** (display only): Time Trial (was Blitz 2:00), Daily Challenge (was Daily Blitz), Duel 2:00 / Duel 3:00, Spell Duel, Quick Duel, Guild Duels (was Challenge Friends). Classic and Spell Battle (vs Bot) keep their names. Mode ids, rulesets, protocol, SR1 / SR2 and saved data are unchanged; `/sr trial` and `/sr quickplay` added.
+- Protocol additions `QS`, `PRF`, `CH`, `QM` and the `INV` flag `q`: ignored by 0.6.0 and older, which still duel normally.
+- Handoff for the web project: `docs/WOW_QUICKPLAY_HANDOFF.md`. Includes everything from 0.6.0 and 0.5.1.
+- All SIMULATED: nothing of 0.6.1 has run in a real WoW client yet.
+
 ## 0.6.0 — Challenge Friends (branch `multiplayer`, development, not released)
 
 - **Challenge** card on the menu opens **Challenge Friends**: pick Blitz 2:00, 3:00 or Spell Battle, then a list — Guild, WoW Friends, Battle.net friends on WoW, Group, Recent rivals — or type a name. Uses the 0.5 duel protocol unchanged.

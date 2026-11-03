@@ -252,6 +252,20 @@ function DB.sanitize(raw)
     end
   end
 
+  -- Quickplay (last mode), character card sharing, match chat (on/off + muted players).
+  local rq = (type(raw.quickplay) == "table") and raw.quickplay or {}
+  db.quickplay = { mode = (rq.mode == "s180") and "s180" or "b120" }
+  local rso = (type(raw.social) == "table") and raw.social or {}
+  db.social = { shareCard = bool(rso.shareCard, true) }
+  local rc = (type(raw.chat) == "table") and raw.chat or {}
+  db.chat = { enabled = bool(rc.enabled, true), muted = {} }
+  if type(rc.muted) == "table" then
+    local n = 0
+    for k, v in pairs(rc.muted) do
+      if v == true and type(k) == "string" and #k <= 64 and not k:find("[%c|]") and n < 200 then n = n + 1; db.chat.muted[k:lower()] = true end
+    end
+  end
+
   -- An unfinished run saved at logout / reload (mode + web-compatible input log).
   local su = raw.suspended
   if type(su) == "table" and ns.Session and ns.Session.MODES[su.mode] and su.mode == "spellbot" then

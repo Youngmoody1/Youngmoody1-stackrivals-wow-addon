@@ -23,16 +23,16 @@ local RESUME_TICKS = 120 -- 2 s when resuming
 --- Game modes. `limitTicks` ends the run on time; `daily` uses one shared seed per UTC day.
 Session.MODES = {
   classic = { key = "classic", name = "Classic", short = "Endless. Faster as you go" },
-  blitz = { key = "blitz", name = "Blitz 2:00", short = "Top score in two minutes", limitTicks = 7200 },
-  daily = { key = "daily", name = "Daily Blitz", short = "Same pieces for everyone", limitTicks = 7200, daily = true },
+  blitz = { key = "blitz", name = "Time Trial", short = "Solo top score in 2:00", limitTicks = 7200 },
+  daily = { key = "daily", name = "Daily Challenge", short = "Same pieces for everyone today", limitTicks = 7200, daily = true },
 }
 Session.MODE_ORDER = { "classic", "blitz", "daily" }
 -- Duel modes (not in the solo menu); limits must match Protocol.RULESETS.
 Session.MODES.duel_b120 = { key = "duel_b120", name = "Duel 2:00", short = "1v1 score race", limitTicks = 7200, countdownTicks = 180, duel = true }
-Session.MODES.duel_r180 = { key = "duel_r180", name = "Duel 3:00", short = "1v1 score race, web rules", limitTicks = 10800, countdownTicks = 240, duel = true }
+Session.MODES.duel_r180 = { key = "duel_r180", name = "Duel 3:00", short = "1v1 score race, the web's 3:00", limitTicks = 10800, countdownTicks = 240, duel = true }
 -- Spell Battle vs Bot: the web's 3:00 cap and 4 s countdown (src/lib/match/rules.ts).
 Session.MODES.spellbot = { key = "spellbot", name = "Spell Battle", short = "Spells vs a bot. 3:00", limitTicks = 10800, countdownTicks = 240, spell = true }
-Session.MODES.duel_s180 = { key = "duel_s180", name = "Spell Duel 3:00", short = "1v1 Spell Battle", limitTicks = 10800, countdownTicks = 240, duel = true, spell = true }
+Session.MODES.duel_s180 = { key = "duel_s180", name = "Spell Duel 3:00", short = "1v1 with spells and mana", limitTicks = 10800, countdownTicks = 240, duel = true, spell = true }
 
 --- Seed shared by every player for a UTC date string "YYYY-MM-DD".
 function Session.dailySeed(dateStr) return "srwow-daily-" .. dateStr end
