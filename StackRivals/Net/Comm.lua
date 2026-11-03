@@ -91,6 +91,7 @@ function Comm.init()
   for _, b in pairs(BUCKETS) do b.tokens, b.at = b.cap, now() end
   Comm.enabled = true
   Comm.hookOffline()
+  if ns.BNet then ns.BNet.init() end
 end
 
 -- The server may print a same-realm player without the realm; only then is the bare name ours.
@@ -222,13 +223,15 @@ function Comm.flush()
     else
       bucket.tokens = bucket.tokens - 1
       q.tries = q.tries + 1
-      local code = Comm.result(pcall(C_ChatInfo.SendAddonMessage, P.PREFIX, q.text, q.channel, q.target))
+      -- a Battle.net friend on a realm whispers can't reach goes over Battle.net (Net/BNet.lua)
+      local bnId = q.channel == "WHISPER" and ns.BNet and ns.BNet.route(q.target)
+      local code = bnId and ns.BNet.send(bnId, q.text) or Comm.result(pcall(C_ChatInfo.SendAddonMessage, P.PREFIX, q.text, q.channel, q.target))
       Comm.stats.codes[code] = (Comm.stats.codes[code] or 0) + 1
       Comm.traceEvent("send", q.text, q.target, code)
       if code == 0 then
         table.remove(Comm.queue, i)
         Comm.stats.sent = Comm.stats.sent + 1
-        if q.channel == "WHISPER" and q.target then recentTargets[q.target:lower()] = t end
+        if q.channel == "WHISPER" and q.target and not bnId then recentTargets[q.target:lower()] = t end
       elseif RESULT_FAIL[code] or q.tries >= MAX_TRIES then
         table.remove(Comm.queue, i)
         Comm.stats.dropped = Comm.stats.dropped + 1

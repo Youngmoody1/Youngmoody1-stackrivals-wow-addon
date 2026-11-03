@@ -46,6 +46,7 @@ function NS.new(opts)
     M.install(env)
     M.playerName, M.realm = o.name, o.realm or "Realm"
     M.faction, M.race, M.class, M.level = o.faction, o.race, o.class, o.level -- your character (defaults: Alliance Human Warrior 60)
+    M.connected = o.connected -- connected realms (GetAutoCompleteRealms); whispers reach only these + your own
     M.inInstance = net.instance
     env.IsInGuild = function() return o.guild ~= nil end
     env.IsInGroup = function() return o.group ~= nil end
@@ -93,6 +94,12 @@ function NS.new(opts)
       return { gameAccountInfo = { isOnline = isOn(e.name, e.realm), clientProgram = "WoW", characterName = e.name, realmName = e.realm or "Realm", wowProjectID = e.project or 2, gameAccountID = 7000 + i } }
     end
     env.IsInRaid = function() return false end
+    -- Battle.net game data (C_BattleNet.SendGameData): only between mutual Battle.net friends; the
+    -- receiver gets BN_CHAT_MSG_ADDON with the sender's game account ID as IT sees it (7000 + index
+    -- in its own list). o.noBnetApi = an old client without the API.
+    if not o.noBnetApi then
+      env.C_BattleNet.SendGameData = function(id, prefix, text) return net.sendBnet(net.byName[full(o.name, o.realm):lower()], id, prefix, text) end
+    end
     env.StackRivalsDB = o.saved
     env.math = setmetatable({ random = function(a, b) return a + math.floor(net.random() * (b - a + 1)) end }, { __index = math })
     local c = { name = full(o.name, o.realm), env = env, M = M, o = o, bucket = { tokens = 10, at = 0 }, online = true, lockdownUntil = -1 }
@@ -150,6 +157,33 @@ function NS.new(opts)
     end
   end
 
+  --- Battle.net game data from client c to its friend number (id - 7000).
+  function net.sendBnet(c, id, prefix, text)
+    assert(#prefix <= 16 and #text <= 4078, "Battle.net game data limits")
+    if not c or not c.online then return 9 end
+    local e = (c.o.bnet or {})[id - 7000]
+    local to = e and net.byName[full(e.name, e.realm):lower()]
+    if not to or not to.online then return 12 end
+    local back
+    for i, x in ipairs(to.o.bnet or {}) do if full(x.name, x.realm):lower() == c.name:lower() then back = 7000 + i end end
+    if not back then return 9 end -- not mutual friends: Battle.net doesn't deliver
+    net.sent = net.sent + 1
+    net.bnetSent = (net.bnetSent or 0) + 1
+    if net.tap then net.tap(c, text, "BNET", e.name) end
+    net.seq = net.seq + 1
+    net.queue[#net.queue + 1] = { at = net.time + net.latency[1], seq = net.seq, to = to, from = c, prefix = prefix, text = text, channel = "BNET", bnetId = back }
+    return 0
+  end
+
+  local function realmOf(name) return (name:match("%-(.+)$") or "Realm"):lower() end
+  --- Can c whisper target? Same realm or a connected realm (o.connected), like the real client.
+  local function whisperable(c, target)
+    local r = realmOf(full(target))
+    if r == realmOf(c.name) then return true end
+    for _, x in ipairs(c.o.connected or {}) do if x:lower() == r then return true end end
+    return false
+  end
+
   function net.send(c, prefix, text, channel, target)
     assert(#prefix <= 16 and #text <= 255, "addon message limits")
     if not c.online then return 9 end
@@ -159,6 +193,7 @@ function NS.new(opts)
     if net.tap then net.tap(c, text, channel, target) end
     if channel == "WHISPER" then
       local to = net.byName[full(target):lower()]
+      if not whisperable(c, target) then net.unreachable = (net.unreachable or 0) + 1; return 0 end -- "No player named ..."
       if not to or not to.online then return 12 end
       enqueue(to, c, prefix, text, channel)
     elseif channel == "GUILD" then
@@ -192,7 +227,8 @@ function NS.new(opts)
           q.at = to.hangUntil; net.queue[#net.queue + 1] = q
         elseif to.online then
           net.delivered = net.delivered + 1
-          to.M.fire("CHAT_MSG_ADDON", q.prefix, q.text, q.channel, q.from.name)
+          if q.channel == "BNET" then to.M.fire("BN_CHAT_MSG_ADDON", q.prefix, q.text, "WHISPER", q.bnetId)
+          else to.M.fire("CHAT_MSG_ADDON", q.prefix, q.text, q.channel, q.from.name) end
         end
       end
       for _, c in ipairs(net.clients) do

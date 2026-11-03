@@ -155,8 +155,9 @@ S.list = {
   { "9b-challenge-bnet", "Guild Duels - Battle.net friends", function()
     local _, _, _, NS = duelPair()
     local net = NS.new({ seed = 9 })
-    local a = net.add({ name = "Alice", saved = { seenHelp = true }, alsoOnline = { Frank = true, Gina = true },
+    local a = net.add({ name = "Alice", saved = { seenHelp = true }, alsoOnline = { Gina = true },
       bnet = { { name = "Bob" }, { name = "Frank", realm = "Faraway" }, { name = "Gina", project = 5 }, { name = "Hana" } } })
+    net.add({ name = "Frank", realm = "Faraway", saved = { seenHelp = true }, bnet = { { name = "Alice" } } }) -- other realm: over Battle.net
     net.add({ name = "Bob", saved = { seenHelp = true } })
     a.env.UIParent:SetSize(1920, 1080)
     net.step(30)

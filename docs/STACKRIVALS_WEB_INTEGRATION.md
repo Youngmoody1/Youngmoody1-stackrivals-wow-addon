@@ -210,7 +210,8 @@ Rewards, ranking, XP and progression are decided **only** by the website from se
 * Rank, reward or grant progression.
 * Talk across factions with free text (WoW's rule). Whether cross-faction addon whispers arrive at
   all **needs a real client test**.
-* Cross-realm Battle.net transport: text 4/4. See `docs/CHALLENGE_FRIENDS.md`.
+* Reach non-friends on other realms. Battle.net friends on any realm are reached over Battle.net
+  game data (0.6.1, simulated; `docs/CHALLENGE_FRIENDS.md`). Anyone else needs a connected realm.
 
 ## Prompt for web Claude
 

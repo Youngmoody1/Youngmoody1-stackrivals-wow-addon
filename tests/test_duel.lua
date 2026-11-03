@@ -880,11 +880,11 @@ describe("second review findings (simulated clients)", function()
   it("L2 offline line: only the rival's full name counts, and one stray line doesn't end a duel", function()
     local net = NS.new({ seed = 104 })
     local filt
-    local a = net.add({ name = "Alice", guild = "G", beforeLogin = function(env)
+    local a = net.add({ name = "Alice", guild = "G", connected = { "Other" }, beforeLogin = function(env)
       env.ERR_CHAT_PLAYER_NOT_FOUND_S = "No player named '%s' is currently playing."
       env.ChatFrame_AddMessageEventFilter = function(ev, fn) filt = fn end
     end })
-    local b = net.add({ name = "Bob-Other", guild = "G" })
+    local b = net.add({ name = "Bob-Other", guild = "G", connected = { "Realm" } })
     ok(filt, "chat filter installed")
     ok(a.ns.Duel.challenge("Bob-Other", "b120"))
     for _ = 1, 40 do net.step(15); local m = b.ns.Duel.current; if m and m.state == "invited" then break end end
@@ -987,8 +987,9 @@ describe("Challenge Friends (simulated clients)", function()
 
   it("Battle.net friends: same WoW version and a realm you can whisper -> challengeable; others say why", function()
     local net = NS.new({ seed = 104 })
-    -- Frank (another realm) and Gina (another WoW version) are online on Battle.net
-    local a = net.add({ name = "Alice", bnet = { { name = "Bob" }, { name = "Frank", realm = "Faraway" }, { name = "Gina", project = 5 } }, alsoOnline = { Frank = true, Gina = true } })
+    -- Frank (another realm) and Gina (another WoW version) are online on Battle.net; this client has
+    -- no Battle.net game-data API (older client), so Frank can't be reached (0.6.1: see test_bnet)
+    local a = net.add({ name = "Alice", noBnetApi = true, bnet = { { name = "Bob" }, { name = "Frank", realm = "Faraway" }, { name = "Gina", project = 5 } }, alsoOnline = { Frank = true, Gina = true } })
     local b = net.add({ name = "Bob" })
     net.step(30)
     open(a, "bnet")

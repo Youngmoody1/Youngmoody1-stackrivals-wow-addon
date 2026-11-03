@@ -128,6 +128,18 @@ To spillere med 0.6.1 i samme guild. Alt er **UTESTET i WoW**. Previews er simul
 | E5 | `/reload` → Account | Stadig PENDING (i 15 min), derefter NOT LINKED med "The link request expired" | UTESTET |
 | E6 | Faneblad **Profile** | "Linking is not finished…" (ingen opdigtet profil) | UTESTET |
 
+## F. Battle.net på tværs af realms (build 0.6.1, kun efter din godkendelse)
+
+To spillere, der er **Battle.net-venner** på **forskellige realms, der ikke er forbundne**, i samme WoW-version. Alt er **UTESTET i WoW**.
+
+| # | Gør dette | Det skal ske | Resultat |
+|---|---|---|---|
+| F1 | A: `/sr` → **Guild Duel** → fanen **Battle.net** → **Refresh** ✱ | B står som "ready" (ikke "other realm") | UTESTET |
+| F2 | A: **Challenge** ud for B → B: Accept → begge Ready → spil færdig ✱ | En normal duel med resultatet "Confirmed by both PCs" | UTESTET |
+| F3 | Begge: **QUICKPLAY** → Duel 2:00 → Search | Match found inden for ca. 20 s | UTESTET |
+| F4 | Chat i lobbyen (også hvis I er Alliance og Horde) | Tekst kommer frem. Intet i WoW's chatvindue | UTESTET |
+| F5 | B: `/reload` midt i en duel | Duellen fortsætter eller ender med en ærlig grund. Notér, hvad der sker | UTESTET |
+
 ## Efter testen
 
 - Gem `WTF\Account\<KONTO>\SavedVariables\StackRivals.lua` fra **begge** maskiner (der ligger

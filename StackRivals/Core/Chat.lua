@@ -57,6 +57,9 @@ function Chat.mode(m)
   if not rc.chat then return "off", "your rival has match chat off" end
   local mine = ns.Card and ns.Card.mine() or {}
   if mine.faction and rc.faction and mine.faction == rc.faction and mine.faction ~= "Neutral" then return "free" end
+  -- Battle.net friends may already write to each other across factions (Battle.net whispers):
+  -- a match that runs over Battle.net allows text too
+  if ns.BNet and ns.BNet.route(m.rival) then return "free" end
   return "quick", "only quick messages across factions"
 end
 

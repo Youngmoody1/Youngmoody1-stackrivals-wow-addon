@@ -35,8 +35,9 @@ Result → Rematch.
   lets the addon reach:
   * guild (one `GUILD` broadcast every 20 s while searching);
   * party / raid (one `PARTY` / `RAID` broadcast);
-  * WoW friends, Battle.net friends on a reachable realm, and recent rivals whose StackRivals
-    answered a presence ping (whispered `QS`, at most 20).
+  * WoW friends, Battle.net friends (any realm: over Battle.net game data when a whisper can't
+    reach them) and recent rivals whose StackRivals answered a presence ping (whispered `QS`, at
+    most 20).
 
   Classic gives addons no global channel, so there is **no global queue and no fake queue**.
 * **Matching.** When two searchers hear each other (`QS`), the lower `name-realm` sends a duel

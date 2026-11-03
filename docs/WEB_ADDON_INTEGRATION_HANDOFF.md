@@ -18,7 +18,7 @@ the short version plus the prompt.
 | **Account**: link with a one-time code, Pending / Linked / Not synced, Unlink | BUILT addon side; web side missing |
 | **Profile** (display of the website's snapshot) | BUILT addon side; web side missing |
 | **Sync**: play SR1 challenge codes, export SR1 result codes | BUILT addon side; web import missing |
-| Battle.net cross-realm duel transport | text 4/4 (see `docs/CHALLENGE_FRIENDS.md`) |
+| Battle.net transport: duels, Quickplay and chat with Battle.net friends on any realm (`C_BattleNet.SendGameData`) | BUILT, SIMULATED |
 
 **WoW-style names** (display only; ids unchanged): Classic, Time Trial, Daily Challenge, Spell
 Battle, Duel 2:00 / 3:00, Spell Duel, Quick Duel (QUICKPLAY button) and Guild Duels. The website
@@ -54,7 +54,7 @@ Contract §3.
 | `GUILD` addon broadcast | presence, Quickplay search | SIMULATED |
 | `PARTY` / `RAID` addon broadcast | presence, Quickplay search | SIMULATED |
 | `WHISPER` addon messages (same / connected realms) | duels, cards, chat, presence | SIMULATED |
-| Battle.net addon data (`BNSendGameData`) | duels with Battle.net friends on other realms | text 4/4 |
+| Battle.net game data (`C_BattleNet.SendGameData` / `BNSendGameData`, `BN_CHAT_MSG_ADDON`) | everything above, with Battle.net friends on realms a whisper can't reach | SIMULATED |
 | WoW chat channels (`SendChatMessage`) | only the player's own "Share score" button | BUILT (by click only) |
 | Internet (HTTP / WebSocket) | — | **not available to addons** |
 

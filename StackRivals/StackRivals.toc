@@ -29,6 +29,7 @@ UI\Board.lua
 UI\Window.lua
 UI\Minimap.lua
 Net\Comm.lua
+Net\BNet.lua
 Core\Social.lua
 Core\Account.lua
 Core\Sync.lua

@@ -92,8 +92,14 @@ function Social.friends()
   return out
 end
 
+--- Can a normal addon whisper reach this realm (ours or a connected one)?
+function Social.whisperable(realm)
+  return type(realm) == "string" and reachableRealms()[(realm:gsub("[%s%-]", "")):lower()] or false
+end
+
 --- Battle.net friends who are on WoW now. Reachable = the same WoW version (project) and a realm
---- we can whisper; others are listed with the reason (a Battle.net transport is not built yet).
+--- we can whisper, or any realm through the Battle.net transport (Net/BNet.lua) when the client
+--- has it; others are listed with the reason.
 function Social.bnet()
   local out, seen = {}, {}
   local B = C_BattleNet
@@ -110,7 +116,8 @@ function Social.bnet()
       if project and g.wowProjectID and g.wowProjectID ~= project then
         e.reach, e.why = false, "other WoW version"
       elseif realm ~= "" and not realms[(realm:gsub("[%s%-]", "")):lower()] then
-        e.reach, e.why = false, "other realm"
+        if ns.BNet and ns.BNet.available() then e.via = "bnet" -- other realm: over Battle.net
+        else e.reach, e.why = false, "other realm" end
       end
       add(out, seen, e)
     end
