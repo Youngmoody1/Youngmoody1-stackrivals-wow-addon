@@ -263,6 +263,8 @@ function UI:RefreshDuelSheet()
       row.info:SetText(r.text)
       row.dot:SetColorTexture(r.col[1], r.col[2], r.col[3], 1)
       row.btn.target = r.e.name
+      -- only players whose StackRivals answered get a Challenge button; the rest show why not
+      row.btn:SetShown(r.can)
       if r.can and not busy then row.btn:Enable() else row.btn:Disable() end
       row:Show()
     else

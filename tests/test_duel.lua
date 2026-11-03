@@ -943,7 +943,7 @@ describe("Challenge Friends (simulated clients)", function()
     eq(sent(net), before, "no message without a click")
     local row = rowFor(a, "Bob")
     ok(row, "Bob is listed (online guild member)")
-    ok(not row.btn:IsEnabled(), "not challengeable before his addon answered")
+    ok(not row.btn:IsShown() and not row.btn:IsEnabled(), "not challengeable before his addon answered")
     ok(row.info:GetText():find("no StackRivals answer"), row.info:GetText())
   end)
 
