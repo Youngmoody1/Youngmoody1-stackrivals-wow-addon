@@ -361,6 +361,22 @@ S.list = {
     ns.UI:ShowSheet("account"); ns.UI.accountTab = "profile"; ns.UI:RefreshAccount(); M.frames_step(1)
     return M, ns
   end },
+  { "23d-sync", "Account - Sync: play a challenge code, copy result codes (manual copy / paste)", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS("")
+    M.serverTime = 1793000000
+    ns.App:StartChallenge(ns.Codes.challenge("b120", "srchal-7f3k2p9d01"))
+    local s = ns.App.session
+    for _ = 1, 3000 do
+      if s.recorded then break end
+      if s.phase == "playing" then s:press("hardDrop"); s:release("hardDrop") end
+      M.frames_step(1)
+    end
+    ns.App:ShowMenu()
+    ns.UI:ShowSheet("account"); ns.UI.accountTab = "sync"; ns.UI:RefreshAccount()
+    ns.UI.accountSheet.sync.rows[1].btn:Click()
+    M.frames_step(1)
+    return M, ns
+  end },
   { "8-records", "Records", function()
     local M, ns = boot(); seedRecords(ns); SlashCmdList.STACKRIVALS(""); ns.UI:ShowSheet("records"); M.frames_step(1); return M, ns
   end },

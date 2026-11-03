@@ -268,6 +268,8 @@ function DB.sanitize(raw)
 
   -- stackrivals.io account link + profile snapshot per character (Core/Account.lua; display data only)
   db.accounts = ns.Account and ns.Account.sanitize(raw.accounts) or {}
+  -- results kept for export as SR1 result codes (Core/Sync.lua)
+  db.sync = ns.Sync and ns.Sync.sanitize(raw.sync) or { results = {} }
 
   -- An unfinished run saved at logout / reload (mode + web-compatible input log).
   local su = raw.suspended

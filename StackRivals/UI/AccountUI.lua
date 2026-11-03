@@ -59,8 +59,8 @@ end
 UI.accountEditBox = editBox
 
 --- A read-only box holding text to copy: click selects all (then Ctrl+C); typing can't change it.
-local function copyBox(parent, w)
-  local eb = editBox(parent, w, "", 4096)
+local function copyBox(parent, w, maxLetters)
+  local eb = editBox(parent, w, "", maxLetters or 4096)
   eb:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
   eb:SetScript("OnMouseUp", function(self) self:HighlightText() end)
   eb:SetScript("OnTextChanged", function(self)

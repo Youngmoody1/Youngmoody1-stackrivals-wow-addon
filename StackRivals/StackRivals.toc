@@ -31,6 +31,7 @@ UI\Minimap.lua
 Net\Comm.lua
 Core\Social.lua
 Core\Account.lua
+Core\Sync.lua
 Core\Card.lua
 Core\Chat.lua
 Core\Quickplay.lua
@@ -40,5 +41,6 @@ UI\DuelUI.lua
 UI\QuickplayUI.lua
 UI\MatchChat.lua
 UI\AccountUI.lua
+UI\SyncUI.lua
 UI\SpellUI.lua
 Core\Main.lua

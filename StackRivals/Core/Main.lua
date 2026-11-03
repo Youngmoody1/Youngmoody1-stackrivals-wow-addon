@@ -83,6 +83,28 @@ function App:Start(mode)
   ns.UI:RefreshPhase()
 end
 
+--- Play an SR1 challenge code (Account > Sync). Returns true or false, reason.
+function App:StartChallenge(code)
+  local ch, why = ns.Codes.parseChallenge(code)
+  if not ch then return false, why end
+  if ch.engine ~= E.ENGINE_VERSION then return false, "engine" end
+  if ns.UI.inCombat() then return false, "combat" end
+  local d = ns.Duel and ns.Duel.current
+  if d and (d.state == "playing" or d.state == "waiting") then return false, "duel" end
+  if ns.Duel then ns.Duel.clear() end
+  if self.session and self.session.spell then ns.SpellBattle.settleAll(self.session) end
+  ns.UI:Create()
+  self.session = Session.new("chal_" .. ch.ruleset, ch.seed, self:Today())
+  self.session.challenge = ch
+  self.lastChallenge = code
+  self.inMenu = false
+  ns.db.suspended = nil
+  if ns.UI.HideSheets then ns.UI:HideSheets() end
+  if not ns.UI.frame:IsShown() then ns.UI.frame:Show() end
+  ns.UI:RefreshPhase()
+  return true
+end
+
 function App:ContinueSuspended()
   local su = ns.db.suspended
   if not su then return end
@@ -190,8 +212,16 @@ function App:OnRunOver(reason)
     return
   end
   local mode = s.mode.key
+  if s.mode.challenge then
+    -- a web challenge: never a local record; kept for export as an SR1 result code
+    if ns.Sync then ns.Sync.saveChallengeRun(s) end
+    ns.Sound.play("gameover")
+    ns.UI:ShowOver({ state = s.state, reason = reason, mode = mode, modeName = s.mode.name, challenge = s.challenge or s.mode.challenge })
+    return
+  end
   local res = DB.recordRun(ns.db, mode, s.state, s.playSeconds, s.date or self:Today(), E.serializeLog(s.state), self:Today())
   if res.newBest then ns.Sound.play("record") else ns.Sound.play("gameover") end
+  if mode == "daily" and res.newTodayBest and ns.Sync then ns.Sync.saveDailyRun(s) end
   ns.UI:ShowOver({
     state = s.state, reason = reason, mode = mode, modeName = s.mode.name,
     newBest = res.newBest, prevBest = res.prevBest, newTodayBest = res.newTodayBest, rank = res.rank,

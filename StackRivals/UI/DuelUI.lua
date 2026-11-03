@@ -591,6 +591,7 @@ function UI:PlayAgain()
     end
     return
   end
+  if s and s.challenge and ns.App.lastChallenge then ns.App:StartChallenge(ns.App.lastChallenge); return end
   ns.App:Start(ns.App.lastMode or "classic")
 end
 

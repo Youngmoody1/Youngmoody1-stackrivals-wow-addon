@@ -1120,7 +1120,9 @@ function UI:ShowOver(info)
   self.overTitle:SetText(info.reason == "time" and "TIME!" or "GAME OVER")
   self.overScore:SetText(T.commas(s.score))
   self.badgePulse:Stop()
-  if info.newBest then
+  if info.challenge then
+    self.overBadge:SetText("RESULT CODE READY")
+  elseif info.newBest then
     self.overBadge:SetText(info.prevBest > 0 and ("NEW BEST  +" .. T.commas(s.score - info.prevBest)) or "NEW BEST")
     self.badgePulse:Play()
   elseif info.newTodayBest then
@@ -1132,7 +1134,8 @@ function UI:ShowOver(info)
   local c = s.clears
   local rankTxt = info.rank and ("#" .. info.rank .. " in your top 5  -  ") or ""
   local quads = (c.quad > 0) and string.format("  -  %d %s", c.quad, c.quad == 1 and "quad" or "quads") or ""
-  self.overDetail:SetText(string.format("%d lines  -  level %d%s\n%s%s", s.lines, s.level, quads, rankTxt, info.modeName))
+  self.overDetail:SetText(info.challenge and string.format("%d lines  -  level %d%s\nCopy it from Account > Sync and paste it on stackrivals.io.", s.lines, s.level, quads)
+    or string.format("%d lines  -  level %d%s\n%s%s", s.lines, s.level, quads, rankTxt, info.modeName))
   local g, p = IsInGuild and IsInGuild() or false, IsInGroup and IsInGroup() or false
   self.shareGuild:SetShown(g); self.shareGroup:SetShown(p); self.shareLabel:SetShown(g or p)
   -- centre whatever is visible: SHARE [Guild] [Group]
@@ -1153,6 +1156,8 @@ function UI:ShowOver(info)
 end
 
 function UI:PlayAgain()
+  local s = ns.App.session
+  if s and s.challenge and ns.App.lastChallenge then ns.App:StartChallenge(ns.App.lastChallenge); return end
   ns.App:Start(ns.App.lastMode or "classic")
 end
 

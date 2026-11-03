@@ -34,6 +34,12 @@ Session.MODES.duel_r180 = { key = "duel_r180", name = "Duel 3:00", short = "1v1 
 Session.MODES.spellbot = { key = "spellbot", name = "Spell Battle", short = "Spells vs a bot. 3:00", limitTicks = 10800, countdownTicks = 240, spell = true }
 Session.MODES.duel_s180 = { key = "duel_s180", name = "Spell Duel 3:00", short = "1v1 with spells and mana", limitTicks = 10800, countdownTicks = 240, duel = true, spell = true }
 
+-- Web challenges (SR1 challenge codes pasted into Account > Sync): the SR1 rulesets, never in
+-- the local records; the result is kept for export as an SR1 result code.
+Session.MODES.chal_b120 = { key = "chal_b120", name = "Web Challenge 2:00", short = "SR1 challenge", limitTicks = 7200, countdownTicks = 180, challenge = "b120" }
+Session.MODES.chal_r180 = { key = "chal_r180", name = "Web Challenge 3:00", short = "SR1 challenge", limitTicks = 10800, countdownTicks = 240, challenge = "r180" }
+Session.MODES.chal_daily120 = { key = "chal_daily120", name = "Daily Challenge (code)", short = "SR1 daily", limitTicks = 7200, countdownTicks = 180, challenge = "daily120" }
+
 --- Seed shared by every player for a UTC date string "YYYY-MM-DD".
 function Session.dailySeed(dateStr) return "srwow-daily-" .. dateStr end
 --- The UTC date a daily seed belongs to (or nil for non-daily seeds).
