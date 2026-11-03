@@ -17,7 +17,7 @@ local function pair(seed, oa, of)
   return net, a, f
 end
 local function rowFor(c, name)
-  for _, row in ipairs(c.ns.UI.duelSheet.rows) do if row:IsShown() and row.name:GetText() == name then return row end end
+  for _, row in ipairs(c.ns.UI.duelSheet.rows) do if row:IsShown() and (row.name:GetText():gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) == name then return row end end
 end
 local function scan(t, seen, hit)
   seen = seen or {}

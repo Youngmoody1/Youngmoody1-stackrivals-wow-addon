@@ -75,8 +75,9 @@ function Social.guild()
   if not (IsInGuild and IsInGuild() and GetNumGuildMembers and GetGuildRosterInfo) then return out end
   local total = GetNumGuildMembers() or 0
   for i = 1, math.min(total, 1000) do
-    local name, _, _, _, _, _, _, _, online = GetGuildRosterInfo(i)
-    add(out, seen, { name = Social.full(name), online = online and true or false, reach = true, source = "guild" })
+    local name, _, _, _, className, _, _, _, online, _, classFile = GetGuildRosterInfo(i)
+    local cls = (type(classFile) == "string" and classFile ~= "" and classFile) or (ns.T and ns.T.classToken(className)) or nil
+    add(out, seen, { name = Social.full(name), online = online and true or false, reach = true, source = "guild", class = cls })
   end
   return out
 end
@@ -87,7 +88,10 @@ function Social.friends()
   if not (F and F.GetNumFriends and F.GetFriendInfoByIndex) then return out end
   for i = 1, math.min(F.GetNumFriends() or 0, 200) do
     local info = F.GetFriendInfoByIndex(i)
-    if type(info) == "table" then add(out, seen, { name = Social.full(info.name), online = info.connected and true or false, reach = true, source = "friends" }) end
+    if type(info) == "table" then
+      add(out, seen, { name = Social.full(info.name), online = info.connected and true or false, reach = true, source = "friends",
+        class = ns.T and ns.T.classToken(info.className) or nil })
+    end
   end
   return out
 end
@@ -112,7 +116,8 @@ function Social.bnet()
     local g = ok and type(acc) == "table" and acc.gameAccountInfo or nil
     if g and g.isOnline and g.clientProgram == (BNET_CLIENT_WOW or "WoW") and type(g.characterName) == "string" and g.characterName ~= "" then
       local realm = type(g.realmName) == "string" and g.realmName or ""
-      local e = { name = Social.full(g.characterName, realm ~= "" and realm or nil), online = true, source = "bnet", reach = true }
+      local e = { name = Social.full(g.characterName, realm ~= "" and realm or nil), online = true, source = "bnet", reach = true,
+        class = ns.T and ns.T.classToken(g.className) or nil }
       if project and g.wowProjectID and g.wowProjectID ~= project then
         e.reach, e.why = false, "other WoW version"
       elseif realm ~= "" and not realms[(realm:gsub("[%s%-]", "")):lower()] then

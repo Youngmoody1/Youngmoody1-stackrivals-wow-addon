@@ -56,6 +56,76 @@ T.PIECE = {
 }
 
 T.FONT = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
+
+------------------------------------------------------------------------------------------------
+-- WoW's own colours (never invented): class colours from the client (C_ClassColor, else
+-- RAID_CLASS_COLORS), with warcraft.wiki.gg "Class colors" as the fallback; item quality colours
+-- likewise. Faction themes: Alliance blue, Horde red (StackRivals' own tints, not Blizzard values).
+------------------------------------------------------------------------------------------------
+T.CLASS_HEX = { -- warcraft.wiki.gg/wiki/Class_colors (Nov 2026)
+  WARRIOR = "C69B6D", PALADIN = "F48CBA", HUNTER = "AAD372", ROGUE = "FFF468", PRIEST = "FFFFFF",
+  SHAMAN = "0070DD", MAGE = "3FC7EB", WARLOCK = "8788EE", DRUID = "FF7C0A",
+  DEATHKNIGHT = "C41E3A", MONK = "00FF98", DEMONHUNTER = "A330C9", EVOKER = "33937F",
+}
+T.QUALITY_HEX = { [0] = "9D9D9D", [1] = "FFFFFF", [2] = "1EFF00", [3] = "0070DD", [4] = "A335EE", [5] = "FF8000", [6] = "E6CC80", [7] = "00CCFF", [8] = "00CCFF" }
+
+local function fromHex(h) return tonumber(h:sub(1, 2), 16) / 255, tonumber(h:sub(3, 4), 16) / 255, tonumber(h:sub(5, 6), 16) / 255 end
+T.fromHex = fromHex
+
+--- r, g, b of a class token ("SHAMAN"), as THIS client colours it; nil for an unknown token.
+function T.classColor(token)
+  if type(token) ~= "string" then return nil end
+  if C_ClassColor and C_ClassColor.GetClassColor then
+    local ok, c = pcall(C_ClassColor.GetClassColor, token)
+    if ok and type(c) == "table" and type(c.r) == "number" then return c.r, c.g, c.b end
+  end
+  local rc = RAID_CLASS_COLORS and RAID_CLASS_COLORS[token]
+  if type(rc) == "table" and type(rc.r) == "number" then return rc.r, rc.g, rc.b end
+  local h = T.CLASS_HEX[token]
+  if h then return fromHex(h) end
+  return nil
+end
+
+local function hex2(v) return string.format("%02x", math.floor(v * 255 + 0.5)) end
+--- "|cffRRGGBBtext|r" in the class colour (text unchanged if the class is unknown).
+function T.classText(token, text)
+  local r, g, b = T.classColor(token)
+  if not r then return text end
+  return "|cff" .. hex2(r) .. hex2(g) .. hex2(b) .. text .. "|r"
+end
+
+--- r, g, b of an item quality (0 poor .. 5 legendary, 6 artifact, 7 heirloom).
+function T.qualityColor(q)
+  if type(q) ~= "number" then return nil end
+  local f = (C_Item and C_Item.GetItemQualityColor) or GetItemQualityColor
+  if f then
+    local ok, r, g, b = pcall(f, q)
+    if ok and type(r) == "number" then return r, g, b end
+  end
+  local ic = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q]
+  if type(ic) == "table" and type(ic.r) == "number" then return ic.r, ic.g, ic.b end
+  local h = T.QUALITY_HEX[q]
+  if h then return fromHex(h) end
+  return nil
+end
+
+--- Faction themes: { text, edge, fill } (Alliance blue, Horde red, else neutral).
+T.FACTION_THEME = {
+  -- fills dark enough that every class colour (incl. Shaman blue, Death Knight red) reads at >= 3:1
+  Alliance = { text = { hex("6FA8FF") }, edge = { hex("3D7BE0") }, fill = { hex("0B1630") } },
+  Horde = { text = { hex("FF5A5F") }, edge = { hex("C8282E") }, fill = { hex("2A0E11") } },
+  Neutral = { text = { hex("C9CED8") }, edge = { hex("27324F") }, fill = { hex("0E1426") } },
+}
+
+--- Localised class name (as WoW shows it) -> class token, for lists that only give names.
+function T.classToken(name)
+  if type(name) ~= "string" then return nil end
+  if T.CLASS_HEX[name:upper()] then return name:upper() end
+  for _, tbl in ipairs({ LOCALIZED_CLASS_NAMES_MALE, LOCALIZED_CLASS_NAMES_FEMALE }) do
+    if type(tbl) == "table" then for token, loc in pairs(tbl) do if loc == name then return token end end end
+  end
+  return nil
+end
 T.MEDIA = "Interface\\AddOns\\" .. ADDON .. "\\Media\\"
 T.DISPLAY = T.MEDIA .. "Fonts\\ChakraPetch-Bold.ttf"
 T.DISPLAY_ITALIC = T.MEDIA .. "Fonts\\ChakraPetch-BoldItalic.ttf"
@@ -98,17 +168,25 @@ function T.panel(parent, edge, alpha)
   local bg = T.tex(f, "BACKGROUND", T.C.surface1, alpha or 0.94)
   bg:SetAllPoints()
   f.bg = bg
+  f.lines = {}
   local function line(p1, p2, w, h)
     local l = T.tex(f, "BORDER", T.C.line, 1)
     l:SetPoint(p1); l:SetPoint(p2)
     if w then l:SetWidth(w) end
     if h then l:SetHeight(h) end
+    f.lines[#f.lines + 1] = l
     return l
   end
   line("TOPLEFT", "TOPRIGHT", nil, 1)
   line("BOTTOMLEFT", "BOTTOMRIGHT", nil, 1)
   line("TOPLEFT", "BOTTOMLEFT", 1, nil)
   line("TOPRIGHT", "BOTTOMRIGHT", 1, nil)
+  --- Re-colour the panel (fill, 1px border, top edge-light), e.g. by faction.
+  function f:SetTheme(fill, border, edgeC)
+    if fill then self.bg:SetColorTexture(fill[1], fill[2], fill[3], alpha or 0.94) end
+    if border then for _, l in ipairs(self.lines) do l:SetColorTexture(border[1], border[2], border[3], 1) end end
+    if edgeC and self.edge then self.edge:SetColorTexture(edgeC[1], edgeC[2], edgeC[3], 1) end
+  end
   if edge then
     local e = T.tex(f, "ARTWORK", edge, 1)
     e:SetPoint("TOPLEFT"); e:SetPoint("TOPRIGHT"); e:SetHeight(2)

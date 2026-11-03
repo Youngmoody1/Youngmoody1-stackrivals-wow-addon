@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0 — WoW colours, Loot Duel, 0.6.1 review (branch `feature/loot-duel`, development, not released)
+
+- **WoW's own class colours** everywhere a class is known: lobby cards, Quick Duel "your card", Guild Duels lists (class from the guild roster, friends and Battle.net lists), match chat (the rival's name), the live rival panel and the result. Taken from the client (`C_ClassColor.GetClassColor`, else `RAID_CLASS_COLORS`), with warcraft.wiki.gg's values as fallback (the 9 Classic classes plus Death Knight, Monk, Demon Hunter and Evoker, used only when a client reports them). Item quality colours the same way.
+- **Faction themes**: Alliance cards blue, Horde cards red (fill, border, edge, label), dark enough that every class colour reads at 3:1 or better (tested). Your own card shows your real character portrait (`SetPortraitTexture`); the rival's shows the class icon. No invented race colours.
+- Profile tab without a profile is compact, with a "Link account" button.
+
 ## 0.6.1 — Connected multiplayer (branch `feature/connected`, development, not released)
 
 - **QUICKPLAY** (Quick Duel): a big button on the menu. Pick Duel 2:00 or Spell Duel 3:00 → Search → match found → ready check (the duel lobby) → countdown → match → result → rematch. It finds only players who are searching too and that WoW lets the addon reach (guild, party / raid, friends and Battle.net friends whose StackRivals answered, recent rivals). There is no global or fake queue. Cancel, 5-minute timeout, fall-through (back to searching, the no-show rival is skipped for 2 min), lobby cancel. The stackrivals.io adapter exists and honestly reports "not connected".

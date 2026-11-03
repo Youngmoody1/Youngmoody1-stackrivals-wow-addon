@@ -136,7 +136,7 @@ function UI:CreateMatchChat()
   self.chatTab = tab
 end
 
-local LINE_COLOR = { me = C.paper, them = C.steel, quick = C.gold, sys = C.label }
+local LINE_COLOR = { me = C.paper, them = C.body, quick = C.gold, sys = C.label }
 
 function UI:RefreshChat()
   local p = self.chat
@@ -169,10 +169,16 @@ function UI:RefreshChat()
   -- newest at the bottom; long lines wrap onto more slots
   local vis = {}
   if #lines == 0 then vis[1] = { "No messages yet.", "sys" } end
+  -- the rival's name in WoW's class colour (from their card; steel when unknown)
+  local rc = m.rivalCard
+  local rivalTag = rc and rc.class and T.classText(rc.class, short(m.rival)) or ("|cff4fa8ff" .. short(m.rival) .. "|r")
   for _, l in ipairs(lines) do
     local who = l.me and "You" or short(m.rival)
     local kind = l.quick and "quick" or (l.me and "me" or "them")
-    for i, part in ipairs(wrap(who .. ": " .. l.text, WRAP)) do vis[#vis + 1] = { i == 1 and part or ("  " .. part), kind } end
+    for i, part in ipairs(wrap(who .. ": " .. l.text, WRAP)) do
+      if i == 1 and not l.me then part = rivalTag .. part:sub(#who + 1) end
+      vis[#vis + 1] = { i == 1 and part or ("  " .. part), kind }
+    end
   end
   local first = math.max(1, #vis - SLOTS + 1)
   for i, fs in ipairs(p.lines) do

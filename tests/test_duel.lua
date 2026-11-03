@@ -921,7 +921,7 @@ describe("Challenge Friends (simulated clients)", function()
   local function sent(net) return net.sent end
   local function rowFor(c, name)
     for _, row in ipairs(c.ns.UI.duelSheet.rows) do
-      if row:IsShown() and row.name:GetText() == name then return row end
+      if row:IsShown() and (row.name:GetText():gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) == name then return row end
     end
   end
   local function open(c, src)

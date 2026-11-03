@@ -259,7 +259,7 @@ function UI:RefreshDuelSheet()
   for i, row in ipairs(s.rows) do
     local r = rows[first + i]
     if r then
-      row.name:SetText(short(r.e.name))
+      row.name:SetText(T.classText(r.e.class, short(r.e.name))) -- WoW's class colour when the list tells the class
       row.info:SetText(r.text)
       row.dot:SetColorTexture(r.col[1], r.col[2], r.col[3], 1)
       row.btn.target = r.e.name
@@ -340,6 +340,7 @@ end
 local FACTION_ICON = { Alliance = "Interface\\TargetingFrame\\UI-PVP-Alliance", Horde = "Interface\\TargetingFrame\\UI-PVP-Horde" }
 local function playerCard(parent, edge, w)
   local c = T.panel(parent, edge)
+  c.sideEdge = edge
   c:SetSize(w, 126)
   c.who = T.label(c, ""); c.who:SetPoint("TOP", 0, -10)
   c.name = T.display(c, SZ.title, C.paper); c.name:SetPoint("TOP", 0, -24)
@@ -375,10 +376,13 @@ local function fillCard(c, name, p, own, waiting)
     return
   end
   p = p or {}
-  local fc = p.faction and ns.Card.FACTION_COLOR[p.faction] or C.label
+  -- faction theme: Alliance blue, Horde red; unknown keeps the side's own colour
+  local th = T.FACTION_THEME[p.faction or ""]
+  if th then c:SetTheme(th.fill, th.edge, th.edge) else c:SetTheme(C.surface1, C.line, c.sideEdge) end
+  local fc = th and th.text or C.label
   c.faction:SetText(string.upper(p.faction or "Unknown faction"))
   c.faction:SetTextColor(fc[1], fc[2], fc[3])
-  c.line2:SetText(ns.Card.who(p))
+  c.line2:SetText(ns.Card.who(p, true)) -- the class name in WoW's class colour
   c.line3:SetText(realm or myRealm or "")
   local games = (p.wins or 0) + (p.losses or 0)
   local rec = games > 0 and string.format("Duels %d-%d (%d%%)", p.wins, p.losses, math.floor(100 * p.wins / games + 0.5)) or "No duels yet"
@@ -387,8 +391,16 @@ local function fillCard(c, name, p, own, waiting)
   c.fIcon:SetShown(fi ~= nil)
   if fi then c.fIcon:SetTexture(fi) end
   local tc = p.class and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[p.class]
-  c.cIcon:SetShown(tc ~= nil)
-  if tc then c.cIcon:SetTexCoord(tc[1], tc[2], tc[3], tc[4]) end
+  if own and SetPortraitTexture then
+    -- your own card: your real character portrait (WoW draws it from the "player" unit)
+    c.cIcon:SetTexCoord(0, 1, 0, 1)
+    pcall(SetPortraitTexture, c.cIcon, "player")
+    c.cIcon:Show()
+  else
+    c.cIcon:SetTexture("Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES")
+    c.cIcon:SetShown(tc ~= nil)
+    if tc then c.cIcon:SetTexCoord(tc[1], tc[2], tc[3], tc[4]) end
+  end
   c.tip = (own and "Your character, from WoW." or "Self-reported by your rival's StackRivals: not verified (only the name is checked by WoW).")
     .. "\nStackRivals rank / level: Unknown (needs a linked stackrivals.io account)."
     .. "\nDuels count played-out, replay-checked duels on that PC."
@@ -521,7 +533,9 @@ function UI:RenderRival()
   local r = m.rival_
   local my = s.state.score
   local their = r.score or 0
-  rp.name:SetText("VS " .. string.upper(short(m.rival)):sub(1, 13))
+  -- the rival's name in WoW's class colour when their card told us the class
+  local rc = m.rivalCard
+  rp.name:SetText("VS " .. T.classText(rc and rc.class, string.upper(short(m.rival)):sub(1, 13)))
   rp.score:SetText(T.commas(their))
   rp.state:SetText(m.silentWarned and "no signal..." or (r.over and "finished" or "playing"))
   local c = (their > my) and C.redLight or C.steel
@@ -553,7 +567,7 @@ function UI:ShowDuelOver(m)
     self.overTitle:SetText(o[1])
     self.overTitle:SetTextColor(o[2][1], o[2][2], o[2][3])
     self.overScore:SetText(T.commas(m.myScore or 0))
-    self.overBadge:SetText(short(m.rival) .. ": " .. T.commas(m.theirScore or 0))
+    self.overBadge:SetText(T.classText(m.rivalCard and m.rivalCard.class, short(m.rival)) .. ": " .. T.commas(m.theirScore or 0))
     self.overBadge:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
     local note = REASON[m.endReason] or ""
     if m.endReason == "check_failed" and m.check and m.check.reasons and m.check.reasons[1] == "pause_limit" then

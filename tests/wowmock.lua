@@ -262,6 +262,7 @@ function M.install(G)
   G.UnitName = function() return M.playerName or "Tester" end
   G.GetNormalizedRealmName = function() return M.realm or "Realm" end
   -- server time (unix s): fixed base + simulated time, or M.serverTime
+  G.SetPortraitTexture = function(tex, unit) tex._tex = "portrait:" .. tostring(unit) end
   G.GetServerTime = function() return M.serverTime or math.floor(1793000000 + (M.time or 0)) end
   -- your own character (Core/Card.lua): set M.faction / M.race / M.class / M.level in a test
   G.UnitFactionGroup = function(u) if u == "player" then local f = M.faction or "Alliance"; return f, f end end

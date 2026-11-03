@@ -187,7 +187,7 @@ function UI:RefreshQuickplay()
   local Card = ns.Card
   local share = Card.sharing()
   s.me.share:SetValue(share)
-  s.me.line:SetText(share and Card.describe(Card.mine()) or "Hidden: your rival sees Unknown.")
+  s.me.line:SetText(share and Card.describe(Card.mine(), true) or "Hidden: your rival sees Unknown.")
   -- the web adapter, honestly
   local web = QP.adapters.web
   local wst = web.status()

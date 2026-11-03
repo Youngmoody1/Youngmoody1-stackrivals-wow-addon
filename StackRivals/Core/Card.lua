@@ -79,19 +79,29 @@ local function onCard(msg, sender)
   if ns.UI and ns.UI.RefreshChat then ns.UI:RefreshChat() end
 end
 
---- "Orc Shaman  -  Level 38" (localized class names when the client has them; Unknown parts say so).
-function Card.who(c)
+--- Display names: race ("Night Elf", "Undead"), class (localised; DEMONHUNTER -> "Demon Hunter").
+function Card.raceName(c) return c and c.race and (c.race == "Scourge" and "Undead" or (c.race:gsub("(%l)(%u)", "%1 %2"))) or nil end
+function Card.className(c)
+  if not (c and c.class) then return nil end
+  local loc = LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[c.class]
+  if loc then return loc end
+  local nice = { DEATHKNIGHT = "Death Knight", DEMONHUNTER = "Demon Hunter" }
+  return nice[c.class] or (c.class:sub(1, 1) .. c.class:sub(2):lower())
+end
+
+--- "Orc Shaman  -  Level 38"; colour = true puts the class name in WoW's class colour.
+function Card.who(c, colour)
   c = c or {}
-  local cls = c.class and ((LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[c.class]) or (c.class:sub(1, 1) .. c.class:sub(2):lower())) or nil
-  local race = c.race and (c.race == "Scourge" and "Undead" or (c.race:gsub("(%l)(%u)", "%1 %2"))) or nil
+  local cls, race = Card.className(c), Card.raceName(c)
+  if cls and colour and ns.T then cls = ns.T.classText(c.class, cls) end
   local who = (race and cls) and (race .. " " .. cls) or race or cls or "Unknown"
   return who .. "  -  " .. (c.level and ("Level " .. c.level) or "Level ?")
 end
 
 --- "Horde  -  Orc Shaman  -  Level 38"
-function Card.describe(c)
+function Card.describe(c, colour)
   if not c then return "Unknown" end
-  return (c.faction or "Unknown") .. "  -  " .. Card.who(c)
+  return (c.faction or "Unknown") .. "  -  " .. Card.who(c, colour)
 end
 
 function Card.init()

@@ -183,6 +183,10 @@ function UI:CreateAccount()
     p.hist[i] = row
   end
   p.foot = T.text(p, SZ.label, C.label); p.foot:SetPoint("BOTTOMLEFT", 14, 10); p.foot:SetWidth(cw - 28); p.foot:SetJustifyH("LEFT")
+  -- no profile yet: a compact panel with one clear next step (no big empty area)
+  p.go = T.button(p, "Link account", 130, 26, "primary", function() UI.accountTab = "account"; UI:RefreshAccount() end)
+  p.go:SetPoint("BOTTOMLEFT", 14, 12)
+  p.go.tip = "Link this character to your stackrivals.io account with a one-time code."
 
   local close = T.button(s, "Close", 130, 32, "frame", function() s:Hide(); UI:RefreshPhase() end)
   close:SetPoint("BOTTOMRIGHT", -20, 16)
@@ -261,6 +265,8 @@ function UI:RefreshProfile(p, state, r)
   local pr = r and r.profile
   local has = pr ~= nil
   p.empty:SetShown(not has)
+  p.go:SetShown(not has and state ~= "pending")
+  p:SetHeight(has and 268 or 104)
   for _, k in ipairs({ "name", "rank", "stats", "extra", "histHead", "foot" }) do p[k]:SetShown(has) end
   for _, b in ipairs({ p.xp, p.season }) do for _, x in pairs(b) do x:SetShown(has) end end
   for _, row in ipairs(p.hist) do for _, x in pairs(row) do x:SetShown(has) end end
