@@ -9,6 +9,7 @@ local UI = ns.UI
 local SZ = T.SIZE
 
 local ROWS = 3
+UI.syncCopied = setmetatable({}, { __mode = "k" }) -- results whose code saw Ctrl+C this session (not saved)
 local RULESET_NAME = { b120 = "Web Challenge 2:00", r180 = "Web Challenge 3:00", daily120 = "Daily Challenge" }
 
 function UI:CreateSync(sheet)
@@ -18,7 +19,7 @@ function UI:CreateSync(sheet)
   local y = CreateFrame("Frame", nil, sheet)
   y:SetPoint("TOPLEFT", 0, 0); y:SetPoint("BOTTOMRIGHT", 0, 0)
   sheet.sync = y
-  y.status = T.text(y, SZ.label, C.label); y.status:SetPoint("TOPLEFT", L, -92); y.status:SetWidth(cw); y.status:SetJustifyH("LEFT")
+  y.status = T.text(y, SZ.label, C.label); y.status:SetPoint("TOPLEFT", L, -92); y.status:SetWidth(cw); y.status:SetJustifyH("LEFT"); y.status:SetWordWrap(false)
 
   local h1 = T.label(y, "PLAY A CHALLENGE CODE"); h1:SetPoint("TOPLEFT", L, -116)
   y.code = UI.accountEditBox(y, cw - 106, "Paste an SR1C... code from stackrivals.io", ns.Codes.MAX_CODE)
@@ -40,18 +41,19 @@ function UI:CreateSync(sheet)
     row:SetSize(cw, 28); row:SetPoint("TOPLEFT", L, -186 - (i - 1) * 31)
     row.name = T.text(row, SZ.small, C.paper); row.name:SetPoint("LEFT", 10, 0); row.name:SetJustifyH("LEFT")
     row.info = T.text(row, SZ.label, C.label); row.info:SetPoint("LEFT", 160, 0); row.info:SetJustifyH("LEFT"); row.info:SetWidth(cw - 160 - 100)
-    row.btn = T.button(row, "Copy code", 92, 22, "steel", function(b)
+    row.btn = T.button(row, "Select code", 92, 22, "steel", function(b)
       local code, why = Sync.resultCode(b.r)
       if code then
-        y.out:SetValue(code); y.out:Show(); y.out:SetFocus(); y.out:HighlightText()
-        UI.syncNote = "Ctrl+C, then paste it on " .. ns.Account.WEB.results .. " (" .. T.commas(#code) .. " characters). The website replays it before it counts."
-        UI.syncNoteGood = true
+        y.out:SetValue(code); y.out:SelectAll(); y.out.r = b.r
+        UI.syncNote = "Selected (" .. T.commas(#code) .. " characters). Press Ctrl+C (Cmd+C on a Mac), then paste it on " .. ns.Account.WEB.results .. "."
+        UI.syncNoteGood = false
       else
         UI.syncNote = Sync.ERRORS[why] or ("Can't make a code: " .. tostring(why)); UI.syncNoteGood = false
       end
       UI:RefreshSync()
     end)
     row.btn:SetPoint("RIGHT", -3, 0)
+    row.btn.tip = "WoW can't copy for an addon: this shows the whole result code, selected, so Ctrl+C copies all of it."
     row:Hide()
     y.rows[i] = row
   end
@@ -65,6 +67,12 @@ function UI:CreateSync(sheet)
   y.out = UI.accountCopyBox(y, cw, ns.Codes.MAX_CODE)
   y.out:SetPoint("TOPLEFT", L, -282)
   y.out:Hide()
+  y.out.onCopy = function(box)
+    if box.r then UI.syncCopied[box.r] = true end -- this session only; never saved, never assumed
+    UI.syncNote = "Ctrl+C pressed. Paste it on " .. ns.Account.WEB.results .. ". The website replays it before it counts."
+    UI.syncNoteGood = true
+    UI:RefreshSync()
+  end
   y.note = T.text(y, SZ.label, C.gold); y.note:SetPoint("TOPLEFT", L, -312); y.note:SetWidth(cw - 150); y.note:SetJustifyH("LEFT")
 end
 
@@ -73,8 +81,8 @@ function UI:RefreshSync()
   local y = s and s.sync
   if not y or not y:IsShown() then return end
   local st, r = ns.Account.state()
-  y.status:SetText((st == "linked" or st == "not_synced") and ("Linked to " .. (r.profile.name:gsub("|", "||")) .. ": result codes carry your link.")
-    or "Not linked: result codes carry only your character name.")
+  y.status:SetText((st == "linked" or st == "not_synced") and ("Linked (unverified) to " .. (r.profile.name:gsub("|", "||")) .. ": codes carry your one-time link code.")
+    or "Not linked: codes carry only your character name and earn nothing.")
   local list = ns.Sync.exportable(ns.App:Today())
   local pages = math.max(1, math.ceil(#list / ROWS))
   self.syncPage = math.min(math.max(1, self.syncPage or 1), pages)
@@ -88,7 +96,9 @@ function UI:RefreshSync()
     if e then
       local rr = e.r
       row.name:SetText((e.kind == "daily" and "Daily Challenge (today)") or RULESET_NAME[rr.ruleset] or rr.ruleset)
-      row.info:SetText(T.commas(rr.score) .. "  -  " .. date("%d %b", rr.at) .. (rr.exported and "  -  copied" or ""))
+      -- "Ctrl+C pressed" only when we saw it this session; "code shown" when the code was made
+      row.info:SetText(T.commas(rr.score) .. "  -  " .. date("%d %b", rr.at)
+        .. (UI.syncCopied[rr] and "  -  Ctrl+C pressed" or rr.exported and "  -  code shown" or ""))
       row.btn.r = rr
       row:Show()
     else

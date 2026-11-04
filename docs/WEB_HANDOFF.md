@@ -13,7 +13,7 @@
   a Shards row that appears only when an approved format delivers a balance. **No new format is
   built** (`SRP2` stays a proposal until web Claude answers). How the addon receives the next web
   report: `docs/INTEGRATION_CHECKLIST.md`, "When web Claude's report arrives". The contracts still
-  missing are listed there as C1–C9.
+  missing are listed there as C1–C10. Start with `docs/WEB_CLAUDE_HANDOFF.md` (short, technical).
 * **XP and Shards from WoW play:** `docs/WOW_PROGRESSION_SPEC.md` is a proposal for the website.
   It says which results the website can replay-verify, which could earn XP or Shards, and covers
   anti-farming, caps and the safe import flow. It sets no numbers: the website decides them all.

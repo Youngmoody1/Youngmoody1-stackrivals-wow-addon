@@ -9,12 +9,26 @@ local C = T.C
 local UI = ns.UI
 local SZ = T.SIZE
 
+--- What the Account tab says. A pasted snapshot links this character on this PC, but without a
+--- signature it proves nothing about who owns the website account: "LINKED - UNVERIFIED", never a
+--- plain green LINKED. VERIFIED (green) only once a signature scheme exists and the check passed.
 local STATE = {
   not_linked = { "NOT LINKED", C.label },
-  pending = { "PENDING", C.gold },
-  linked = { "LINKED", C.green },
-  not_synced = { "NOT SYNCED", C.redLight },
+  pending = { "PENDING CONFIRMATION", C.gold },
+  linked = { "LINKED - UNVERIFIED", C.gold },
+  verified = { "VERIFIED", C.green },
+  not_synced = { "OUT OF DATE", C.redLight },
 }
+UI.ACCOUNT_STATE = STATE
+--- The display state: Account.state() plus the profile's verification.
+function UI.accountDisplayState()
+  local st, r = ns.Account.state()
+  if st == "linked" then
+    local v = ns.Account.profileView()
+    if v and v.verified then return "verified", r end
+  end
+  return st, r
+end
 local MODE_NAME = {
   b120 = "Duel 2:00", r180 = "Duel 3:00", s180 = "Spell Duel", classic = "Classic", blitz = "Time Trial",
   daily = "Daily Challenge", spellbot = "Spell Battle",
@@ -94,7 +108,23 @@ local function copyBox(parent, w, maxLetters)
     end
     self.hint:SetShown(false)
   end)
-  function eb:SetValue(v) self.value = v; self.setting = true; self:SetText(v or ""); self.setting = false; self.locked = true end
+  function eb:SetValue(v)
+    if v ~= self.value then self.copied = false end
+    self.value = v; self.setting = true; self:SetText(v or ""); self.setting = false; self.locked = true
+  end
+  -- WoW can't put text on the clipboard for an addon: the player presses Ctrl+C (Cmd+C on a Mac).
+  -- We only say "Ctrl+C pressed" after seeing that key in the box, never "copied" before.
+  if eb:HasScript("OnKeyDown") then
+    eb:SetScript("OnKeyDown", function(self, key)
+      local mod = (IsControlKeyDown and IsControlKeyDown()) or (IsMetaKeyDown and IsMetaKeyDown())
+      if key == "C" and mod and self.value and self.value ~= "" then
+        self.copied = true
+        if self.onCopy then self:onCopy() end
+      end
+    end)
+  end
+  --- Focus it and select everything, ready for Ctrl+C.
+  function eb:SelectAll() self:Show(); self:SetFocus(); self:HighlightText() end
   return eb
 end
 UI.accountCopyBox = copyBox
@@ -124,17 +154,18 @@ function UI:CreateAccount()
   a:SetPoint("TOPLEFT", 0, 0); a:SetPoint("BOTTOMRIGHT", 0, 0)
   s.acc = a
   local st = T.panel(a, C.red)
-  st:SetSize(cw, 62); st:SetPoint("TOPLEFT", L, -92)
+  st:SetSize(cw, 76); st:SetPoint("TOPLEFT", L, -92)
   st.chip = T.display(st, SZ.heading, C.label); st.chip:SetPoint("TOPLEFT", 12, -10)
   st.who = T.text(st, SZ.small, C.body); st.who:SetPoint("TOPRIGHT", -12, -12); st.who:SetJustifyH("RIGHT")
   st.line = T.text(st, SZ.label, C.label); st.line:SetPoint("TOPLEFT", 12, -38); st.line:SetWidth(cw - 24); st.line:SetJustifyH("LEFT"); st.line:SetWordWrap(false)
+  st.trust = T.text(st, SZ.label, C.label); st.trust:SetPoint("TOPLEFT", 12, -54); st.trust:SetWidth(cw - 24); st.trust:SetJustifyH("LEFT"); st.trust:SetWordWrap(false)
   a.status = st
 
-  a.steps = T.text(a, SZ.small, C.body); a.steps:SetPoint("TOPLEFT", L, -166); a.steps:SetWidth(cw); a.steps:SetJustifyH("LEFT")
+  a.steps = T.text(a, SZ.small, C.body); a.steps:SetPoint("TOPLEFT", L, -180); a.steps:SetWidth(cw); a.steps:SetJustifyH("LEFT")
   a.steps:SetSpacing(3)
   -- not linked: type the web code
   a.code = editBox(a, 160, "A7K9-P2XM", 12)
-  a.code:SetPoint("TOPLEFT", L, -234)
+  a.code:SetPoint("TOPLEFT", L, -248)
   local function doLink()
     local req, why = Acc.startLink(a.code:GetText())
     if req then a.code:SetText(""); a.code:ClearFocus(); UI.accountNote = nil
@@ -145,9 +176,17 @@ function UI:CreateAccount()
   a.link = T.button(a, "Link", 100, 24, "primary", doLink)
   a.link:SetPoint("LEFT", a.code, "RIGHT", 6, 0)
   -- pending: the request to copy
-  a.request = copyBox(a, cw)
-  a.request:SetPoint("TOPLEFT", L, -186)
-  a.step2 = T.text(a, SZ.small, C.body); a.step2:SetPoint("TOPLEFT", L, -220); a.step2:SetWidth(cw); a.step2:SetJustifyH("LEFT")
+  a.request = copyBox(a, cw - 106)
+  a.request:SetPoint("TOPLEFT", L, -200)
+  a.request.onCopy = function() UI.accountNote = "Ctrl+C pressed. Now paste it on the website, then come back for step 3."; UI.accountNoteGood = true; UI:RefreshAccount() end
+  a.select = T.button(a, "Select", 100, 24, "steel", function()
+    a.request:SelectAll()
+    UI.accountNote = "Selected. Press Ctrl+C (Cmd+C on a Mac) to copy it."; UI.accountNoteGood = false
+    UI:RefreshAccount()
+  end)
+  a.select:SetPoint("LEFT", a.request, "RIGHT", 6, 0)
+  a.select.tip = "WoW can't copy for an addon: this selects the whole request so Ctrl+C copies all of it."
+  a.step2 = T.text(a, SZ.small, C.body); a.step2:SetPoint("TOPLEFT", L, -234); a.step2:SetWidth(cw); a.step2:SetJustifyH("LEFT")
   -- pending / linked: paste a snapshot
   a.paste = editBox(a, cw - 106, "Paste the SRP1... snapshot here", ns.AccountCodes.MAX_CODE)
   local function doImport()
@@ -157,7 +196,8 @@ function UI:CreateAccount()
       UI.accountNote = (res == "linked") and "Linked. Your stackrivals.io profile is on the Profile tab." or "Profile updated."
       UI.accountNoteGood = true
     else
-      UI.accountNote = Acc.ERRORS[res] or ("Can't import: " .. tostring(res)); UI.accountNoteGood = false
+      -- the paste is refused and nothing changes: the profile you had stays as it was
+      UI.accountNote = "REJECTED: " .. (Acc.ERRORS[res] or ("can't import (" .. tostring(res) .. ")")); UI.accountNoteGood = false
     end
     a.paste:ClearFocus()
     UI:RefreshAccount()
@@ -176,7 +216,7 @@ function UI:CreateAccount()
   end)
   a.unlink.tip = "Forgets the link and profile for this character on this PC. Your website account is not changed."
   a.expiry = T.text(a, SZ.label, C.label)
-  a.note = T.text(a, SZ.small, C.gold); a.note:SetPoint("TOPLEFT", L, -320); a.note:SetWidth(cw - 150); a.note:SetJustifyH("LEFT")
+  a.note = T.text(a, SZ.small, C.gold); a.note:SetPoint("TOPLEFT", L, -334); a.note:SetWidth(cw - 150); a.note:SetJustifyH("LEFT")
 
   ------------------------------------------------------------------ Profile tab
   -- Top: name (left, cut with "..." when long) and rank (right, bounded). Then level and season
@@ -190,7 +230,24 @@ function UI:CreateAccount()
   s.prof = p
   local inner = cw - 28
   local RANKW = 150
-  local function line(fs, w) fs:SetWidth(w); fs:SetWordWrap(false); fs:SetJustifyH("LEFT"); return fs end
+  p.tips = {}
+  --- One-line text, cut with "..." when too long; hovering shows the whole text in a tooltip.
+  local function line(fs, w)
+    fs:SetWidth(w); fs:SetWordWrap(false); fs:SetJustifyH("LEFT")
+    local hover = CreateFrame("Frame", nil, p)
+    hover:SetAllPoints(fs); hover:EnableMouse(true)
+    hover:SetScript("OnEnter", function(self)
+      local t = fs:GetText()
+      if not t or t == "" or not (fs.IsTruncated and fs:IsTruncated()) then return end
+      GameTooltip:SetOwner(self, "ANCHOR_TOP")
+      GameTooltip:SetText(t, 1, 1, 1, 1, true)
+      GameTooltip:Show()
+    end)
+    hover:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    hover.fs = fs
+    p.tips[#p.tips + 1] = hover
+    return fs
+  end
   p.empty = T.text(p, SZ.body, C.body); p.empty:SetPoint("TOPLEFT", 14, -16); p.empty:SetWidth(inner); p.empty:SetJustifyH("LEFT")
   p.empty:SetSpacing(3)
   p.name = line(T.display(p, SZ.title, C.paper), inner - RANKW - 12); p.name:SetPoint("TOPLEFT", 14, -12)
@@ -206,7 +263,8 @@ function UI:CreateAccount()
   p.season = bar(-70, "SEASON")
   p.stats = line(T.text(p, SZ.small, C.body), inner); p.stats:SetPoint("TOPLEFT", 14, -98)
   p.statsWidth = inner
-  p.shards = line(T.display(p, SZ.small, C.gold), 124); p.shards:SetPoint("TOPRIGHT", -14, -98); p.shards:SetJustifyH("RIGHT")
+  p.SHARDSW = 160 -- "999,999,999,999 SHARDS" (12 digits) fits; longer is cut, with the full text on hover
+  p.shards = line(T.display(p, SZ.small, C.gold), p.SHARDSW); p.shards:SetPoint("TOPRIGHT", -14, -98); p.shards:SetJustifyH("RIGHT")
   p.extra = line(T.text(p, SZ.label, C.label), inner); p.extra:SetPoint("TOPLEFT", 14, -116)
   p.histHead = T.label(p, "RECENT MATCHES (STACKRIVALS.IO)"); p.histHead:SetPoint("TOPLEFT", 14, -138)
   p.hist = {}
@@ -251,22 +309,35 @@ function UI:RefreshAccount()
   local state, r = Acc.state()
   if tab == "account" then
     local a = s.acc
-    local st = STATE[state]
+    local shown = UI.accountDisplayState()
+    local st = STATE[shown]
     a.status.chip:SetText(st[1]); a.status.chip:SetTextColor(st[2][1], st[2][2], st[2][3])
     a.status.who:SetText("This character: " .. (ns.Duel and ns.Duel.short(Acc.me() or "?") or (Acc.me() or "?")))
     local pr = r and r.profile
-    if state == "linked" then
-      a.status.line:SetText("Account " .. safe(pr.name) .. "  -  last update " .. when(pr.issued) .. " (" .. ago(pr.issued) .. ")")
-    elseif state == "not_synced" then
-      a.status.line:SetText("Out of date: last update " .. when(pr.issued) .. ". Paste a new snapshot below.")
-    elseif state == "pending" then
-      a.status.line:SetText("Waiting for confirmation from stackrivals.io. Not linked yet.")
+    local line, trust
+    if shown == "verified" then
+      line = "Account " .. safe(pr.name) .. "  -  last update " .. when(pr.issued) .. " (" .. ago(pr.issued) .. ")"
+      trust = "The website's signature on this profile checked out."
+    elseif shown == "linked" then
+      line = "Account " .. safe(pr.name) .. "  -  last update " .. when(pr.issued) .. " (" .. ago(pr.issued) .. ")"
+      trust = "Linked from a pasted snapshot. Not checked: no signatures yet."
+    elseif shown == "not_synced" then
+      line = "Account " .. safe(pr.name) .. "  -  last update " .. when(pr.issued) .. " (" .. ago(pr.issued) .. ")"
+      trust = "Older than 7 days or expired: paste a new snapshot below."
+    elseif shown == "pending" then
+      line = "Waiting for confirmation from stackrivals.io. Not linked yet."
+      trust = "Nothing is linked until you import the website's snapshot (step 3)."
     else
-      a.status.line:SetText((r and r.note == "unlinked") and "Unlinked on this PC." or "Last synced: never.")
+      line = (r and r.note == "unlinked") and "Unlinked on this PC." or "This character isn't linked to a stackrivals.io account."
+      trust = "Everything works without an account, Loot Duel included."
     end
+    a.status.line:SetText(line)
+    a.status.trust:SetText(trust)
+    local tc = (shown == "not_synced") and C.gold or C.label
+    a.status.trust:SetTextColor(tc[1], tc[2], tc[3])
     local showCode, showReq, showPaste = state == "not_linked", state == "pending", state ~= "not_linked"
     a.code:SetShown(showCode); a.link:SetShown(showCode)
-    a.request:SetShown(showReq); a.step2:SetShown(showReq)
+    a.request:SetShown(showReq); a.select:SetShown(showReq); a.step2:SetShown(showReq)
     a.paste:SetShown(showPaste); a.import:SetShown(showPaste)
     a.cancel:SetShown(showReq); a.unlink:SetShown(state == "linked" or state == "not_synced")
     a.expiry:SetShown(showReq)
@@ -275,23 +346,24 @@ function UI:RefreshAccount()
       a.steps:SetText("Step 1 of 3. Log in on stackrivals.io (on the website, never in WoW).\n"
         .. "Open " .. Acc.WEB.link:gsub("^stackrivals%.io > ", "") .. ": it shows a one-time code.\nType that code here and click Link:")
     elseif state == "pending" then
-      a.steps:SetText("Step 2 of 3. Click the box, Ctrl+C, paste it on that website page:")
+      a.steps:SetText("Step 2 of 3. Select, Ctrl+C, then paste it on that website page:")
       a.request:SetValue(Acc.requestCode())
       a.step2:SetText("Step 3 of 3. Paste the snapshot the website then shows (SRP1...):")
-      a.paste:SetPoint("TOPLEFT", 24, -240)
-      a.cancel:SetPoint("TOPLEFT", 24, -276)
+      a.paste:SetPoint("TOPLEFT", 24, -254)
+      a.cancel:SetPoint("TOPLEFT", 24, -290)
       a.expiry:SetPoint("LEFT", a.cancel, "RIGHT", 12, 0)
       local left = math.max(0, Acc.PENDING_TTL - (Acc.now() - r.pending.at))
       a.expiry:SetText(string.format("Code %s  -  this request expires in %d:%02d", ns.AccountCodes.prettyWebCode(r.pending.code), math.floor(left / 60), left % 60))
     else
       a.steps:SetText("Update: open " .. Acc.WEB.export .. ",\n"
         .. "copy the snapshot (SRP1...), paste it here and click Import.")
-      a.paste:SetPoint("TOPLEFT", 24, -212)
-      a.unlink:SetPoint("TOPLEFT", 24, -250)
+      a.paste:SetPoint("TOPLEFT", 24, -226)
+      a.unlink:SetPoint("TOPLEFT", 24, -264)
       a.unlink:SetLabel(a.unlink.armed and "Click to confirm" or "Unlink")
     end
     a.note:SetText(self.accountNote or ((r and r.note == "pending_expired") and Acc.ERRORS.pending_expired) or "")
-    local nc = (self.accountNoteGood and self.accountNote) and C.green or C.gold
+    local note = self.accountNote
+    local nc = (self.accountNoteGood and note) and C.green or (note and note:find("^REJECTED") and C.redLight) or C.gold
     a.note:SetTextColor(nc[1], nc[2], nc[3])
   elseif tab == "profile" then
     self:RefreshProfile(s.prof, state, r)
@@ -325,6 +397,7 @@ function UI:RefreshProfile(p, state, r)
   for _, b in ipairs({ p.xp, p.season }) do for _, x in pairs(b) do x:SetShown(has) end end
   for _, row in ipairs(p.hist) do for _, x in pairs(row) do x:SetShown(has) end end
   if not has then
+    for _, h in ipairs(p.tips) do h:Hide() end
     p.empty:SetText(state == "pending" and "Linking is not finished: import the confirmation snapshot from stackrivals.io on the Account tab."
       or "No profile yet. Link your stackrivals.io account on the Account tab: your name, rank, level, XP, season and match history will show here.")
     return
@@ -343,7 +416,7 @@ function UI:RefreshProfile(p, state, r)
     games > 0 and string.format("  -  %d%% won", math.floor(100 * pr.wins / games + 0.5)) or ""))
   -- the website's balance, only when an approved format delivers one (SRP1 never does)
   p.shards:SetText(pr.shards and (T.commas(pr.shards) .. " SHARDS") or "")
-  p.stats:SetWidth(pr.shards and (p.statsWidth - 130) or p.statsWidth) -- the record gets the whole line without Shards
+  p.stats:SetWidth(pr.shards and (p.statsWidth - p.SHARDSW - 6) or p.statsWidth) -- the record gets the whole line without Shards
   p.extra:SetText("Achievements " .. (pr.achUnlocked and (pr.achUnlocked .. " / " .. pr.achTotal) or "-")
     .. "  -  Cosmetics " .. (pr.cosOwned and (pr.cosOwned .. " owned" .. (pr.cosEquipped and (", wearing " .. safe(pr.cosEquipped)) or "")) or "-"))
   for i, row in ipairs(p.hist) do
@@ -360,6 +433,9 @@ function UI:RefreshProfile(p, state, r)
     end
   end
   if #pr.history == 0 then p.hist[1].mode:SetShown(true); p.hist[1].mode:SetText("No matches yet.") end
+  p.histHead:SetText(#pr.history > #p.hist and ("RECENT MATCHES (" .. #p.hist .. " OF " .. #pr.history .. ", MORE ON STACKRIVALS.IO)") or "RECENT MATCHES (STACKRIVALS.IO)")
+  -- a tooltip only where there is text to show (and none over the "Link account" button)
+  for _, h in ipairs(p.tips) do h:SetShown(h.fs:IsShown()) end
   local t = UI.profileSyncText(pr)
   p.updated:SetText(t.updated)
   p.foot:SetText(t.foot)

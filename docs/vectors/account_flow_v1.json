@@ -1,0 +1,311 @@
+{
+  "addonImport": [
+    {
+      "code": "SRP1.i6bjy6p8h43e.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni7oe.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.9a7a989c",
+      "expect": {
+        "ok": true,
+        "result": "linked",
+        "verified": false
+      },
+      "name": "link_ok",
+      "now": 1793000060,
+      "profileChanged": true,
+      "setup": "pending",
+      "why": "pending + snapshot with the same linkId, made after the request"
+    },
+    {
+      "code": "SRP1.0pbestwumzsy.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni9yw.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.54b9f96f",
+      "expect": {
+        "ok": true,
+        "result": "updated",
+        "verified": false
+      },
+      "name": "update_ok",
+      "now": 1793003600,
+      "profileChanged": true,
+      "setup": "linked",
+      "why": "linked + a newer snapshot"
+    },
+    {
+      "code": "SRP1.j7b9mh4hquii.426f622d5265616c6d.acc_7f3k2.416c69636520537461636b.tni7oe.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.6596c58c",
+      "expect": {
+        "error": "player",
+        "ok": false
+      },
+      "name": "wrong_character",
+      "now": 1793000060,
+      "profileChanged": false,
+      "setup": "pending",
+      "why": "a snapshot for another character can't be imported here"
+    },
+    {
+      "code": "SRP1.zzzzzzzzzzzz.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni7oe.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.24958964",
+      "expect": {
+        "error": "link_other",
+        "ok": false
+      },
+      "name": "other_link_while_pending",
+      "now": 1793000060,
+      "profileChanged": false,
+      "setup": "pending",
+      "why": "linkId not the one this character asked for"
+    },
+    {
+      "code": "SRP1.zzzzzzzzzzzz.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni9yw.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.db8620c2",
+      "expect": {
+        "error": "link_other",
+        "ok": false
+      },
+      "name": "other_link_when_linked",
+      "now": 1793003600,
+      "profileChanged": false,
+      "setup": "linked",
+      "why": "a snapshot from another link (another account) is refused"
+    },
+    {
+      "code": "SRP1.2sbt5grc4gm7.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni4vk.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.8e2dc735",
+      "expect": {
+        "error": "too_old_for_link",
+        "ok": false
+      },
+      "name": "made_before_request",
+      "now": 1793000060,
+      "profileChanged": false,
+      "setup": "pending",
+      "why": "an old snapshot can't confirm a new link request (replay of an old confirmation)"
+    },
+    {
+      "code": "SRP1.laboz3zy8bcr.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tniafk.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.512d1732",
+      "expect": {
+        "error": "future",
+        "ok": false
+      },
+      "name": "future_dated",
+      "now": 1793000060,
+      "profileChanged": false,
+      "setup": "pending",
+      "why": "issued more than the clock skew in the future"
+    },
+    {
+      "code": "SRP1.3tcjur6ld71c.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni7qc.tni7t4.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.3aaeef36",
+      "expect": {
+        "error": "expired",
+        "ok": false
+      },
+      "name": "expired",
+      "now": 1793691230,
+      "profileChanged": false,
+      "setup": "linked",
+      "why": "now is past expires + clock skew"
+    },
+    {
+      "code": "SRP1.mcceoee7h2rw.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni7nu.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.063731ce",
+      "expect": {
+        "error": "older",
+        "ok": false
+      },
+      "name": "older_than_current",
+      "now": 1793003600,
+      "profileChanged": false,
+      "setup": "linked",
+      "why": "an older snapshot never replaces a newer one"
+    },
+    {
+      "code": "SRP1.4uc9i2mumxgg.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni7oe.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.dc734845",
+      "expect": {
+        "error": "duplicate",
+        "ok": false
+      },
+      "name": "same_twice",
+      "now": 1793003600,
+      "profileChanged": false,
+      "setup": "linked",
+      "why": "the same snapshot again changes nothing"
+    },
+    {
+      "code": "SRP1.abcdefghij12.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni7oe.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.88eab3c8",
+      "expect": {
+        "error": "not_pending",
+        "ok": false
+      },
+      "name": "no_request",
+      "now": 1793000060,
+      "profileChanged": false,
+      "setup": "none",
+      "why": "a snapshot without a link request on this character"
+    },
+    {
+      "code": "SRP1.5wcz7d13vowl.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni8ck.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.dcabb5c7",
+      "expect": {
+        "error": "pending_expired",
+        "ok": false
+      },
+      "name": "request_expired",
+      "now": 1793000960,
+      "profileChanged": false,
+      "setup": "pending",
+      "why": "the link request is older than 15 minutes"
+    },
+    {
+      "code": "SRP2.ofcu119pzjl5.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni9yw.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.80c5b04b",
+      "expect": {
+        "error": "version",
+        "ok": false
+      },
+      "name": "newer_format",
+      "now": 1793003600,
+      "profileChanged": false,
+      "setup": "linked",
+      "why": "an unknown newer version is refused, never guessed"
+    },
+    {
+      "code": "SRL1.A7K9P2XJ.wow-forever.416c6963652d5265616c6d.6xcpvogc4ebq.0-9-0.1.tni7nk.d9dc9102",
+      "expect": {
+        "error": "is_request",
+        "ok": false
+      },
+      "name": "link_request_pasted",
+      "now": 1793000060,
+      "profileChanged": false,
+      "setup": "pending",
+      "why": "the player's own SRL1 pasted in the snapshot box"
+    },
+    {
+      "code": "SRP1.pgdkpcoy890a.416c6963652a5265616c6d.acc_7f3k2.416c69636520537461636b.tni7oe.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.706214c5",
+      "expect": {
+        "error": "check",
+        "ok": false
+      },
+      "name": "typo",
+      "now": 1793000060,
+      "profileChanged": false,
+      "setup": "pending",
+      "why": "one character changed: the check catches it"
+    },
+    {
+      "code": "SRP1.7zdfkzwld5qu.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni9yw.tnv6ce.c.zzzzzz.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.a314887e",
+      "expect": {
+        "ok": true,
+        "result": "updated",
+        "verified": false
+      },
+      "name": "forged_but_rechecked",
+      "now": 1793003600,
+      "profileChanged": true,
+      "setup": "linked",
+      "why": "XP raised and the check recomputed: ACCEPTED (the check only catches typos). Shown as UNVERIFIED, unlocks nothing; only a website signature can stop this"
+    }
+  ],
+  "clock": {
+    "T0": 1793000000,
+    "clockSkewSeconds": 600,
+    "pendingTtlSeconds": 900,
+    "staleAfterSeconds": 604800
+  },
+  "format": "stackrivals.account-flow.v1-draft",
+  "note": "DRAFT proposal. addonImport is generated by running the addon (tests/account_flow_vectors.lua); websiteChecks are the outcomes the website must produce.",
+  "websiteChecks": [
+    {
+      "expect": "reject: code_unknown",
+      "input": "a web code the website never issued",
+      "name": "code_unknown",
+      "step": "SRL1 pasted on the Link page"
+    },
+    {
+      "expect": "reject: code_unknown (never reveal that it exists)",
+      "input": "a valid code issued to ANOTHER logged-in account",
+      "name": "code_other_account",
+      "step": "SRL1 pasted on the Link page"
+    },
+    {
+      "expect": "reject: code_expired",
+      "input": "the code is older than its lifetime (about 10 minutes)",
+      "name": "code_expired",
+      "step": "SRL1"
+    },
+    {
+      "expect": "reject: code_used",
+      "input": "the same code a second time, after a successful link",
+      "name": "code_reused",
+      "step": "SRL1"
+    },
+    {
+      "expect": "rate limit; codes are 8 Crockford symbols with a check symbol",
+      "input": "many wrong codes from one account or IP",
+      "name": "code_brute_force",
+      "step": "Link page"
+    },
+    {
+      "expect": "reject with that error",
+      "input": "every entry in account_v1.json linkRequestInvalid",
+      "name": "request_bad_format",
+      "step": "SRL1"
+    },
+    {
+      "expect": "policy needed (C10): keep the first binding and flag, or allow one binding per account and mark both unverified",
+      "input": "a second account links the same Name-Realm + platform",
+      "name": "character_claimed_twice",
+      "step": "SRL1"
+    },
+    {
+      "expect": "store as CLAIMED: Name-Realm in a code is not proof of character ownership (only Battle.net OAuth would be)",
+      "input": "any SRL1",
+      "name": "character_not_proven",
+      "step": "binding"
+    },
+    {
+      "expect": "never export for another binding",
+      "input": "the website must only export a snapshot with the linkId and player of that binding",
+      "name": "snapshot_for_other_link",
+      "step": "Export snapshot"
+    },
+    {
+      "expect": "board only as 'Name-Realm (unlinked)'; earns nothing for anyone",
+      "input": "link field '-'",
+      "name": "result_unlinked",
+      "step": "Import result (SR1R)"
+    },
+    {
+      "expect": "reject: link_mismatch (never credit the importing account)",
+      "input": "an SR1R whose link code belongs to another account's binding",
+      "name": "result_other_account",
+      "step": "Import result"
+    },
+    {
+      "expect": "reject: link_used (the link code inside a result is single-use)",
+      "input": "a second SR1R with the same one-time link code",
+      "name": "result_link_reused",
+      "step": "Import result"
+    },
+    {
+      "expect": "reject: player_mismatch",
+      "input": "playerHex not the Name-Realm of the binding the link code belongs to",
+      "name": "result_player_mismatch",
+      "step": "Import result"
+    },
+    {
+      "expect": "reject: duplicate_run, flag for review",
+      "input": "the same run (runKey) under another name or account",
+      "name": "result_duplicate_run",
+      "step": "Import result"
+    },
+    {
+      "expect": "stored as rejected, never ranked, never rewarded",
+      "input": "every SR1 replay error in sr1.json (claim_mismatch, hash_mismatch, over_time_cap, faster_than_clock, inhuman_input_rate, inputs_after_topout, expired)",
+      "name": "result_replay_fails",
+      "step": "Import result"
+    },
+    {
+      "expect": "board yes, reward no (WOW_PROGRESSION_SPEC.md section 4)",
+      "input": "a server_verified result beyond the daily cap",
+      "name": "reward_without_limits",
+      "step": "rewards"
+    },
+    {
+      "expect": "never imported for rewards (no export exists)",
+      "input": "a WoW duel or Loot Duel result",
+      "name": "peer_checked_reward",
+      "step": "rewards"
+    }
+  ]
+}

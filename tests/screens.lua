@@ -408,7 +408,7 @@ S.list = {
     ns.UI:ShowSheet("account"); M.frames_step(1)
     return M, ns
   end },
-  { "23c-profile", "Account - Profile tab (display only, from the snapshot)", function()
+  { "23c-profile", "Account - Profile tab (display only). Clock: 100 s after the snapshot was made -> just now", function()
     local M, ns = boot(); SlashCmdList.STACKRIVALS("")
     M.serverTime = 1793000000
     local AC = ns.AccountCodes
@@ -423,7 +423,7 @@ S.list = {
     ns.UI:ShowSheet("account"); ns.UI.accountTab = "profile"; ns.UI:RefreshAccount(); M.frames_step(1)
     return M, ns
   end },
-  { "23c2-profile-stale", "Account - Profile tab, worst case: snapshot older than 7 days, 5 matches, longest name / rank / season / cosmetic", function()
+  { "23c2-profile-stale", "Account - Profile, worst case: longest texts, 5 matches. Clock: 12 days after the snapshot -> 12 days ago, OUT OF DATE", function()
     local M, ns = boot(); SlashCmdList.STACKRIVALS("")
     local T0 = 1793000000
     M.serverTime = T0
@@ -441,7 +441,7 @@ S.list = {
     ns.UI:ShowSheet("account"); ns.UI.accountTab = "profile"; ns.UI:RefreshAccount(); M.frames_step(1)
     return M, ns
   end },
-  { "23c3-profile-shards", "Account - Profile tab with a Shards balance (SIMULATED future format: SRP1 has no Shards; shown only once the website approves one)", function()
+  { "23c3-profile-shards", "Account - Profile with Shards (SIMULATED future format; SRP1 has none). Clock: 1 h 56 min after the snapshot -> 1 h ago", function()
     local M, ns = boot(); SlashCmdList.STACKRIVALS("")
     local T0 = 1793000000
     M.serverTime = T0

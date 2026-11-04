@@ -108,6 +108,12 @@ local function newFontString(parent, layer)
     SetJustifyV = function() end,
     SetSpacing = function() end,
     SetWordWrap = function(o, v) o._nowrap = not v end,
+    -- approximate (no glyph metrics here): one line, wider than its width = cut with "..."
+    IsTruncated = function(o)
+      if not (o._nowrap and o._w and o._w > 0 and type(o._text) == "string") then return false end
+      local size = o._font and o._font[2] or 12
+      return #o._text * size * 0.55 > o._w
+    end,
   }), "FontString")
 end
 
@@ -126,6 +132,8 @@ local function newFrame(ftype, name, parent)
     _scale = 1, _enabled = true, _order = nextOrder(), _name = name,
     SetScript = function(o, ev, fn) o._scripts[ev] = fn end,
     GetScript = function(o, ev) return o._scripts[ev] end,
+    -- M.noEditBoxKeyDown = true models a client whose edit boxes have no OnKeyDown script
+    HasScript = function(o, ev) return not (M.noEditBoxKeyDown and o._kind == "EditBox" and ev == "OnKeyDown") end,
     HookScript = function(o, ev, fn) local old = o._scripts[ev]; o._scripts[ev] = function(...) if old then old(...) end fn(...) end end,
     SetFrameStrata = function() end,
     SetFrameLevel = function(o, l) o._level = l end,
@@ -183,7 +191,12 @@ local function newFrame(ftype, name, parent)
     f.SetMaxLetters = function(o, n) o._maxLetters = n end
     f.SetFont = function(o, path, size, flags) o._font = { path, size, flags }; return true end
     f.SetTextInsets = function() end
-    f.SetText = function(o, t) o._etext = t or ""; local sc = o._scripts.OnTextChanged; if sc then sc(o, true) end end
+    -- like WoW: SetMaxLetters(n > 0) cuts longer text (the tests check that codes are never cut)
+    f.SetText = function(o, t)
+      t = t or ""
+      if (o._maxLetters or 0) > 0 and #t > o._maxLetters then t = t:sub(1, o._maxLetters) end
+      o._etext = t; local sc = o._scripts.OnTextChanged; if sc then sc(o, true) end
+    end
     f.GetText = function(o) return o._etext end
     f.SetFocus = function(o) o._focus = true end
     f.ClearFocus = function(o) o._focus = false end
@@ -237,6 +250,8 @@ function M.install(G)
   -- tests/clients.lua switches a mock to any other client
   G.GetBuildInfo = function() return "1.60.1", "70532", "Oct 2026", 16001 end
   G.date = os.date
+  G.IsControlKeyDown = function() return M.ctrl or false end
+  G.IsMetaKeyDown = function() return M.meta or false end
   G.tinsert = table.insert
   G.IsInGuild = function() return M.inGuild or false end
   -- social lists (Core/Social.lua): set M.guild / M.friends / M.bnet / M.ignored in a test

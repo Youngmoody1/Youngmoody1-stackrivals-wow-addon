@@ -133,7 +133,7 @@ describe("Sync: result codes", function()
     eq(#ns.db.sync.results, 10)
     eq(ns.db.sync.results[1].seed, "srchal-run12")
   end)
-  it("the Sync tab: Copy code puts the result code in the copy box", function()
+  it("the Sync tab: Select code puts the whole code in the box, selected; it never says copied before Ctrl+C", function()
     local net, c = client(8)
     local ns = c.ns
     ok(ns.App:StartChallenge(ns.Codes.challenge("b120", "srchal-uiexport1")))
@@ -143,12 +143,58 @@ describe("Sync: result codes", function()
     local y = ns.UI.accountSheet.sync
     ok(y.rows[1]:IsShown())
     eq(y.rows[1].name:GetText(), "Web Challenge 2:00")
+    eq(y.rows[1].btn.fs:GetText(), "Select code")
     y.rows[1].btn:Click()
     local code = y.out:GetText()
     ok(code:match("^SR1R%."), code:sub(1, 20))
+    ok(y.out._highlighted and y.out._focus, "selected and focused, ready for Ctrl+C")
     local _, replayOk = serverCheck(ns, code)
     ok(replayOk)
-    ok(ns.UI.syncNote:find("replays it"), ns.UI.syncNote)
+    ok(ns.UI.syncNote:find("^Selected"), ns.UI.syncNote)
+    ok(not ns.UI.syncNote:lower():find("copied"), "not copied yet: " .. ns.UI.syncNote)
+    ok(y.rows[1].info:GetText():find("code shown", 1, true), y.rows[1].info:GetText())
+    ok(not y.rows[1].info:GetText():find("Ctrl+C pressed", 1, true))
+    -- C without Ctrl is just a letter
+    y.out._scripts.OnKeyDown(y.out, "C")
+    ok(not ns.UI.syncNote:find("Ctrl+C pressed"), ns.UI.syncNote)
+    -- Ctrl+C in the box
+    c.M.ctrl = true; y.out._scripts.OnKeyDown(y.out, "C"); c.M.ctrl = false
+    ok(ns.UI.syncNote:find("Ctrl+C pressed", 1, true) and ns.UI.syncNote:find("replays it", 1, true), ns.UI.syncNote)
+    ok(y.rows[1].info:GetText():find("Ctrl+C pressed", 1, true), y.rows[1].info:GetText())
+    -- the session-only mark is never saved
+    for k in pairs(ns.db.sync.results[1]) do ok(k ~= "copiedNow" and k ~= "copied", "saved field " .. k) end
+  end)
+  it("a result code is never cut: the box holds the longest code the format allows, and a long real run", function()
+    local net, c = client(10)
+    local ns = c.ns
+    ns.App:ShowMenu()
+    ns.UI:ShowSheet("account"); ns.UI.accountSheet.tabs.sync:Click()
+    local y = ns.UI.accountSheet.sync
+    local longest = "SR1R." .. string.rep("a", ns.Codes.MAX_CODE - 5)
+    eq(#longest, ns.Codes.MAX_CODE)
+    y.out:SetValue(longest)
+    eq(#y.out:GetText(), ns.Codes.MAX_CODE, "the copy box keeps every character")
+    -- a busy 2:00 run: a move every few frames
+    ok(ns.App:StartChallenge(ns.Codes.challenge("b120", "srchal-longcode1")))
+    local s = ns.App.session
+    local f = 0
+    while not s.recorded and f < 9000 do
+      if s.phase == "playing" then
+        local k = (f % 7 == 0) and "left" or (f % 7 == 3) and "right" or (f % 40 == 20) and "rotateCW" or (f % 90 == 45) and "hardDrop" or nil
+        if k then s:press(k); s:release(k) end
+      end
+      net.step(1); f = f + 1
+    end
+    ok(s.recorded, "the run ended")
+    ok(ns.db.sync.results[1], "the run is kept for export")
+    ns.App:ShowMenu()
+    ns.UI:ShowSheet("account"); ns.UI.accountSheet.tabs.sync:Click()
+    y.rows[1].btn:Click()
+    local code = y.out:GetText()
+    eq(code, ns.Sync.resultCode(ns.db.sync.results[1]), "the box holds the whole code")
+    ok(#code > 1000, "a long code: " .. #code .. " characters")
+    local _, replayOk = serverCheck(ns, code)
+    ok(replayOk, "and it replays")
   end)
   it("manipulated saved results are dropped on load", function()
     local net = NS.new({ seed = 9 })

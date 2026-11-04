@@ -54,6 +54,20 @@ Tæller kun, hvis **en anden klient svarer**. Et vellykket API-kald alene bevise
 | M8 | Battle.net-venner på forskellige realms | 2 | Duel via Battle.net (eller tydelig grund, hvis det ikke kan) | IKKE TESTET | IKKE TESTET |
 | M9 | Raid (Forever fra 9. dec.): Loot Duel med 10–20 | 10–20 | Starttid, resultattid, FPS og samme vinder | IKKE TESTET | – |
 
+## 2b. Senere: 0.9.x-skærmene i rigtig WoW (først med en 0.9-testbuild og dit GO)
+
+0.8.1 har de gamle konto-skærme. De nye (Profile-bundlinje, UNVERIFIED, trin 1–3, Select, Ctrl+C)
+skal ses i en rigtig klient, før de kaldes færdige:
+
+| # | Test | Forventet |
+|---|---|---|
+| U1 | Account / Profile / Sync ved UI-skala 0,64, 0,8 og 1,0 og ved StackRivals-størrelse 70 % og 140 % | Ingen tekst løber ind i en anden, intet går uden for vinduet |
+| U2 | Lange navne og ranks (en testprofil fra en simuleret hjemmeside-kode) | Afkortet med "...", den fulde tekst vises, når musen holdes over |
+| U3 | Trin 2: Select og derefter Ctrl+C i boksen | "Ctrl+C pressed" vises først efter Ctrl+C. Indsat i Notesblok er koden hel |
+| U4 | Sync: Select code på et 3:00-resultat, Ctrl+C, indsæt i Notesblok | Hele koden (2–3,5 KB), intet skåret af |
+| U5 | Ctrl+C-genkendelse (`OnKeyDown` i edit-bokse) | Virker, eller også står der intet om Ctrl+C. Aldrig en Lua-fejl |
+| U6 | LINKED - UNVERIFIED / OUT OF DATE / REJECTED | Farver og tekster som i previewerne |
+
 ## 3. Efter hver session
 
 1. `/sr report` fra hver deltager. Linjerne indeholder ingen navne eller chat.
