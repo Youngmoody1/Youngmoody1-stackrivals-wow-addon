@@ -1,10 +1,15 @@
 # Changelog
 
-## 0.9.0 (development) — Ready for the website integration (branch `feature/web-integration`, not released, not installed)
+## 0.9.0 Alpha — 4 Nov 2026 (branch `feature/web-integration`; download on stackrivals.io/wow)
 
 0.8.1 is frozen on `alpha/0.8.1` as the test version. This branch prepares the integration with
 stackrivals.io. New formats come from the website: `SRP2` v1 was defined there on 2026-11-04 (below).
 
+- **Fix (found in Classic Era 1.15.9): Select + Ctrl+C on the Account tab.** The tab refreshes every second for
+  the expiry countdown and re-set the link request's text each time, which dropped the selection before Ctrl+C.
+  The text is now only set when it changes (regression test in `tests/test_account.lua`).
+- **First real-client run of the integration (Classic Era 1.15.9, 4 Nov 2026):** loaded over 0.7.0 with saved
+  data kept, linked to stackrivals.io, SRP1 and SRP2 imported, Shards shown on the Profile tab.
 - **SRP2 v1 (2026-11-04, defined by stackrivals.io)** — the website answered C3 with its own spec (`docs/WOW_SRP2.md`
   on the website; shared vectors `docs/vectors/srp2_v1.json`, catalog `docs/vectors/cosmetics_catalog_v1.json`):
   - `AccountCodes.parseProfile2` / `profile2`: SRP1's fields 1–18 (same rules) + `shards`, `asOf`, `equipped`
