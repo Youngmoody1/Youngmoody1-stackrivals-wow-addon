@@ -219,6 +219,7 @@ function UI:Create()
   if ns.Quickplay and self.CreateQuickplay then self:CreateQuickplay() end
   if ns.Chat and self.CreateMatchChat then self:CreateMatchChat() end
   if ns.Account and self.CreateAccount then self:CreateAccount() end
+  if ns.LootDuel and self.CreateLootDuel then self:CreateLootDuel() end
   if ns.SpellBattle and self.CreateSpell then self:CreateSpell() end
 
   F:SetScript("OnShow", function() UI:OnShow() end)
@@ -457,25 +458,29 @@ function UI:CreateMenu()
   -- secondary navigation
   self.navRow = CreateFrame("Frame", nil, menu)
   self.navRow:SetSize(cw, 28); self.navRow:SetPoint("BOTTOM", menu, "BOTTOM", 0, 30)
-  self.howBtn = T.button(self.navRow, "How to play", 128, 28, "frame", function() UI:ShowSheet("help") end)
-  self.recBtn = T.button(self.navRow, "Records", 128, 28, "frame", function() UI:ShowSheet("records") end)
-  self.accBtn = T.button(self.navRow, "Account", 128, 28, "frame", function() UI:ShowSheet("account") end)
+  self.howBtn = T.button(self.navRow, "How to play", 98, 28, "frame", function() UI:ShowSheet("help") end)
+  self.recBtn = T.button(self.navRow, "Records", 98, 28, "frame", function() UI:ShowSheet("records") end)
+  self.accBtn = T.button(self.navRow, "Account", 98, 28, "frame", function() UI:ShowSheet("account") end)
   self.accBtn.tip = "Link this character to your stackrivals.io account (one-time code), import your profile, sync."
-  self:LayoutNav({ self.howBtn, self.recBtn, self.accBtn })
+  self.lootBtn = T.button(self.navRow, "Loot Duel", 98, 28, "gold", function() UI:ShowSheet("loot") end)
+  self.lootBtn.tip = "Raid loot: the group races for an item instead of /roll. The loot master still hands it out."
+  if ns.BUILD and not ns.BUILD.duels then self.lootBtn:Disable(); self.lootBtn.tip = "Off in this Spell Battle vs Bot test build." end
+  self:LayoutNav({ self.howBtn, self.recBtn, self.accBtn, self.lootBtn }, 6)
   self.statsLine = T.text(menu, SZ.label, C.label); self.statsLine:SetPoint("BOTTOM", 0, 10)
   self.statsLine:SetWidth(cw)
   self.menuFade = T.fadeInAnim(menu, 0.2)
 end
 
 --- Centre a row of nav buttons with 10 px gaps.
-function UI:LayoutNav(buttons)
-  local total = -10
-  for _, b in ipairs(buttons) do total = total + b:GetWidth() + 10 end
+function UI:LayoutNav(buttons, gap)
+  gap = gap or 10
+  local total = -gap
+  for _, b in ipairs(buttons) do total = total + b:GetWidth() + gap end
   local x = -total / 2
   for _, b in ipairs(buttons) do
     b:ClearAllPoints()
     b:SetPoint("LEFT", self.navRow, "CENTER", x, 0)
-    x = x + b:GetWidth() + 10
+    x = x + b:GetWidth() + gap
   end
 end
 
@@ -720,6 +725,7 @@ function UI:OnHide()
   if self.duelSheet then self.duelSheet:Hide() end
   if self.qpSheet then self.qpSheet:Hide() end
   if self.accountSheet then self.accountSheet:Hide() end
+  if self.lootSheet then self.lootSheet:Hide() end
   if self.spellSheet then self.spellSheet:Hide() end
   local sess = ns.App.session
   if sess and sess.spell and sess.spell.settling then
@@ -1081,7 +1087,11 @@ function UI:RefreshMenu()
   if fresh then blitz.bestLabel:SetText(""); blitz.best:SetText("Start here"); blitz.best:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
   else blitz.bestLabel:SetText("BEST"); blitz.best:SetTextColor(C.gold[1], C.gold[2], C.gold[3]) end
   -- first visit: point at the how-to-play sheet without forcing it (play is one click away)
-  if not db.seenHelp then self.howBtn:SetLabel("New? How to play") else self.howBtn:SetLabel("How to play") end
+  -- first visit: the how-to-play button is lit red (the nav row has no room for a longer label)
+  local hc = (not db.seenHelp) and C.red or C.line
+  self.howBtn.border:SetColorTexture(hc[1], hc[2], hc[3], 1)
+  self.howBtn:SetLabel(db.seenHelp and "How to play" or "New? Help")
+  self.howBtn.tip = db.seenHelp and nil or "New here? The rules, points and keys in one screen."
   local total, lines = 0, 0
   for _, k in ipairs(Session.MODE_ORDER) do
     total = total + db.records[k].games
@@ -1120,7 +1130,9 @@ function UI:ShowOver(info)
   self.overTitle:SetText(info.reason == "time" and "TIME!" or "GAME OVER")
   self.overScore:SetText(T.commas(s.score))
   self.badgePulse:Stop()
-  if info.challenge then
+  if info.loot then
+    self.overBadge:SetText("WAITING FOR THE OTHERS...")
+  elseif info.challenge then
     self.overBadge:SetText("RESULT CODE READY")
   elseif info.newBest then
     self.overBadge:SetText(info.prevBest > 0 and ("NEW BEST  +" .. T.commas(s.score - info.prevBest)) or "NEW BEST")
@@ -1134,7 +1146,8 @@ function UI:ShowOver(info)
   local c = s.clears
   local rankTxt = info.rank and ("#" .. info.rank .. " in your top 5  -  ") or ""
   local quads = (c.quad > 0) and string.format("  -  %d %s", c.quad, c.quad == 1 and "quad" or "quads") or ""
-  self.overDetail:SetText(info.challenge and string.format("%d lines  -  level %d%s\nCopy it from Account > Sync and paste it on stackrivals.io.", s.lines, s.level, quads)
+  self.overDetail:SetText(info.loot and string.format("%d lines  -  level %d%s\nEvery PC replays every run. The result opens when all are in.", s.lines, s.level, quads)
+    or info.challenge and string.format("%d lines  -  level %d%s\nCopy it from Account > Sync and paste it on stackrivals.io.", s.lines, s.level, quads)
     or string.format("%d lines  -  level %d%s\n%s%s", s.lines, s.level, quads, rankTxt, info.modeName))
   local g, p = IsInGuild and IsInGuild() or false, IsInGroup and IsInGroup() or false
   self.shareGuild:SetShown(g); self.shareGroup:SetShown(p); self.shareLabel:SetShown(g or p)
@@ -1338,7 +1351,8 @@ end
 function UI:SheetOpen()
   return (self.help and self.help:IsShown()) or (self.records and self.records:IsShown()) or (self.settings and self.settings:IsShown())
     or (self.duelSheet and self.duelSheet:IsShown()) or (self.spellSheet and self.spellSheet:IsShown())
-    or (self.qpSheet and self.qpSheet:IsShown()) or (self.accountSheet and self.accountSheet:IsShown()) or false
+    or (self.qpSheet and self.qpSheet:IsShown()) or (self.accountSheet and self.accountSheet:IsShown())
+    or (self.lootSheet and self.lootSheet:IsShown()) or false
 end
 
 function UI:HideSheets()
@@ -1346,6 +1360,7 @@ function UI:HideSheets()
   if self.duelSheet then self.duelSheet:Hide() end
   if self.qpSheet then self.qpSheet:Hide() end
   if self.accountSheet then self.accountSheet:Hide() end
+  if self.lootSheet then self.lootSheet:Hide() end
   if self.spellSheet then self.spellSheet:Hide() end
   if self.settings and self.settings:IsShown() then self:ShowSettings(false) end
 end
@@ -1358,6 +1373,7 @@ function UI:ShowSheet(which)
   if self.duelSheet then self.duelSheet:SetShown(which == "duel") end
   if self.qpSheet then self.qpSheet:SetShown(which == "quickplay") end
   if self.accountSheet then self.accountSheet:SetShown(which == "account") end
+  if self.lootSheet then self.lootSheet:SetShown(which == "loot") end
   if self.spellSheet then self.spellSheet:SetShown(which == "spell"); if which == "spell" then self.spellSheetDuel = false; self:RefreshSpellSheet() end end
   if self.settings:IsShown() then self:ShowSettings(false) end
   self:RefreshPhase()

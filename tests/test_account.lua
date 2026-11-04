@@ -161,7 +161,7 @@ describe("account link state (simulated client)", function()
     local req = assert(Acc.startLink(A.prettyWebCode(code)))
     eq(Acc.state(), "pending", "a typed code alone proves nothing")
     local r = assert(A.parseLinkRequest(req))
-    eq(r.player, "Alice-Realm"); eq(r.platform, "wow-classic"); eq(r.code, code); eq(r.engine, c.ns.Engine.ENGINE_VERSION)
+    eq(r.player, "Alice-Realm"); eq(r.platform, "wow-forever", "the mock runs interface 16001 = WoW Forever"); eq(r.code, code); eq(r.engine, c.ns.Engine.ENGINE_VERSION)
     eq(Acc.requestCode(), req, "the same request every time it is shown")
     c.M.serverTime = T0 + 120
     local okI, res = Acc.import(webAnswer(req))

@@ -64,7 +64,8 @@ end
 
 --- Resend once after a few seconds (called from Duel.update while in the lobby or playing).
 function Card.tick(m, t)
-  if m.cardSent and (m.prfSends or 0) < 2 and t - (m.prfSentAt or t) >= 3 then Card.send(m) end
+  -- up to 4 sends, 3 s apart, until the rival's card arrived (a whisper can be lost; chat needs both cards)
+  if m.cardSent and (m.prfSends or 0) < 4 and t - (m.prfSentAt or t) >= 3 and (m.prfSends < 2 or not m.rivalCard) then Card.send(m) end
 end
 
 local function onCard(msg, sender)
@@ -73,6 +74,8 @@ local function onCard(msg, sender)
   m.rivalCard = {
     faction = msg.faction, race = msg.race, class = msg.class, level = msg.level ~= 0 and msg.level or nil,
     wins = msg.wins, losses = msg.losses, chat = msg.chat, selfReported = true,
+    -- "-" for faction, race and class = the rival switched sharing off: their record is unknown too
+    hidden = msg.faction == nil and msg.race == nil and msg.class == nil,
   }
   if not m.cardSent and (m.state == "lobby" or m.state == "playing") then Card.onLobby(m) end
   if ns.UI and ns.UI.frame and ns.UI.RefreshPhase then ns.UI:RefreshPhase() end

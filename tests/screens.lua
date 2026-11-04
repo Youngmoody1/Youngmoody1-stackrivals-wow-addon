@@ -378,6 +378,55 @@ S.list = {
     M.frames_step(1)
     return M, ns
   end },
+  { "24-loot-setup", "Loot Duel - leader picks the item and players, invites sent", function()
+    local _, _, _, NS = duelPair()
+    local net = NS.new({ seed = 40 })
+    local cs = {}
+    local cls = { "WARRIOR", "SHAMAN", "MAGE", "PRIEST" }
+    for i, n in ipairs({ "Lead", "Ann", "Ben", "Cid" }) do cs[n] = net.add({ name = n, group = "P", lead = (i == 1), class = cls[i], saved = { seenHelp = true } }) end
+    net.step(30)
+    local a = cs.Lead
+    a.env.SlashCmdList.STACKRIVALS("")
+    a.ns.LootDuel.create(19019, "l060", { "Ann-Realm", "Ben-Realm", "Cid-Realm" }); net.step(60)
+    cs.Ann.ns.LootDuel.answer(true); cs.Cid.ns.LootDuel.answer(false); net.step(120)
+    a.ns.UI:ShowSheet("loot")
+    return a.M, a.ns, a.env.StackRivalsFrame
+  end },
+  { "24b-loot-invite", "Loot Duel - the invite popup (accept / decline)", function()
+    local _, _, _, NS = duelPair()
+    local net = NS.new({ seed = 41 })
+    local lead = net.add({ name = "Lead", group = "P", lead = true, saved = { seenHelp = true } })
+    local ann = net.add({ name = "Ann", group = "P", class = "SHAMAN", saved = { seenHelp = true } })
+    net.add({ name = "Ben", group = "P", class = "MAGE", saved = { seenHelp = true } })
+    net.step(30)
+    lead.ns.LootDuel.create(19019, "l060", { "Ann-Realm", "Ben-Realm" }); net.step(60)
+    return ann.M, ann.ns, ann.ns.UI.lootPopup
+  end },
+  { "24c-loot-result", "Loot Duel - result: replay-checked standings and the winner", function()
+    local _, _, _, NS = duelPair()
+    local net = NS.new({ seed = 42 })
+    local cs = {}
+    local cls = { "WARRIOR", "SHAMAN", "MAGE" }
+    for i, n in ipairs({ "Lead", "Ann", "Ben" }) do cs[n] = net.add({ name = n, group = "P", lead = (i == 1), class = cls[i], saved = { seenHelp = true } }) end
+    net.step(30)
+    cs.Lead.ns.LootDuel.create(19019, "l060", { "Lead-Realm", "Ann-Realm", "Ben-Realm" }); net.step(60)
+    cs.Ann.ns.LootDuel.answer(true); cs.Ben.ns.LootDuel.answer(true); net.step(120)
+    cs.Lead.ns.LootDuel.start(); net.step(240)
+    local pace = { Lead = 9, Ann = 5, Ben = 13 }
+    for f = 1, 6000 do
+      local running = false
+      for n, c in pairs(cs) do
+        local s = c.ns.App.session
+        if s and s.loot and not s.recorded then running = true; if s.phase == "playing" and f % pace[n] == 0 then s:press("hardDrop"); s:release("hardDrop") end end
+      end
+      net.step(1)
+      if not running then break end
+    end
+    net.step(60 * 20)
+    cs.Lead.ns.App:ShowMenu()
+    cs.Lead.ns.UI:ShowSheet("loot")
+    return cs.Lead.M, cs.Lead.ns, cs.Lead.env.StackRivalsFrame
+  end },
   { "8-records", "Records", function()
     local M, ns = boot(); seedRecords(ns); SlashCmdList.STACKRIVALS(""); ns.UI:ShowSheet("records"); M.frames_step(1); return M, ns
   end },

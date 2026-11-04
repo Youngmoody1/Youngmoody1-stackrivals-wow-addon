@@ -50,8 +50,9 @@ function BNet.refresh(force)
       local g = ok and type(acc) == "table" and acc.gameAccountInfo or nil
       if g and g.isOnline and g.clientProgram == (BNET_CLIENT_WOW or "WoW") and type(g.gameAccountID) == "number"
         and type(g.characterName) == "string" and g.characterName ~= ""
+        and type(g.realmName) == "string" and g.realmName ~= "" -- never guess a realm (could be someone else)
         and not (WOW_PROJECT_ID and g.wowProjectID and g.wowProjectID ~= WOW_PROJECT_ID) then
-        local name = ns.Social and ns.Social.full(g.characterName, (type(g.realmName) == "string" and g.realmName ~= "") and g.realmName or nil)
+        local name = ns.Social and ns.Social.full(g.characterName, g.realmName)
         if name then byName[name:lower()] = g.gameAccountID; byId[g.gameAccountID] = name end
       end
     end
@@ -88,7 +89,10 @@ end
 function BNet.onEvent(prefix, text, _, senderID)
   if prefix ~= ns.Protocol.PREFIX then return end
   local name = BNet.byId[senderID]
-  if not name then BNet.refresh(true); name = BNet.byId[senderID] end
+  if not name and now() - (BNet.forcedAt or -99) >= 5 then -- a re-read at most every 5 s (no spam)
+    BNet.forcedAt = now()
+    BNet.refresh(true); name = BNet.byId[senderID]
+  end
   if not name then
     BNet.stats.unknown = BNet.stats.unknown + 1 -- not a current Battle.net friend on WoW: dropped
     return

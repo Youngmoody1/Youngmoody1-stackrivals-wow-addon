@@ -59,7 +59,7 @@ function Acc.platform()
   local proj = WOW_PROJECT_ID
   if proj == 1 then return "wow-retail" end
   if ns.BUILD and ns.BUILD.forever then return "wow-forever" end
-  local _, _, _, iface = GetBuildInfo and GetBuildInfo()
+  local iface = GetBuildInfo and select(4, GetBuildInfo())
   if iface == 16001 then return "wow-forever" end -- WoW Forever's interface (TOC)
   return "wow-classic"
 end
@@ -183,7 +183,8 @@ function Acc.sanitize(raw)
     if type(who) == "string" and (not C or C.nameOk(who)) and type(r) == "table" then
       local o = {}
       local pe = r.pending
-      if type(pe) == "table" and id(pe.code, "^[0-9A-Z]+$", 8, 8) and id(pe.linkId, "^[a-z0-9]+$", 12, 12) and num(pe.at, 0, 1e11) then
+      if type(pe) == "table" and id(pe.code, "^[0-9A-Z]+$", 8, 8) and id(pe.linkId, "^[a-z0-9]+$", 12, 12) and num(pe.at, 0, 1e11)
+        and Acc.now() - pe.at <= Acc.PENDING_TTL then -- an expired one-time code isn't kept
         o.pending = { code = pe.code, linkId = pe.linkId, at = num(pe.at, 0, 1e11) }
       end
       local li, pr = r.link, r.profile

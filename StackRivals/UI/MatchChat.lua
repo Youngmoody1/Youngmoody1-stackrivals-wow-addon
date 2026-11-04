@@ -21,7 +21,9 @@ local function wrap(text, n)
   for word in text:gmatch("%S+") do
     while #word > n do
       if cur ~= "" then out[#out + 1] = cur; cur = "" end
-      out[#out + 1] = word:sub(1, n); word = word:sub(n + 1)
+      local cut = n
+      while cut > 1 and (word:byte(cut + 1) or 0) >= 128 and (word:byte(cut + 1) or 0) < 192 do cut = cut - 1 end -- not inside a UTF-8 character
+      out[#out + 1] = word:sub(1, cut); word = word:sub(cut + 1)
     end
     if cur == "" then cur = word
     elseif #cur + 1 + #word <= n then cur = cur .. " " .. word
@@ -175,7 +177,10 @@ function UI:RefreshChat()
   for _, l in ipairs(lines) do
     local who = l.me and "You" or short(m.rival)
     local kind = l.quick and "quick" or (l.me and "me" or "them")
-    for i, part in ipairs(wrap(who .. ": " .. l.text, WRAP)) do
+    -- wrap the plain text, THEN escape each piece: a cut can never split an escaped "||"
+    local raw = who .. ": " .. (l.text:gsub("||", "|"))
+    for i, part in ipairs(wrap(raw, WRAP)) do
+      part = part:gsub("|", "||")
       if i == 1 and not l.me then part = rivalTag .. part:sub(#who + 1) end
       vis[#vis + 1] = { i == 1 and part or ("  " .. part), kind }
     end

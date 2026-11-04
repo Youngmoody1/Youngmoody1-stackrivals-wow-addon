@@ -36,6 +36,7 @@ Core\Sync.lua
 Core\Card.lua
 Core\Chat.lua
 Core\Quickplay.lua
+Core\LootDuel.lua
 Core\Duel.lua
 Core\DuelDiag.lua
 UI\DuelUI.lua
@@ -43,5 +44,6 @@ UI\QuickplayUI.lua
 UI\MatchChat.lua
 UI\AccountUI.lua
 UI\SyncUI.lua
+UI\LootDuelUI.lua
 UI\SpellUI.lua
 Core\Main.lua

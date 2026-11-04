@@ -368,7 +368,7 @@ local function fillCard(c, name, p, own, waiting)
   local myRealm = (ns.Comm.me() or ""):match("%-(.+)$")
   c.name:SetText(base or name)
   if waiting then
-    c.faction:SetText("waiting for card...")
+    c.faction:SetText(waiting == "old" and "older StackRivals: no card" or "waiting for card...")
     c.faction:SetTextColor(C.label[1], C.label[2], C.label[3])
     c.line2:SetText(""); c.line3:SetText(""); c.line4:SetText("")
     c.fIcon:Hide(); c.cIcon:Hide()
@@ -385,7 +385,7 @@ local function fillCard(c, name, p, own, waiting)
   c.line2:SetText(ns.Card.who(p, true)) -- the class name in WoW's class colour
   c.line3:SetText(realm or myRealm or "")
   local games = (p.wins or 0) + (p.losses or 0)
-  local rec = games > 0 and string.format("Duels %d-%d (%d%%)", p.wins, p.losses, math.floor(100 * p.wins / games + 0.5)) or "No duels yet"
+  local rec = p.hidden and "Record: Unknown" or games > 0 and string.format("Duels %d-%d (%d%%)", p.wins, p.losses, math.floor(100 * p.wins / games + 0.5)) or "No duels yet"
   c.line4:SetText(own and rec or (rec .. "  -  unverified"))
   local fi = FACTION_ICON[p.faction or ""]
   c.fIcon:SetShown(fi ~= nil)
@@ -481,7 +481,9 @@ function UI:RefreshDuel(phase)
     if not o:IsShown() then o:Show(); o.fade:Play() end
     local mine = ns.Card and ns.Card.mine() or {}
     fillCard(o.meCard, short(ns.Comm.me()) or "You", ns.Card and ns.Card.sharing() and mine or { wins = mine.wins, losses = mine.losses }, true)
-    fillCard(o.themCard, short(m.rival) or "?", m.rivalCard, false, m.state == "lobby" and not m.rivalCard)
+    local pres = ns.Duel.presence(m.rival)
+    local old = pres and pres.addon and not P.versionAtLeast(pres.addon, "0.6.1")
+    fillCard(o.themCard, short(m.rival) or "?", m.rivalCard, false, (m.state == "lobby" and not m.rivalCard) and (old and "old" or true))
     o.rules:SetText(m.quickplay and ("QUICK DUEL  -  MATCH FOUND  -  " .. string.upper(m.ruleset.name))
       or (string.upper(m.ruleset.name) .. "  -  SAME PIECES FOR BOTH"))
     o.ready:Hide()
@@ -515,7 +517,7 @@ function UI:RefreshDuel(phase)
   else
     o:Hide()
   end
-  local showRival = inDuel and true or false
+  local showRival = (inDuel or (s and s.loot and not ns.App.inMenu)) and true or false
   self.rivalPanel:SetShown(showRival)
   self.nextPanel:SetHeight(self.field:GetHeight() - (showRival and 82 or 0))
   self.nextPreviews[5]:SetShown(not showRival)
@@ -528,6 +530,7 @@ function UI:RenderRival()
   local rp = self.rivalPanel
   if not rp or not rp:IsShown() then return end
   local s = ns.App.session
+  if s and s.loot and self.RenderLootPanel then return self:RenderLootPanel(s) end
   local m = s and s.duel
   if not m then return end
   local r = m.rival_

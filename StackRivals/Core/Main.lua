@@ -62,7 +62,8 @@ end
 --- Start a fresh run in `mode` (classic | blitz | daily).
 function App:Start(mode)
   if ns.UI.inCombat() then self:Print("Can't start a run in combat."); return end
-  if ns.Session.MODES[mode] and ns.Session.MODES[mode].duel then return end -- duels start via ns.Duel
+  local md = ns.Session.MODES[mode]
+  if md and (md.duel or md.challenge or md.loot) then return end -- duels, web challenges and loot duels have their own start
   local d = ns.Duel and ns.Duel.current
   if d and (d.state == "playing" or d.state == "waiting") then self:Print("Finish or leave your duel first (/sr leave)."); return end
   if ns.Duel then ns.Duel.clear() end -- a finished/cancelled duel must not cover the new run
@@ -80,6 +81,26 @@ function App:Start(mode)
   self.inMenu = false
   ns.db.suspended = nil
   if not ns.UI.frame:IsShown() then ns.UI.frame:Show() end
+  ns.UI:RefreshPhase()
+end
+
+--- A Loot Duel race starts (Core/LootDuel.lua): my run on the shared seed, like a duel start.
+function App:StartLoot(d)
+  if self.session and self.session.spell then ns.SpellBattle.settleAll(self.session) end
+  ns.UI:Create()
+  local cur = self.session
+  if cur and not cur.duel and not cur.loot and not cur.challenge then
+    local data = cur:suspendData() -- keep an unfinished solo run for "Continue last run"
+    if data then data.date = cur.date or self:Today(); ns.db.suspended = data end
+  end
+  local s = Session.new("loot_" .. d.rs, d.seed, self:Today())
+  s.loot = d
+  self.session = s
+  self.inMenu = false
+  if ns.UI.HideSheets then ns.UI:HideSheets() end
+  if not ns.UI.frame:IsShown() and not (ns.UI.inCombat() and ns.db.settings.hideInCombat) then ns.UI.frame:Show() end
+  if ns.UI.inCombat() then s:pause("combat")
+  elseif GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus() then s:pause("chat") end
   ns.UI:RefreshPhase()
 end
 
@@ -124,7 +145,14 @@ function App:ContinueSuspended()
   ns.db.suspended = nil
   if not sess then self:Print("That saved run could not be restored."); ns.UI:RefreshMenu(); return end
   self.session = sess
-  self.lastMode = su.mode
+  if sess.mode.challenge then
+    -- a web challenge restored after /reload: it is still that challenge (Play again = the same one)
+    sess.challenge = { ruleset = sess.mode.challenge, seed = sess.seed, engine = E.ENGINE_VERSION }
+    local okC, code = pcall(ns.Codes.challenge, sess.mode.challenge, sess.seed)
+    self.lastChallenge = okC and code or nil
+  else
+    self.lastMode = su.mode
+  end
   self.inMenu = false
   ns.UI:RefreshPhase()
 end
@@ -212,6 +240,13 @@ function App:OnRunOver(reason)
     return
   end
   local mode = s.mode.key
+  if s.loot then
+    -- Loot Duel: my result + log go to everyone; the standings come when all are in (or the deadline)
+    ns.LootDuel.onLocalEnd(s)
+    ns.Sound.play("gameover")
+    ns.UI:ShowOver({ state = s.state, reason = reason, mode = mode, modeName = s.mode.name, loot = s.loot })
+    return
+  end
   if s.mode.challenge then
     -- a web challenge: never a local record; kept for export as an SR1 result code
     if ns.Sync then ns.Sync.saveChallengeRun(s) end

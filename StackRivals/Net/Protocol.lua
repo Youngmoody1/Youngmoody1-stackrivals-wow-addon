@@ -45,6 +45,18 @@
                                                     my played-out duel W / L, chat 1 = match chat on
     1:CH:<mid>:<n>:<hex>                            (0.6.1+) match chat line n (UTF-8 as hex, max 80 bytes)
     1:QM:<mid>:<n>:<code>                           (0.6.1+) quick message n: 1 GL, 2 GG, 3 WP, 4 Rematch?
+    Loot Duel (0.7.0+), all on the group channel (PARTY / RAID); <lid> = loot duel id, names = hex
+    of "Name-Realm" (UTF-8). See docs/LOOT_DUEL.md.
+    1:LDO:<lid>:<l060|l120>:<engine>:<itemId>:<commitL>:<invitees>   offer (raid leader / assist / loot master)
+    1:LDI:<lid>:<k>:<hexName>[,<hexName>...]         invitee list chunk k
+    1:LDA:<lid>:<a|d>:<nonce|->                       my answer (+ my seed nonce when I accept)
+    1:LDP:<lid>:<k>:<total>:<hexName>-<nonce>[,...]   final participant list chunk k of total
+    1:LDS:<lid>:<nonceL>:<listHash>:<count>           start: reveals the leader's nonce; seed from all nonces
+    1:LDC:<lid>:<tick36>:<score36>                     my live score
+    1:LDE:<lid>:<ticks36>:<score36>:<lines36>:<level36>:<hash>:<chunks>   my final result
+    1:LDL:<lid>:<i>:<n>:<payload>                      my log chunk i of n (as LOG)
+    1:LDX:<lid>:<cancel|left>                          the leader cancelled
+    1:LDR:<lid>:<hexWinner|->:<tie 0|1>                the leader's computed result (display only)
   Older clients ignore kinds they don't know (decode -> "kind"), so these never break a 0.4 duel.
 
   Spell Battle (ruleset s180) uses the same flow; only clients 0.5+ know s180, SP and the cast
@@ -138,7 +150,23 @@ local SPEC = {
   HEL = 2, HI = 3, INV = 4, ACC = 2, DEC = 2, RDY = 1, GO = 2, PNG = 1, SC = 5, END = 7, LOG = 4, BYE = 2, RQ = 2, FIN = 1,
   SP = 4, PSE = 3, RSM = 2, VER = 5,
   QS = 3, PRF = 8, CH = 3, QM = 3,
+  LDO = 6, LDI = 3, LDA = 3, LDP = 4, LDS = 4, LDC = 3, LDE = 7, LDL = 4, LDX = 2, LDR = 3,
 }
+--- Loot Duel rules (WoW-only, peer-checked): same pieces for everyone, no spells, highest score.
+P.LOOT_RULESETS = {
+  l060 = { id = "l060", name = "Loot Duel 1:00", limitTicks = 3600, countdownTicks = 180 },
+  l120 = { id = "l120", name = "Loot Duel 2:00", limitTicks = 7200, countdownTicks = 180 },
+}
+P.LOOT_MAX = 8 -- participants
+local function hexName(h) return type(h) == "string" and #h >= 4 and #h <= 128 and #h % 2 == 0 and h:match("^[0-9a-f]+$") ~= nil end
+local function unhexName(h)
+  if not hexName(h) then return nil end
+  local s = h:gsub("..", function(x) return string.char(tonumber(x, 16)) end)
+  if s:find("[%c|]") or not s:find("-", 1, true) then return nil end
+  return s
+end
+P.unhexName = unhexName
+function P.hexName(s) return (s:gsub(".", function(ch) return string.format("%02x", ch:byte()) end)) end
 P.FACTIONS = { A = "Alliance", H = "Horde", N = "Neutral" }
 P.QUICK = { "Good luck!", "GG!", "Well played!", "Rematch?" }
 P.CHAT_MAX = 80 -- bytes of UTF-8 text per chat line
@@ -190,6 +218,53 @@ function P.decode(s)
   elseif kind == "QM" then
     if not isMid(f[3]) or not isInt(f[4], 1, 9999) or not isInt(f[5], 1, #P.QUICK) then return nil, "bad" end
     m.mid, m.n, m.code = f[3], tonumber(f[4]), tonumber(f[5])
+  elseif kind == "LDO" then
+    if not isMid(f[3]) or not P.LOOT_RULESETS[f[4]] or not isInt(f[5], 1, 9999) or not isInt(f[6], 1, 9999999)
+      or not f[7]:match("^%x%x%x%x%x%x%x%x$") or not isInt(f[8], 2, P.LOOT_MAX) then return nil, "bad" end
+    m.lid, m.rs, m.engine, m.itemId, m.commit, m.count = f[3], f[4], tonumber(f[5]), tonumber(f[6]), f[7], tonumber(f[8])
+  elseif kind == "LDI" then
+    if not isMid(f[3]) or not isInt(f[4], 1, 9) then return nil, "bad" end
+    m.lid, m.k, m.names = f[3], tonumber(f[4]), {}
+    for part in (f[5] .. ","):gmatch("([^,]*),") do
+      local nm = unhexName(part)
+      if not nm or #m.names >= P.LOOT_MAX then return nil, "bad" end
+      m.names[#m.names + 1] = nm
+    end
+  elseif kind == "LDA" then
+    if not isMid(f[3]) or (f[4] ~= "a" and f[4] ~= "d") then return nil, "bad" end
+    if f[4] == "a" and not isNonce(f[5]) then return nil, "bad" end
+    if f[4] == "d" and f[5] ~= "-" then return nil, "bad" end
+    m.lid, m.accept, m.nonce = f[3], f[4] == "a", f[4] == "a" and f[5] or nil
+  elseif kind == "LDP" then
+    if not isMid(f[3]) or not isInt(f[4], 1, 9) or not isInt(f[5], 1, 9) or tonumber(f[4]) > tonumber(f[5]) then return nil, "bad" end
+    m.lid, m.k, m.total, m.entries = f[3], tonumber(f[4]), tonumber(f[5]), {}
+    for part in (f[6] .. ","):gmatch("([^,]*),") do
+      local h, nonce = part:match("^([0-9a-f]+)%-([0-9a-z]+)$")
+      local nm = h and unhexName(h)
+      if not nm or not isNonce(nonce) or #m.entries >= P.LOOT_MAX then return nil, "bad" end
+      m.entries[#m.entries + 1] = { name = nm, nonce = nonce }
+    end
+  elseif kind == "LDS" then
+    if not isMid(f[3]) or not isNonce(f[4]) or not f[5]:match("^%x%x%x%x%x%x%x%x$") or not isInt(f[6], 2, P.LOOT_MAX) then return nil, "bad" end
+    m.lid, m.nonce, m.listHash, m.count = f[3], f[4], f[5], tonumber(f[6])
+  elseif kind == "LDC" then
+    local t, sc = P.unb36(f[4]), P.unb36(f[5])
+    if not isMid(f[3]) or not t or not sc then return nil, "bad" end
+    m.lid, m.tick, m.score = f[3], t, sc
+  elseif kind == "LDE" then
+    local t, sc, ln, lv = P.unb36(f[4]), P.unb36(f[5]), P.unb36(f[6]), P.unb36(f[7])
+    if not isMid(f[3]) or not t or not sc or not ln or not lv or not f[8]:match("^%x%x%x%x%x%x%x%x$") or not isInt(f[9], 0, 99) then return nil, "bad" end
+    m.lid, m.ticks, m.score, m.lines, m.level, m.hash, m.chunks = f[3], t, sc, ln, lv, f[8], tonumber(f[9])
+  elseif kind == "LDL" then
+    if not isMid(f[3]) or not isInt(f[4], 1, 99) or not isInt(f[5], 1, 99) or tonumber(f[4]) > tonumber(f[5]) then return nil, "bad" end
+    if #f[6] > P.CHUNK_PAYLOAD or not f[6]:match("^[0-9a-zA-G]*$") then return nil, "bad" end
+    m.lid, m.i, m.n, m.payload = f[3], tonumber(f[4]), tonumber(f[5]), f[6]
+  elseif kind == "LDX" then
+    if not isMid(f[3]) or (f[4] ~= "cancel" and f[4] ~= "left") then return nil, "bad" end
+    m.lid, m.reason = f[3], f[4]
+  elseif kind == "LDR" then
+    if not isMid(f[3]) or (f[4] ~= "-" and not unhexName(f[4])) or (f[5] ~= "0" and f[5] ~= "1") then return nil, "bad" end
+    m.lid, m.winner, m.tie = f[3], f[4] ~= "-" and unhexName(f[4]) or nil, f[5] == "1"
   elseif kind == "ACC" then
     if not isMid(f[3]) or not isNonce(f[4]) then return nil, "bad" end
     m.mid, m.nonce = f[3], f[4]

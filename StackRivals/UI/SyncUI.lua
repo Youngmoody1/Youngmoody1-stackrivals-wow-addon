@@ -33,7 +33,7 @@ function UI:CreateSync(sheet)
   y.play = T.button(y, "Play", 100, 24, "primary", play)
   y.play:SetPoint("LEFT", y.code, "RIGHT", 6, 0)
 
-  local h2 = T.label(y, "YOUR RESULTS  -  MANUAL COPY / PASTE TO STACKRIVALS.IO"); h2:SetPoint("TOPLEFT", L, -170)
+  local h2 = T.label(y, "YOUR RESULTS  -  COPY / PASTE TO STACKRIVALS.IO"); h2:SetPoint("TOPLEFT", L, -170)
   y.rows = {}
   for i = 1, ROWS do
     local row = T.panel(y)
@@ -55,6 +55,11 @@ function UI:CreateSync(sheet)
     row:Hide()
     y.rows[i] = row
   end
+  -- all kept results (10 + today's Daily) can be reached: pages of ROWS
+  y.prev = T.button(y, "<", 26, 20, "frame", function() UI.syncPage = math.max(1, (UI.syncPage or 1) - 1); UI:RefreshSync() end)
+  y.next = T.button(y, ">", 26, 20, "frame", function() UI.syncPage = (UI.syncPage or 1) + 1; UI:RefreshSync() end)
+  y.next:SetPoint("TOPRIGHT", -L - 2, -166); y.prev:SetPoint("RIGHT", y.next, "LEFT", -4, 0)
+  y.page = T.text(y, SZ.label, C.label); y.page:SetPoint("RIGHT", y.prev, "LEFT", -6, 0)
   y.empty = T.text(y, SZ.small, C.body); y.empty:SetPoint("TOPLEFT", L, -190); y.empty:SetWidth(cw); y.empty:SetJustifyH("LEFT")
   y.empty:SetSpacing(3)
   y.out = UI.accountCopyBox(y, cw, ns.Codes.MAX_CODE)
@@ -71,8 +76,15 @@ function UI:RefreshSync()
   y.status:SetText((st == "linked" or st == "not_synced") and ("Linked to " .. (r.profile.name:gsub("|", "||")) .. ": result codes carry your link.")
     or "Not linked: result codes carry only your character name.")
   local list = ns.Sync.exportable(ns.App:Today())
+  local pages = math.max(1, math.ceil(#list / ROWS))
+  self.syncPage = math.min(math.max(1, self.syncPage or 1), pages)
+  local first = (self.syncPage - 1) * ROWS
+  y.prev:SetShown(pages > 1); y.next:SetShown(pages > 1); y.page:SetShown(pages > 1)
+  y.page:SetText(self.syncPage .. " / " .. pages)
+  if self.syncPage > 1 then y.prev:Enable() else y.prev:Disable() end
+  if self.syncPage < pages then y.next:Enable() else y.next:Disable() end
   for i, row in ipairs(y.rows) do
-    local e = list[i]
+    local e = list[first + i]
     if e then
       local rr = e.r
       row.name:SetText((e.kind == "daily" and "Daily Challenge (today)") or RULESET_NAME[rr.ruleset] or rr.ruleset)

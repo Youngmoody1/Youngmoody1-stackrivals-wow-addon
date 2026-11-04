@@ -17,6 +17,7 @@ local NOTE = {
   no_opponent = "No opponent found in 5 minutes. Only players who are searching right now and that WoW lets you reach can be matched.",
   fell_through = "Your opponent didn't get ready. Searching again (they are skipped for 2 minutes).",
   cancelled = "Search cancelled.",
+  busy = "You're in a duel, so the search stopped.",
   you_not_ready = "You didn't press Ready in time, so the search stopped. Search again when you're set.",
 }
 

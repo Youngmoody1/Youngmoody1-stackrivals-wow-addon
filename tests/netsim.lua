@@ -63,6 +63,21 @@ function NS.new(opts)
       return out
     end
     env.GetNumGroupMembers = function() local g = groupMates(); return #g > 0 and (#g + 1) or 0 end
+    -- group roles for Loot Duel: o.lead = party leader; classes from o.class
+    local function unitClient(u)
+      if u == "player" then return o end
+      local k = tonumber((u or ""):match("^party(%d+)$"))
+      local x = k and groupMates()[k]
+      return x and x.o or nil
+    end
+    env.UnitIsGroupLeader = function(u) local x = unitClient(u); return x and x.lead == true or false end
+    env.UnitExists = function(u) return unitClient(u) ~= nil end
+    env.UnitClass = function(u)
+      local x = unitClient(u)
+      if not x then return nil end
+      local cls = x.class or "WARRIOR"
+      return cls:sub(1, 1) .. cls:sub(2):lower(), cls
+    end
     env.UnitName = function(unit)
       if unit == "player" or unit == nil then return o.name end
       local k = tonumber((unit or ""):match("^party(%d+)$"))

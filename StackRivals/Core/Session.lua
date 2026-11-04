@@ -40,6 +40,10 @@ Session.MODES.chal_b120 = { key = "chal_b120", name = "Web Challenge 2:00", shor
 Session.MODES.chal_r180 = { key = "chal_r180", name = "Web Challenge 3:00", short = "SR1 challenge", limitTicks = 10800, countdownTicks = 240, challenge = "r180" }
 Session.MODES.chal_daily120 = { key = "chal_daily120", name = "Daily Challenge (code)", short = "SR1 daily", limitTicks = 7200, countdownTicks = 180, challenge = "daily120" }
 
+-- Loot Duel (Core/LootDuel.lua): everyone in the race plays the same seed, no spells; never a record.
+Session.MODES.loot_l060 = { key = "loot_l060", name = "Loot Duel 1:00", short = "Raid loot race", limitTicks = 3600, countdownTicks = 180, loot = true }
+Session.MODES.loot_l120 = { key = "loot_l120", name = "Loot Duel 2:00", short = "Raid loot race", limitTicks = 7200, countdownTicks = 180, loot = true }
+
 --- Seed shared by every player for a UTC date string "YYYY-MM-DD".
 function Session.dailySeed(dateStr) return "srwow-daily-" .. dateStr end
 --- The UTC date a daily seed belongs to (or nil for non-daily seeds).
@@ -88,7 +92,7 @@ end
 
 --- Serialize an unfinished run for SavedVariables, or nil if there is nothing to keep.
 function Session:suspendData()
-  if self.duel or self.mode.duel then return nil end -- a duel can't be resumed after /reload
+  if self.duel or self.mode.duel or self.loot or self.mode.loot then return nil end -- a duel / loot duel can't be resumed after /reload
   if self.phase == "over" or self.state.gameOver then return nil end
   if self.state.tick == 0 and #self.state.inputLog == 0 then return nil end
   if self.spell then return ns.SpellBattle.suspendData(self) end

@@ -261,7 +261,22 @@ function M.install(G)
   G.GetCursorPosition = function() return 0, 0 end
   G.UnitName = function() return M.playerName or "Tester" end
   G.GetNormalizedRealmName = function() return M.realm or "Realm" end
+  G.UnitExists = function(u) return u == "player" end
+  G.UnitIsGroupLeader = function() return false end
   -- server time (unix s): fixed base + simulated time, or M.serverTime
+  -- items (Loot Duel): M.items[id] = { name, quality, icon } or the defaults below
+  local ITEMS = {
+    [19019] = { "Thunderfury, Blessed Blade of the Windseeker", 5, "Interface\\Icons\\INV_Sword_39" },
+    [17076] = { "Bonereaver's Edge", 4, "Interface\\Icons\\INV_Sword_12" },
+  }
+  G.GetItemInfo = function(id)
+    local it = (M.items or ITEMS)[tonumber(id) or 0]
+    if not it then return nil end
+    local link = "|cff" .. ({ [4] = "a335ee", [5] = "ff8000" })[it[2]] .. "|Hitem:" .. id .. "::::::::60:::::|h[" .. it[1] .. "]|h|r"
+    return it[1], link, it[2], 60, 60, "Weapon", "Sword", 1, "INVTYPE_WEAPON", it[3], 0
+  end
+  G.GiveMasterLoot = function() M.lootGiven = (M.lootGiven or 0) + 1 end -- must never be called by the addon
+  G.SetLootMethod = function() M.lootChanged = (M.lootChanged or 0) + 1 end
   G.SetPortraitTexture = function(tex, unit) tex._tex = "portrait:" .. tostring(unit) end
   G.GetServerTime = function() return M.serverTime or math.floor(1793000000 + (M.time or 0)) end
   -- your own character (Core/Card.lua): set M.faction / M.race / M.class / M.level in a test

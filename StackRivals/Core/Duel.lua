@@ -792,6 +792,7 @@ function Duel.init()
   if ns.Card then ns.Card.init() end
   if ns.Chat then ns.Chat.init() end
   if ns.Quickplay then ns.Quickplay.init() end
+  if ns.LootDuel then ns.LootDuel.init() end
 end
 
 ------------------------------------------------------------------------------------------------
@@ -1100,6 +1101,7 @@ end
 function Duel.update()
   local t = now()
   if ns.Quickplay then ns.Quickplay.update(t) end
+  if ns.LootDuel then ns.LootDuel.update(t) end
   if ns.Card and Duel.current then ns.Card.tick(Duel.current, t) end
   local dt = t - (Duel.lastT or t)
   Duel.lastT = t

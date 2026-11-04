@@ -84,8 +84,8 @@ function QP.cancel(note)
   emit("changed")
 end
 
-local function sendQS(channel, target)
-  ns.Comm.send(P().encode("QS", QP.qid, QP.mode, ns.VERSION or "dev"), channel, target, nil, { low = true })
+local function sendQS(channel, target, normal)
+  ns.Comm.send(P().encode("QS", QP.qid, QP.mode, ns.VERSION or "dev"), channel, target, nil, { low = not normal })
 end
 
 --- Announce: guild + group broadcast, and a whisper to friends whose StackRivals answered (fresh).
@@ -115,7 +115,11 @@ function QP.wants(ruleset, sender)
   if QP.state ~= "searching" or ruleset ~= QP.mode or type(sender) ~= "string" then return false end
   if ignored(sender) then return false end
   local ex = QP.excluded[sender:lower()]
-  return not (ex and now() < ex)
+  if ex and now() < ex then return false end
+  -- they must have told us they search (QS): nobody can push a match on a searcher. Their QS whisper
+  -- is queued before their invite, so it arrives first.
+  local c = QP.candidates[sender:lower()]
+  return c ~= nil and now() - c.at < QP.CANDIDATE_TTL
 end
 
 --- The duel for this Quickplay match exists (we invited, or accepted their invite).
@@ -133,12 +137,13 @@ local function onSearch(msg, sender)
   if ex and now() < ex then return end
   QP.candidates[k] = { name = sender, at = now(), addon = msg.addon }
   -- tell them about me (a broadcast only reaches them one way)
-  if not QP.replied[k] or now() - QP.replied[k] >= QP.REPLY_GAP then
+  local lower = me():lower() < k
+  if lower or not QP.replied[k] or now() - QP.replied[k] >= QP.REPLY_GAP then
     QP.replied[k] = now()
-    sendQS("WHISPER", sender)
+    sendQS("WHISPER", sender, lower) -- the inviter's QS goes out normally, right before its invite
   end
   -- the lower name invites; the other waits for that invite
-  if me():lower() < k and not (ns.Duel and ns.Duel.busy()) then
+  if lower and not (ns.Duel and ns.Duel.busy()) then
     local okC = ns.Duel.challenge(sender, QP.mode, { quickplay = true })
     if okC then QP.onMatched(ns.Duel.current) end
   end
@@ -148,6 +153,13 @@ end
 --- Called every frame (from Duel.update).
 function QP.update(t)
   if QP.state == "searching" then
+    local cur = ns.Duel and ns.Duel.current
+    if cur and ns.Duel.busy() and cur ~= QP.match then
+      -- you accepted a normal duel (or challenged someone): stop searching, no more QS
+      QP.state, QP.note = "idle", "busy"
+      emit("changed")
+      return
+    end
     if t - QP.started > QP.SEARCH_MAX then
       QP.state, QP.note = "none", "no_opponent"
       emit("changed")
