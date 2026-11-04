@@ -11,6 +11,12 @@ StackRivalsDB = {
 ["hardDrop"] = "SPACE",
 ["left"] = "A",
 },
+["suspended"] = {
+["date"] = "2026-11-04",
+["mode"] = "classic",
+["log"] = "1;a1b2c3d4e5f60718;1;600;8,2 20,0 29,0 47,5 70,0 81,5 97,1 120,5 144,1 182,5 210,2 263,1 292,5",
+["playSeconds"] = 10,
+},
 ["window"] = {
 },
 ["seenIntro"] = true,
