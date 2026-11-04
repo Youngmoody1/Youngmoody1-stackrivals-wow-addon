@@ -529,8 +529,13 @@ function UI:RefreshDuel(phase)
   local showRival = (inDuel or (s and s.loot and not ns.App.inMenu)) and true or false
   self.rivalPanel:SetShown(showRival)
   if self.RefreshLootBoard then self:RefreshLootBoard() end -- the 10-player list beside the window
-  self.nextPanel:SetHeight(self.field:GetHeight() - (showRival and 82 or 0))
-  self.nextPreviews[5]:SetShown(not showRival)
+  -- NEXT: in Spell Battle vs Bot, SetSpellLayout owns it (2 pieces above the bot's panel). Resizing
+  -- it here showed the 5th NEXT piece on top of the bot's mini board: a coloured box (red for an
+  -- I piece) over the rival panel, seen in a real client.
+  if self.spellLayoutOn ~= "bot" then
+    self.nextPanel:SetHeight(self.field:GetHeight() - (showRival and 82 or 0))
+    self.nextPreviews[5]:SetShown(not showRival)
+  end
   self:RenderRival()
   if self.RefreshChat then self:RefreshChat() end
   return o:IsShown()

@@ -9,7 +9,9 @@
 - **CONGRATULATIONS!** on every participant's PC once every needed replay is checked: "[Name] wins the Loot Duel!", score, "#1 of n", "highest replay-checked score", with the item box above; a short glow and pop, once. A tie shows **TIE!** and "Roll off with /roll (the agreed tiebreak). No winner is invented." A local chat line, never group chat; Announce stays a manual click by the leader.
 - **Live list for 40**: 10 rows of 30 px, mouse-wheel scrolling through all players, your own row pinned when out of view, status icons, "provisional until the best runs are replayed", redrawn at most 4 times a second. Live scores every 4 / 5 / 6 s by group size. All results can be paged after the race (9 per page under the final header).
 - **Invite popup**: shorter text with room above the countdown bar.
-- **Spell Battle red box** (seen in the real Classic Era client): the Bomb target marker was a red-outlined frame above the board. It is now a faint red patch in the board's background layer under the pieces, hidden without mana. Regression test.
+- **Spell Battle red box** (seen in the real Classic Era client). Two candidates were found and both are fixed, each with a regression test:
+  - (a) Every phase change (pause, resume, countdown) let the duel code show the 5th NEXT piece again and stretch the NEXT panel, so that piece was drawn over the bot's mini board. An I piece is red, so it looked like a red bar or box. It is visible in our own preview since 0.5; we didn't catch it until now.
+  - (b) The Bomb target marker was a red-outlined frame above the board. It is now a faint patch under the pieces, hidden without mana.
 - **Guild Duels** naming (from 0.7.0's branch) is in this build.
 - Tests: `tests/test_loot40.lua` (13: 2, 5, 10, 15, 20, 25, 40 players with message counts, peak traffic, replays, memory; 40 on a bad network with 5 at 5 fps; 3 disconnects; a forged top claim; seed manipulation; a leaver in the lobby; a member who missed messages). Previews for 5-man, 10 / 20 / 40 raids, winner / loser / passed, CONGRATULATIONS, TIE and the 40-player live board. See `docs/LOOT_DUEL.md`.
 

@@ -39,7 +39,7 @@ brief say **2–40 is the priority**. This plan follows 2–40.
 | # | Observation | Status |
 |---|---|---|
 | 3 | "Guild Duel" vs "GUILD DUELS" | DONE on the branch; in the 0.7.2 test ZIP |
-| 4 | Red box in Spell Battle (user, real Classic Era client) | Cause found (Bomb target outline above the board). Fixed with a regression test; in the 0.7.2 test ZIP. **Needs a screenshot / re-test to confirm** |
+| 4 | Red box in Spell Battle (user, real Classic Era client) | Two causes found and fixed with regression tests: (a) the 5th NEXT piece drawn over the bot's mini board after any phase change (most likely: an I piece is red); (b) the Bomb target outline above the board. In the 0.7.2 test ZIP. **Needs a screenshot / re-test to confirm** |
 
 ## 3. Real client tests (Classic Era first)
 

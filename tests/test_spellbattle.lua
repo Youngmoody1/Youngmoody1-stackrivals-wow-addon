@@ -374,6 +374,36 @@ describe("Spell Battle HUD readability (simulated layout)", function()
     ok(not bt:IsShown(), "hidden without mana")
   end)
 
+  it("regression (seen in a real client): no NEXT piece is drawn over the bot's board, after any phase change", function()
+    local M, ns = boot(nil)
+    local sess = startSpell(M, ns, "rookie")
+    local UI = ns.UI
+    -- the cause: every phase refresh (pause, resume, countdown) let the duel code re-show NEXT
+    -- piece 5 and grow the NEXT panel, so piece 5 sat on top of the bot's mini board
+    for _, step in ipairs({ "refresh", "pause", "resume" }) do
+      if step == "refresh" then UI:RefreshPhase()
+      elseif step == "pause" then ns.App:Pause("manual"); M.frames_step(2)
+      else ns.App:Resume(); M.frames_step(250) end
+      for i = 3, 5 do ok(not UI.nextPreviews[i]:IsShown(), step .. ": NEXT piece " .. i .. " hidden in Spell Battle") end
+      ok(UI.nextPanel:GetHeight() <= UI.field:GetHeight() - 207 + 0.5, step .. ": NEXT ends above the bot's panel")
+      ok(UI.spellRival:IsShown(), step .. ": the bot's panel is shown")
+    end
+    -- every NEXT piece that is visible lies above the bot's panel (rects from the layout helper)
+    local L = dofile(testdir .. "/layout.lua")
+    local R = L.new(UI.frame)
+    local rp = R.rect(UI.spellRival)
+    for i = 1, 5 do
+      local pv = UI.nextPreviews[i]
+      if R.visible(pv) then
+        local pr = R.rect(pv)
+        ok(pr.b >= rp.t - 0.5 or pr.r <= rp.l or pr.l >= rp.r, "NEXT piece " .. i .. " clear of the bot's panel")
+      end
+    end
+    -- back to Classic: all 5 NEXT pieces again
+    ns.App:Start("classic"); M.frames_step(200)
+    for i = 1, 5 do ok(UI.nextPreviews[i]:IsShown(), "Classic: NEXT piece " .. i) end
+  end)
+
   it("spell messages never cover your board; tile key / cost and the lane are big enough", function()
     local L = dofile(testdir .. "/layout.lua")
     local M, ns = boot(nil)
