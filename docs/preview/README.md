@@ -10,6 +10,10 @@ colour), the bundled Chakra Petch font and the addon's own textures (mark, icon)
 Blizzard textures, and animations (each shows its visible moment). The window is drawn at its base
 size; in WoW it is scaled to ~58% of the screen height (never below 1:1).
 
+Blizzard textures (item icons, class icons, faction emblems, portraits) can't be loaded outside
+WoW: the previews draw them as a crossed square or an empty circle. In the client they are the
+real icons.
+
 Final visual decisions wait for real in-client screenshots.
 
 Regenerate (after committing, so the banner names the commit):
