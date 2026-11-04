@@ -96,6 +96,11 @@ local function run(seed, size, n, netOpts, hooks)
     local d = LDc(lead).current
     if d and d.state == "cancelled" then break end
   end
+  -- when the leader had every share (its go), and how late the latest go reached a player
+  local ld = LDc(lead).current
+  local leaderGo = ld and ld.startAt and (ld.startAt - t0) or -1
+  local maxLate = 0
+  for i = 1, n do local x = LDc(list[i]).current; if x and x.lateBy and x.lateBy > maxLate then maxLate = x.lateBy end end
   if hooks.duringRace then hooks.duringRace(net, list) end
   race(net, list, hooks.skip)
   local tEnd = net.time
@@ -112,7 +117,7 @@ local function run(seed, size, n, netOpts, hooks)
   local m = {
     n = n, size = size, startS = lastStart, raceEndS = tEnd - t0, resultS = doneAt and (doneAt - t0) or nil,
     afterRaceS = doneAt and (doneAt - tEnd) or nil, messages = net.sent - sent0, bytes = bytes, throttled = net.throttled,
-    memKB = collectgarbage("count") - mem0, checks = 0, checkMs = 0, maxCheckMs = 0, peakChannel = 0, peakSender10 = 0,
+    memKB = collectgarbage("count") - mem0, leaderGo = leaderGo, maxLate = maxLate, checks = 0, checkMs = 0, maxCheckMs = 0, peakChannel = 0, peakSender10 = 0,
   }
   for _, v in pairs(perSec) do if v > m.peakChannel then m.peakChannel = v end end
   for _, c in ipairs(list) do
@@ -131,8 +136,8 @@ local function run(seed, size, n, netOpts, hooks)
 end
 
 local function fmt(m)
-  return string.format("%2d players (group %2d): start %.1f s | result %.1f s after the race (%.0f s total) | %d messages (%.1f KB) | peak %d msg/s on the channel, %d per sender in 10 s | %d replays, %.0f ms total, max %.1f ms | +%.0f KB memory | throttled %d",
-    m.n, m.size, m.startS, m.afterRaceS or -1, m.resultS or -1, m.messages, m.bytes / 1024, m.peakChannel, m.peakSender10, m.checks, m.checkMs, m.maxCheckMs, m.memKB, m.throttled)
+  return string.format("%2d players (group %2d): start %.1f s (leader's go %.1f s, latest go %d s late) | result %.1f s after the race (%.0f s total) | %d messages (%.1f KB) | peak %d msg/s on the channel, %d per sender in 10 s | %d replays, %.0f ms total, max %.1f ms | +%.0f KB memory | throttled %d",
+    m.n, m.size, m.startS, m.leaderGo, m.maxLate, m.afterRaceS or -1, m.resultS or -1, m.messages, m.bytes / 1024, m.peakChannel, m.peakSender10, m.checks, m.checkMs, m.maxCheckMs, m.memKB, m.throttled)
 end
 
 local function sameResult(list, n, size)
@@ -250,6 +255,49 @@ describe("Loot Duel with 40: trouble", function()
     end
   end)
 
+  for _, case in ipairs({ { 12, "12 forged claims above everyone (more than the best 10)" }, { 25, "25 forged claims, 15 honest players" } }) do
+    local nForged, title = case[1], case[2]
+    it("40, " .. title .. ": every forged claim is rejected, checking goes on down the list, the best honest run wins on every PC", function()
+      local liars = {}
+      for i = 2, nForged + 1 do liars[i] = true end
+      local net, list, names, m = run(480 + nForged, 40, 40, nil, {
+        beforeStart = function(n2, l)
+          for i in pairs(liars) do
+            local c = l[i]
+            local P = c.ns.Protocol
+            local LDm = c.ns.LootDuel
+            local realSend = LDm.sendFinal
+            local fake = 900000 + i * 1000 -- all different, all above any honest score
+            LDm.sendFinal = function(d)
+              local s = c.ns.App.session
+              if d.myFinal and not d.forged and s then
+                d.forged = true
+                d.results[c.name:lower()].score = fake
+                d.myFinal.msg = P.encode("LDE", d.lid, P.b36(s.state.tick), P.b36(fake), P.b36(s.state.lines), P.b36(s.state.level), c.ns.Engine.hashState(s.state), #d.myFinal.chunks)
+              end
+              return realSend(d)
+            end
+          end
+        end,
+      })
+      H.note(nForged .. " forged: " .. fmt(m))
+      local w = sameResult(list, 40, 40)
+      for i in pairs(liars) do ok(w ~= list[i].name, "a liar doesn't win") end
+      -- the winner (or the tie) is the best honest run, replay-checked
+      local d = LDc(list[1]).history[1]
+      local bestHonest = -1
+      for _, r in ipairs(d.standings) do
+        local liar = false
+        -- out either way: "rejected" (its log was replayed) or "missing" (a cheat that withholds its log)
+        for i in pairs(liars) do if r.name == list[i].name then liar = true; ok(r.status == "rejected" or r.status == "missing", r.name .. " out: " .. r.status) end end
+        if not liar and r.status ~= "missing" then bestHonest = math.max(bestHonest, r.score) end
+      end
+      local top = d.standings[1]
+      eq(top.status, "verified", "the top of the list is replay-checked")
+      eq(top.score, bestHonest, "the best honest score is on top")
+    end)
+  end
+
   it("40, a modified client reveals a seed share that doesn't match its commitment: the whole race is cancelled (no re-roll)", function()
     local net, list = group(473, 40)
     local lead = list[1]
@@ -289,6 +337,38 @@ describe("Loot Duel with 40: trouble", function()
     H.note(string.format("player 9 started %.1f s after the start (full list + go on the repeats)", net.time - t0))
     eq(LDc(deaf).current.seed, LDc(lead).current.seed, "same pieces")
     eq(list[2].ns.App.session and list[2].ns.App.session.loot ~= nil, true, "the others race too")
+  end)
+
+  it("20: a member whose first go is lost starts from a repeat, plays the rest of the time and finishes with everyone", function()
+    local net, list = group(476, 20)
+    local lead, late = list[1], list[12]
+    local inv = {}
+    for i = 1, 20 do inv[i] = list[i].name end
+    LDc(lead).create(19019, "l060", inv); net.step(60 * 5)
+    for i = 2, 20 do LDc(list[i]).answer(true) end
+    net.step(60 * 12)
+    local t0
+    -- the first go (LDG + LDW) and its first one-message repeat never reach player 12
+    net.dropIf = function(to, from, text)
+      return to == late and t0 and net.time < t0 + 6 and (text:find(":LDG:", 1, true) or text:find(":LDW:", 1, true)) and true or false
+    end
+    ok(LDc(lead).start()); t0 = net.time
+    for _ = 1, 60 * 40 do net.step(1); if late.ns.App.session and late.ns.App.session.loot then break end end
+    local d = LDc(late).current
+    ok(late.ns.App.session and late.ns.App.session.loot, "player 12 races")
+    ok((d.lateBy or 0) >= 2, "started late: " .. tostring(d.lateBy))
+    eq(late.ns.App.session.mode.limitTicks, 3600 - d.lateBy * 60, "plays the rest of the minute")
+    eq(d.seed, LDc(lead).current.seed, "same pieces")
+    -- every run ends at about the same moment (the late one isn't 'behind' the others)
+    local endAt = {}
+    for _ = 1, 60 * 90 do
+      net.step(1)
+      for i, c in ipairs(list) do local s = c.ns.App.session; if not endAt[i] and s and s.loot and (s.recorded or s.phase == "over") then endAt[i] = net.time end end
+      if endAt[1] and endAt[12] then break end
+    end
+    ok(endAt[1] and endAt[12], "both runs ended")
+    ok(math.abs(endAt[12] - endAt[1]) < 3, string.format("ends together (%.1f s apart)", math.abs((endAt[12] or 0) - (endAt[1] or 0))))
+    H.note(string.format("player 12 got the go %d s late; its run ended %.1f s from the leader's", d.lateBy or -1, math.abs((endAt[12] or 0) - (endAt[1] or 0))))
   end)
 
   it("one player who never answers or leaves the lobby can't block anyone: no answer = not in, the rest start", function()

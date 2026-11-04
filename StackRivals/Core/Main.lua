@@ -96,6 +96,11 @@ function App:StartLoot(d)
   end
   local s = Session.new("loot_" .. d.rs, d.seed, self:Today())
   s.loot = d
+  if d.lateBy and d.lateBy > 0 and s.mode.limitTicks then
+    -- my go came late: play the rest of the time, so my run ends with everyone else's
+    local base = s.mode
+    s.mode = setmetatable({ limitTicks = math.max(600, base.limitTicks - d.lateBy * 60) }, { __index = base })
+  end
   self.session = s
   self.inMenu = false
   if ns.UI.HideSheets then ns.UI:HideSheets() end

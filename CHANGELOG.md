@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.3 — Loot Duel QA after the 0.7.2 review (branch `feature/loot-duel-raid`, development, not released, not installed)
+
+- **Checking goes on until there is a valid winner**: a forged claim is rejected at once and the next moves up, as often as needed; if a top log never arrives, every remaining claim is checked in one more 40 s round (0.7.2: 10 at a time, twice). If nothing survives: NO WINNER, never an invented one. Tested with 12 and 25 forged top claims among 40.
+- **Fast start on a bad network**: the full list and go follow the one-message versions right away (5% loss, 2.5 s latency, 40 players: 52.8 s → 9.0 s). Group messages: burst 8, 0.9/s (was 4, 0.5/s), and every message WoW counts also goes through one shared bucket of 9, +0.9/s (WoW: 10, +1/s). Shares are repeated after 2.5 s. Claims jump the queue; the leader's go repeats stop once every player has been heard.
+- **Runs end together**: go messages carry their age (seconds since the leader's go, stamped when the message leaves the queue); a player whose go came late plays the rest of the time.
+- **Asking for missing pieces** (`LDK`): a PC missing a claim or part of a needed log asks once (others wait for that answer); the player resends just that (rate-limited).
+- Protocol: offer kind `LDJ` (0.7.2 dev `LDH`), `LDG` / `LDW` carry `<age>`, new `LDK`. `/sr` version 0.7.3; Loot Duel needs 0.7.3 on every PC.
+- Tests: 12 and 25 forged claims, a late go, start/lateness measured for every size.
+
 ## 0.7.2 — Loot Duel for up to 40 at once, results and fixes (branch `feature/loot-duel-raid`, development, not released, not installed)
 
 - **2–40 players in one Loot Duel, all at once** (was 2–10): no heats, no 1v1 rounds. Invite All works for a full raid of 40 (confirmed with a second click), All / None tick or clear the list, Invite Selected takes 2–40. Nobody is entered automatically.

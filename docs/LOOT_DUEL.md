@@ -1,4 +1,4 @@
-# Loot Duel (0.7.2, branch `feature/loot-duel-raid`; SIMULATED, not tested in a real group)
+# Loot Duel (0.7.3, branch `feature/loot-duel-raid`; SIMULATED, not tested in a real group)
 
 A party or raid settles who gets an item with one short StackRivals race instead of `/roll`.
 **2–40 players race at the same time** on the same pieces: one race, no 1v1 rounds, no heats, no
@@ -16,7 +16,22 @@ and duels: never ranked, never on the website, no gold, no bets, no Shards.
 
 Everyone plays at once in all of them. Nobody is left out because ten have already joined.
 
-**What changed from 0.7.1 dev (2–10):**
+**What changed in 0.7.3 (after reviewing 0.7.2):**
+* **Checking goes on until there is a valid winner.** If a top log never arrives, every remaining
+  claim is checked in one more round, not 10 at a time. Tested with 12 and with 25 forged top claims
+  among 40.
+* **A much faster start on a bad network**: 9.0 s instead of 52.8 s with 5% loss and up to 2.5 s
+  latency. The full list and the full go now follow the one-message versions right away. Group
+  messages may use 8 at once and 0.9 per second, still under WoW's limit (one shared bucket of 9,
+  +0.9/s, for everything WoW counts).
+* **Runs end together.** A player whose go arrives late (from a repeat) plays the rest of the time,
+  so a late start never means a later or longer run. The go says how late it is (`<age>`).
+* **Missing pieces are asked for** (`LDK`): a PC that misses someone's claim or part of a needed
+  log asks once, and the player sends just that again. Others missing the same wait for that answer.
+* Claims jump the send queue. The leader's go repeats stop once every player has been heard.
+* The offer kind is now `LDJ`, so 0.7.2 and 0.7.3 test builds never mix.
+
+**What changed from 0.7.1 dev (2–10) in 0.7.2:**
 * Up to **40 at once**, with a start protocol that stays at 2 messages for the leader at any size.
 * Over 10 players, only the runs that can win are replayed (see "Verification at 40").
 * Result colours with icons, and a **CONGRATULATIONS!** screen on every participant's PC.
@@ -100,13 +115,14 @@ Everyone plays at once in all of them. Nobody is left out because ten have alrea
     already over (the item was rolled, looted or can't be traded), Loot Duel can't change that,
     and the screen never promises the item.
 
-## Start protocol (0.7.2): 2 leader messages at any size
+## Start protocol (0.7.2, tuned in 0.7.3)
 
 WoW gives each addon prefix **10 messages, then 1 per second**, per sender, on PARTY and RAID too
 ([warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_ChatInfo.SendAddonMessage)). StackRivals
-stays below that: **4, then 1 every 2 s** for group messages. The leader is the bottleneck:
-with 40 players, 0.7.1's way (the full list of 40 commitments, then all 40 shares) is 4 + 3
-messages, about **10 s** at our rate.
+stays below that. Since 0.7.3 every message WoW counts goes through one bucket of **9, +0.9 per
+second**, and group messages may use **8 at once, then 0.9 per second** (0.7.2: 4, then 1 every
+2 s). The leader is the bottleneck: with 40 players, 0.7.1's way (the full list of 40
+commitments, then all 40 shares) is 4 + 3 messages, about **10 s** at 0.7.2's rate.
 
 0.7.2 uses what every PC already heard:
 
@@ -118,10 +134,20 @@ messages, about **10 s** at our rate.
     gives exactly the leader's hash**.
 * Then the go is **one message** too (`LDG`): the leader's share, its own player share and the
   reveal hash. Every PC uses the shares it saw and checks the hash.
-* Whoever missed a join or a share (lost message, late arrival) gets the full list (`LDQ`) and the
-  full go (`LDW`) from the leader's repeats. Those were sent every time in 0.7.1.
+* Whoever missed a join or a share (lost message, late arrival) needs the full list (`LDQ`) and the
+  full go (`LDW`).
+  * In 0.7.2 those came only with the leader's repeats. On a network with 5% loss nearly every
+    member misses at least one of 39 joins, so they all waited for a repeat: **52.8 s** to start.
+  * Since 0.7.3 the full list and go follow the one-message versions **right away**: 5 + 4 leader
+    messages in all.
 * Repeats go out only after the previous repeat has left the send queue, so they never pile up
-  behind WoW's limit.
+  behind WoW's limit. The go repeats stop once every player has been heard in the race.
+* **A late go plays the rest of the time** (0.7.3).
+  * Every go message says how many seconds after the leader's go it left, counted when it really
+    leaves the queue.
+  * A player whose go arrived late plays the remaining time, so every run ends at the same moment.
+  * Tested: a player whose first go and first repeat were lost started 7 s late and finished
+    0.7 s from the leader.
 * Up to 10 players nothing changed: the full list and go are one message each anyway.
 
 Result for 40 (simulated): **every run started 1.0 s after Start** (0.7.1's way: 10.2 s). Tested:
@@ -138,10 +164,16 @@ At 40 that is 40 logs on the group channel and 40 replays per PC, which was too 
 2. Once the claims are known, only the **best 10 claims (ties with the 10th included)** send
    their log (`LDL`, 3–6 messages each). "Known" means every claim is in, or the race time + the
    pause budget + 5 s is over. Every PC replays only the logs it sees in its own best 10.
-3. A claim that **fails its replay** (forged score) is out, and so is one **whose log never
-   arrives**. The next claim moves up into the best 10 and sends its log. This continues until
-   the best 10 are all checked, or the deadline (time limit + 90 s; 2:00 races + 120 s) runs out,
-   plus 2 × 40 s if someone moved up.
+3. A claim that **fails its replay** (forged score) is out at once on every PC. The next claim
+   moves up into the best 10 and sends its log. This repeats as often as needed, so 12 or 25 forged
+   top claims all get rejected and the best honest run wins (tested with 40).
+   * A claim **whose log never arrives** by the deadline (time limit + 90 s; 2:00 races + 120 s)
+     is out too. From then on **every remaining claim** sends its log and is checked, in one more
+     round of 40 s (0.7.3; 0.7.2 promoted 10 at a time).
+   * If no claim survives, the result is **NO WINNER** (normal loot rules), never an invented
+     winner.
+   * A PC that misses a claim, or part of a log it needs, **asks for it** (`LDK`, 0.7.3). That
+     player sends just that piece again, at most every 4 s per piece and 40 times per race.
 4. Claims below the best 10 are shown as **NOT CHECKED**: listed with their score, never the
    winner. A winner is always a replay-checked run.
 5. Replays run **one per frame, never while your own run is live**, so they never cost FPS
@@ -158,7 +190,8 @@ At 40 that is 40 logs on the group channel and 40 replays per PC, which was too 
   accepts it. That is the same as 0.7.1.
 * A modified client that claims a huge score must send a log that produces it. Every PC replays
   that log and rejects it, and the next claim moves up. Tested with 40.
-* A player who withholds a claimed top log is out after the deadline. That only delays the result.
+* A player who withholds a claimed top log is out after the deadline. That only delays the result
+  (by up to 90 s + 40 s). It can't change the winner.
 * The seed can't be steered by anyone, the leader included. All commitments are fixed (in the
   list hash) before any share is revealed. The leader's own share is committed in the offer.
   * A share that doesn't match its commitment cancels the whole race. Tested with a modified
@@ -177,24 +210,28 @@ At 40 that is 40 logs on the group channel and 40 replays per PC, which was too 
 Every simulated client runs the real addon. WoW's per-prefix throttle (10 messages, +1/s per
 sender) is enforced. "Start" = from the leader's Start click until the last run started.
 
-| Case | Group | Start | Result after the last run ended | Messages (all PCs, whole race) | Peak on the channel / one sender in 10 s | Replays per PC (max one) | Refused by WoW's limit |
+| Case | Group | Start (leader's go) | Result after the last run ended | Messages (all PCs, whole race) | Peak on the channel / one sender in 10 s | Replays per PC (max one) | Refused by WoW's limit |
 |---|---|---|---|---|---|---|---|
-| 2 players | party of 5 | 0.5 s | 0.2 s | 14 (0.5 KB) | 4 msg/s / 6 | 2 (1.0 ms) | 0 |
-| 5 | party of 5 | 0.6 s | 0.2 s | 30 (1.2 KB) | 6 / 7 | 5 (1.6 ms) | 0 |
-| 10 | raid of 10 | 0.7 s | 0.2 s | 55 (2.3 KB) | 10 / 7 | 10 (1.9 ms) | 0 |
-| 15 | raid of 20 | 0.7 s | 0.6 s | 81 (2.7 KB) | 16 / 7 | 15 = best 10 + 5 tied with the 10th (2.1 ms) | 0 |
-| 20 | raid of 20 | 0.7 s | 1.2 s | 106 (3.4 KB) | 22 / 7 | 20 = best 10 + ties (1.9 ms) | 0 |
-| 25 | raid of 25 | 0.7 s | 1.2 s | 118 (3.8 KB) | 25 / 7 | 11 (2.1 ms) | 0 |
-| **40** | raid of 40 | **1.0 s** | **1.1 s** | 181 (5.7 KB) | 39 / 8 | 14 (3.3 ms) | 0 |
-| 40, bad network: latency up to 2.5 s, 20% duplicates, 5% loss; 5 players at 5 fps | raid of 40 | 52.8 s (leader had every share after 28 s) | 18.7 s | 686 (24.5 KB) | 36 / 6 | 10 (15.2 ms) | 0 |
-| 40, 3 disconnect mid-race | raid of 40 | 1.0 s | 1.2 s (nobody waits for the 3) | 397 (10.5 KB) | 42 / 8 | 10 (5.8 ms) | 0 |
-| 40, a forged top claim | raid of 40 | 1.0 s | 1.3 s (rejected everywhere, next one moved up) | 180 (5.6 KB) | 39 / 8 | 13 (3.3 ms) | 0 |
-| 20, one member missed a join and the one-message list / go | raid of 20 | that member: 21.7 s (full list and go from the repeats) | – | – | – | – | 0 |
+| 2 players | party of 5 | 0.5 s (0.2 s) | 0.2 s | 15 (0.6 KB) | 5 msg/s / 7 | 2 (1.0 ms) | 0 |
+| 5 | party of 5 | 0.6 s (0.4 s) | 0.2 s | 30 (1.2 KB) | 6 / 7 | 5 (1.1 ms) | 0 |
+| 10 | raid of 10 | 0.7 s (0.4 s) | 0.2 s | 55 (2.3 KB) | 10 / 7 | 10 (1.4 ms) | 0 |
+| 15 | raid of 20 | 0.7 s (0.4 s) | 1.1 s | 85 (3.3 KB) | 17 / 11 | 15 = best 10 + 5 tied with the 10th (2.1 ms) | 0 |
+| 20 | raid of 20 | 0.7 s (0.4 s) | 1.2 s | 110 (4.2 KB) | 22 / 11 | 20 = best 10 + ties (2.3 ms) | 0 |
+| 25 | raid of 25 | 0.7 s (0.4 s) | 1.2 s | 123 (4.7 KB) | 27 / 12 | 11 (2.3 ms) | 0 |
+| **40** | raid of 40 | **0.7 s (0.5 s)** | **1.2 s** | 187 (7.1 KB) | 43 / 15 | 12 (3.1 ms) | 0 |
+| 40, bad network: latency up to 2.5 s, 20% duplicates, 5% loss; 5 players at 5 fps | raid of 40 | **9.0 s (6.6 s)**; 0.7.2: 52.8 s (28 s) | 14.8 s | 470 (18.1 KB) | 39 / 12 | 15 (14.8 ms) | 0 |
+| 40, 3 disconnect mid-race | raid of 40 | 0.7 s | 0.9 s (nobody waits for the 3) | 396 (10.6 KB) | 48 / 15 | 10 (7.2 ms) | 0 |
+| 40, a forged top claim | raid of 40 | 0.7 s | 0.5 s (rejected everywhere, the next moved up) | 191 (7.3 KB) | 42 / 15 | 16 (2.9 ms) | 0 |
+| 40, **12** forged top claims | raid of 40 | 0.7 s | 1.4 s (all 12 rejected, best honest run wins) | 209 (8.1 KB) | 44 / 15 | 34 (12.4 ms) | 0 |
+| 40, **25** forged top claims, 15 honest | raid of 40 | 0.7 s | 1.4 s (all 25 out, best honest run wins) | 215 (8.6 KB) | 43 / 15 | 40 (23.5 ms) | 0 |
+| 20, one member missed a join and the one-message list / go | raid of 20 | that member: 0.6 s (0.7.2: 21.7 s) | – | – | – | – | 0 |
+| 20, one member's first go and first repeat lost | raid of 20 | that member: 7 s late, plays 53 s; its run ends 0.7 s from the leader's | – | – | – | – | 0 |
 
 Simulated races are short: the test bots top out in a few seconds. A real 1:00 race adds the
 minute itself. The results are the same on every PC in every case. The local numbers are from
-texlua (Lua 5.3 with shims); the same tests pass on Lua 5.1 in GitHub CI (671 tests, run
-`41822289833`).
+texlua (Lua 5.3 with shims); the same tests run on Lua 5.1 in GitHub CI (see `docs/STATUS.md`).
+A sender's peak of 15 messages in 10 s is the leader at the start (5 list + 4 go + its claim and
+live score): under WoW's 19 (10 + 1/s), and nothing was refused.
 
 * **Memory:** "+KB" is the Lua heap of *all* simulated clients together in one Lua state, about
   0.6–0.7 MB per client. A real client holds one of those.
@@ -257,17 +294,18 @@ disconnect. Players without StackRivals can always say no.
 
 | Message | Meaning |
 |---|---|
-| `LDH` | offer: item, time, engine, the leader's seed commitment, number of invitees (0.7.0 dev `LDO`, 0.7.1 dev `LDF`: dev builds never mix) |
+| `LDJ` | offer: item, time, engine, the leader's seed commitment, number of invitees (0.7.0 dev `LDO`, 0.7.1 dev `LDF`, 0.7.2 dev `LDH`: dev builds never mix) |
 | `LDI` | invitee list, chunk k (names as hex; the leader's own realm without "-Realm") |
 | `LDA` | join (+ commitment) or pass |
 | `LDS` | **(0.7.2, > 10)** the fixed list in one message: place mask + list hash + the leader's commitment |
 | `LDQ` | the fixed list in full, `<place>-<commitment>`, chunked (10 per message) |
 | `LDN` | a player's seed share |
-| `LDG` | **(0.7.2, > 10)** go in one message: the leader's share, its player share, the reveal hash |
-| `LDW` | go in full: every share as `<place>-<share>`, chunked |
+| `LDG` | **(0.7.2, > 10)** go in one message: the leader's share, its player share, the reveal hash, and (0.7.3) `<age>`: seconds since the leader's go |
+| `LDW` | go in full: every share as `<place>-<share>`, chunked, with `<age>` (0.7.3) |
 | `LDC` | live score (every 4 s; 5 s over 10; 6 s over 20; low priority) |
 | `LDE` | final claim |
 | `LDL` | input log chunks (best 10 + ties only, over 10 players) |
+| `LDK` | **(0.7.3)** "player at place i, send again": `e` = your claim, or the log chunks I miss |
 | `LDX` | cancel / leader left / not every share arrived |
 | `LDR` | the leader's computed result (display only; every PC computes its own) |
 
@@ -291,6 +329,10 @@ These are in `tests/test_lootduel.lua`, `tests/test_lootraid.lua` and `tests/tes
 * **Leaver in the lobby:** one player who never answers or goes offline can't block the start.
 * **Missed messages:** a member who missed a join and the one-message list / go starts from the
   full ones, on the same pieces.
+* **Many forged claims (0.7.3):** 12, and 25, forged top claims among 40. All are out, checking
+  goes on down the list, and the best honest run wins on every PC.
+* **Late go (0.7.3):** a member whose first go and first repeat are lost plays the rest of the
+  minute and finishes with everyone.
 * **Protocol:** `LDS` / `LDG` round-trip, the place mask for 1–40, and bad messages refused.
 * **Earlier (still run):**
   * 10 players on 8 random bad networks;

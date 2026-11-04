@@ -121,7 +121,8 @@ the SR1 result code (§6).
 ### Traffic (simulated, measured by the tests)
 
 A 2:00 duel: about **60 messages per player** (149 for both), peak **6 per second**. Our pacing:
-broadcasts burst 4 then 1 per 2 s; whispers burst 8 then 2 per second, 0.8 per second inside
+broadcasts burst 8 then 0.9 per s (0.7.3; was burst 4 then 1 per 2 s), everything WoW counts also
+through one bucket of 9, +0.9/s; whispers burst 8 then 2 per second, 0.8 per second inside
 instances (where whispers count against the per-prefix limit). Tests assert ≤ 110 messages per
 player per duel and ≤ 8 in any second, and zero throttles inside instances.
 

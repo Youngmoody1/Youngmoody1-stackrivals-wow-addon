@@ -64,13 +64,13 @@ describe("Loot Duel protocol", function()
     local h = P.hexName("Ann-Realm")
     local c16 = "0a1b2c3d4e5f6071"
     local msgs = {
-      P.encode("LDH", "lid123", "l060", 1, 19019, c16, 3), P.encode("LDI", "lid123", 1, h .. "," .. P.hexName("Ben-Realm")),
-      P.encode("LDI", "lid123", 20, P.hexName("Ann") .. "," .. P.hexName("Ben")), P.encode("LDH", "lid123", "l060", 1, 19019, c16, 40),
+      P.encode("LDJ", "lid123", "l060", 1, 19019, c16, 3), P.encode("LDI", "lid123", 1, h .. "," .. P.hexName("Ben-Realm")),
+      P.encode("LDI", "lid123", 20, P.hexName("Ann") .. "," .. P.hexName("Ben")), P.encode("LDJ", "lid123", "l060", 1, 19019, c16, 40),
       P.encode("LDA", "lid123", "a", c16), P.encode("LDA", "lid123", "d", "-"),
       P.encode("LDQ", "lid123", "0a1b2c3d", 2, 1, 1, "1-" .. c16 .. ",2-" .. c16), P.encode("LDQ", "lid123", "0a1b2c3d", 40, 4, 4, "40-" .. c16),
       P.encode("LDN", "lid123", "n0nce123"), P.encode("LDS", "lid123", "0a1b2c3d", 3, P.placeMask({ 1, 7, 40 }), c16),
-      P.encode("LDS", "lid123", "0a1b2c3d", 2, P.placeMask({ 2, 3 }), "-"), P.encode("LDG", "lid123", "n0nce999", "0a1b2c3d", "n0nce123"),
-      P.encode("LDG", "lid123", "n0nce999", "0a1b2c3d", "-"), P.encode("LDW", "lid123", "n0nce999", "0a1b2c3d", 1, 1, "1-n0nce123,2-n0nce456"),
+      P.encode("LDS", "lid123", "0a1b2c3d", 2, P.placeMask({ 2, 3 }), "-"), P.encode("LDG", "lid123", "n0nce999", "0a1b2c3d", "n0nce123", 0),
+      P.encode("LDG", "lid123", "n0nce999", "0a1b2c3d", "-", 12), P.encode("LDW", "lid123", "n0nce999", "0a1b2c3d", 0, 1, 1, "1-n0nce123,2-n0nce456"),
       P.encode("LDC", "lid123", P.b36(600), P.b36(12345)), P.encode("LDE", "lid123", P.b36(3600), P.b36(9000), P.b36(12), P.b36(2), "0a1b2c3d", 2),
       P.encode("LDL", "lid123", 1, 2, "3A0B5F"), P.encode("LDX", "lid123", "cancel"), P.encode("LDR", "lid123", h, 0),
     }
@@ -83,19 +83,20 @@ describe("Loot Duel protocol", function()
     eq(P.placeMask({ 1 }), "1000000000"); eq(table.concat(P.unplaceMask(P.placeMask({ 40, 5, 1, 13 })), ","), "1,5,13,40")
     local s1 = P.decode(P.encode("LDS", "lid123", "0a1b2c3d", 3, P.placeMask({ 1, 7, 40 }), c16))
     eq(table.concat(s1.places, ","), "1,7,40"); eq(s1.leaderCommit, c16)
-    eq(P.decode(P.encode("LDG", "lid123", "n0nce999", "0a1b2c3d", "-")).leaderNonce, nil)
+    eq(P.decode(P.encode("LDG", "lid123", "n0nce999", "0a1b2c3d", "-", 12)).leaderNonce, nil); eq(P.decode(P.encode("LDG", "lid123", "n0nce999", "0a1b2c3d", "-", 12)).age, 12)
     local bad = {
-      "1:LDH:lid123:x999:1:19019:0a1b2c3d4e5f6071:3", "1:LDH:lid123:l060:1:19019:0a1b2c3d4e5f6071:41", "1:LDH:lid123:l060:1:0:0a1b2c3d4e5f6071:3",
-      "1:LDH:lid123:l060:1:19019:0a1b2c3d:3", "1:LDA:lid123:a:n0nce123", "1:LDQ:lid123:0a1b2c3d:2:1:1:1-n0nce123,2-n0nce456",
+      "1:LDJ:lid123:x999:1:19019:0a1b2c3d4e5f6071:3", "1:LDJ:lid123:l060:1:19019:0a1b2c3d4e5f6071:41", "1:LDJ:lid123:l060:1:0:0a1b2c3d4e5f6071:3",
+      "1:LDJ:lid123:l060:1:19019:0a1b2c3d:3", "1:LDH:lid123:l060:1:19019:0a1b2c3d4e5f6071:3", "1:LDA:lid123:a:n0nce123", "1:LDQ:lid123:0a1b2c3d:2:1:1:1-n0nce123,2-n0nce456",
       "1:LDF:lid123:l060:1:19019:0a1b2c3d4e5f6071:3", "1:LDI:lid123:21:" .. h, "1:LDQ:lid123:0a1b2c3d:2:2:1:1-0a1b2c3d4e5f6071",
       "1:LDI:lid123:1:zz", "1:LDI:lid123:1:" .. P.hexName("Bad|cName-Realm"), "1:LDA:lid123:a:-", "1:LDA:lid123:x:0a1b2c3d4e5f6071",
       "1:LDQ:lid123:0a1b2c3d:41:1:1:1-0a1b2c3d4e5f6071", "1:LDQ:lid123:0a1b2c3d:2:1:1:1-0a1b2c3d4e5f6071,41-0a1b2c3d4e5f6071",
       "1:LDQ:lid123:nothex!:2:1:1:1-0a1b2c3d4e5f6071,2-0a1b2c3d4e5f6071", "1:LDE:lid123:1:1:1:1:xyz:1", "1:LDL:lid123:1:1:3AH",
-      "1:LDN:lid123:-", "1:LDW:lid123:n0nce:xyz:1:1:1-n0nce123", "1:LDW:lid123:n0nce999:0a1b2c3d:1:1:1-BAD!", "1:LDW:lid123:n0nce999:0a1b2c3d:1:1:0-n0nce123",
+      "1:LDN:lid123:-", "1:LDW:lid123:n0nce:xyz:0:1:1:1-n0nce123", "1:LDW:lid123:n0nce999:0a1b2c3d:0:1:1:1-BAD!", "1:LDW:lid123:n0nce999:0a1b2c3d:0:1:1:0-n0nce123",
+      "1:LDW:lid123:n0nce999:0a1b2c3d:1:1:1-n0nce123",
       "1:LDO:lid123:l060:1:19019:0a1b2c3d4e5f6071:3", "1:LDP:lid123:1:1:" .. h .. "-0a1b2c3d4e5f6071",
       "1:LDX:lid123:whatever", "1:LDR:lid123:" .. h .. ":2",
       "1:LDS:lid123:0a1b2c3d:3:1000000000:-", "1:LDS:lid123:0a1b2c3d:1:1000000000:-", "1:LDS:lid123:0a1b2c3d:2:30000000:-",
-      "1:LDS:lid123:0a1b2c3d:2:300000000g:-", "1:LDS:lid123:0a1b2c3d:2:3000000000:n0nce", "1:LDG:lid123:n0nce999:xyz:-", "1:LDG:lid123:-:0a1b2c3d:-",
+      "1:LDS:lid123:0a1b2c3d:2:300000000g:-", "1:LDS:lid123:0a1b2c3d:2:3000000000:n0nce", "1:LDG:lid123:n0nce999:xyz:-:0", "1:LDG:lid123:-:0a1b2c3d:-:0", "1:LDG:lid123:n0nce999:0a1b2c3d:-", "1:LDG:lid123:n0nce999:0a1b2c3d:-:-1",
     }
     for _, s in ipairs(bad) do ok(P.decode(s) == nil, "accepted: " .. s) end
   end)
@@ -203,7 +204,7 @@ describe("Loot Duel between simulated clients", function()
     local net, cs = party(13, { "Lead", "Ann", "Ben" })
     local okA, why = LD(cs.Ann).create(19019, "l060", { "Ann-Realm", "Ben-Realm" })
     ok(not okA); eq(why, "not_leader")
-    net.inject(cs.Ben, "Ann-Realm", P.encode("LDH", "fake01", "l060", 1, 19019, "0a1b2c3d4e5f6071", 2), "PARTY")
+    net.inject(cs.Ben, "Ann-Realm", P.encode("LDJ", "fake01", "l060", 1, 19019, "0a1b2c3d4e5f6071", 2), "PARTY")
     net.step(30)
     eq(LD(cs.Ben).current, nil)
     local solo = NS.new({ seed = 14 }).add({ name = "Zed" })

@@ -4,8 +4,11 @@
   * Registers our prefix and listens to CHAT_MSG_ADDON.
   * Every outgoing message goes through a queue with our own conservative token buckets, below
     Blizzard's documented per-prefix limit (10 messages, +1 per second):
-      - broadcasts (GUILD/PARTY/RAID): burst 4, 1 every 2 s
+      - broadcasts (GUILD/PARTY/RAID): burst 8, 0.9 per second (0.7.3; was burst 4, 1 every 2 s:
+                                        a 40-player Loot Duel start needs 5 + 4 messages)
       - whispers:                       burst 8, 2 per second
+      - and everything counted by Blizzard's per-prefix limit (broadcasts, and whispers inside
+        instances) also shares one bucket of 9, +0.9 per second: always under Blizzard's 10, +1/s
     The server limits can change at any time, so result codes are also honoured: throttle or
     lockdown -> retry later with back-off; offline / not in group / not in guild -> give up and
     tell the duel logic.
@@ -26,9 +29,11 @@ local Comm = { handlers = {}, queue = {}, enabled = false, stats = { sent = 0, r
 ns.Comm = Comm
 
 local BUCKETS = {
-  broadcast = { cap = 4, rate = 0.5 },
+  broadcast = { cap = 8, rate = 0.9 },
   whisper = { cap = 8, rate = 2 },
+  prefix = { cap = 9, rate = 0.9 }, -- Blizzard's per-prefix limit (10, +1/s), shared, with a margin
 }
+Comm.BUCKETS = BUCKETS
 -- Inside instances whispers count against Blizzard's per-prefix limit (10, +1/s): stay below it.
 local INSTANCE_WHISPER_RATE = 0.8
 local MAX_QUEUE = 64
@@ -150,6 +155,7 @@ function Comm.send(text, channel, target, onFail, opts)
     for _, q in ipairs(Comm.queue) do
       if q.key == opts.key and q.target == target and q.channel == channel then
         q.text, q.onFail = text, onFail or q.onFail
+        if opts.make then q.make = opts.make end
         return true
       end
     end
@@ -165,7 +171,8 @@ function Comm.send(text, channel, target, onFail, opts)
     if onFail then onFail("queue_full") end
     return false
   end
-  local item = { text = text, channel = channel, target = target, onFail = onFail, tries = 0, notBefore = 0, key = opts and opts.key }
+  local item = { text = text, channel = channel, target = target, onFail = onFail, tries = 0, notBefore = 0, key = opts and opts.key,
+    make = opts and opts.make } -- make(): the text, built when it actually goes out (e.g. "how late is this")
   -- opts.front: time-critical (a race start everyone waits for) goes ahead of queued repeats
   if opts and opts.front then table.insert(Comm.queue, 1, item) else Comm.queue[#Comm.queue + 1] = item end
   if #Comm.queue > Comm.stats.maxQueue then Comm.stats.maxQueue = #Comm.queue end
@@ -235,10 +242,16 @@ function Comm.flush()
       bucket.rate = inInstance and INSTANCE_WHISPER_RATE or 2
     end
     refill(bucket, t)
-    if q.notBefore > t or bucket.tokens < 1 then
+    -- whispers outside instances don't count against Blizzard's per-prefix limit; everything else does
+    local counted = (bucket == BUCKETS.broadcast) or (IsInInstance and select(1, IsInInstance()))
+    local pb = BUCKETS.prefix
+    refill(pb, t)
+    if q.notBefore > t or bucket.tokens < 1 or (counted and pb.tokens < 1) then
       i = i + 1
     else
       bucket.tokens = bucket.tokens - 1
+      if counted then pb.tokens = pb.tokens - 1 end
+      if q.make then local okM, txt = pcall(q.make); if okM and type(txt) == "string" then q.text = txt end end
       q.tries = q.tries + 1
       -- a Battle.net friend on a realm whispers can't reach goes over Battle.net (Net/BNet.lua)
       local bnId = q.channel == "WHISPER" and ns.BNet and ns.BNet.route(q.target)

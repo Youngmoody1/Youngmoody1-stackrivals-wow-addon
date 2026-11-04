@@ -48,8 +48,9 @@
     Loot Duel (0.7.2: 2-40 players at once), all on the group channel (PARTY / RAID / INSTANCE_CHAT);
     <lid> = loot duel id, names = hex of "Name-Realm" (UTF-8), <i> = 1-based position in the invite
     list (every PC has it from LDI). See docs/LOOT_DUEL.md. The offer kind changes whenever the start
-    messages change, so dev builds never mix half-way: 0.7.0 dev LDO, 0.7.1 dev LDF, 0.7.2 LDH.
-    1:LDH:<lid>:<l060|l120>:<engine>:<itemId>:<commitL16>:<invitees>   offer (leader / assist / loot master)
+    messages change, so dev builds never mix half-way: 0.7.0 dev LDO, 0.7.1 dev LDF, 0.7.2 dev LDH,
+    0.7.3 LDJ.
+    1:LDJ:<lid>:<l060|l120>:<engine>:<itemId>:<commitL16>:<invitees>   offer (leader / assist / loot master)
     1:LDI:<lid>:<k>:<hexName>[,<hexName>...]         invitee list chunk k (1-20); a name on the leader's
                                                      realm is sent without "-Realm" (0.7.2)
     1:LDA:<lid>:<a|d>:<commit16|->                    my answer (+ the commitment to my secret seed nonce)
@@ -60,12 +61,19 @@
                                                      sent right behind the offer, is repeated here). LDQ
                                                      follows only on repeats, for whoever missed an LDA.
     1:LDN:<lid>:<nonce>                               my nonce (matches my commitment)
-    1:LDG:<lid>:<nonceL>:<revealHash>:<leaderNonce|->  (0.7.2, > 10 players) go in ONE message: every PC has
-                                                     the players' nonces from their LDN; LDW follows on repeats
-    1:LDW:<lid>:<nonceL>:<revealHash>:<k>:<n>:<i>-<nonce>[,...]  go, chunk k of n: every nonce + the leader's
+    1:LDG:<lid>:<nonceL>:<revealHash>:<leaderNonce|->:<age>  (0.7.3, > 10 players) go in ONE message: every
+                                                     PC has the players' nonces from their LDN; LDW follows
+                                                     right behind it for whoever missed one. <age> = s since
+                                                     the leader's go (0 on the first send): a player whose go
+                                                     came late plays the rest, so every run ends together
+    1:LDW:<lid>:<nonceL>:<revealHash>:<age>:<k>:<n>:<i>-<nonce>[,...]  go, chunk k of n: every nonce + the
+                                                     leader's; <age> as in LDG (0.7.3)
     1:LDC:<lid>:<tick36>:<score36>                     my live score
     1:LDE:<lid>:<ticks36>:<score36>:<lines36>:<level36>:<hash>:<chunks>   my final result
     1:LDL:<lid>:<i>:<n>:<payload>                      my log chunk i of n (as LOG)
+    1:LDK:<lid>:<i>:<e|chunks>                         (0.7.3) "player at place i: send again" - e = your claim
+                                                     (LDE), or the log chunks I miss, as 1.4.5; anyone
+                                                     missing the same waits instead of asking too
     1:LDX:<lid>:<cancel|left|noreveal>                 the leader cancelled
     1:LDR:<lid>:<hexWinner|->:<tie 0|1>                the leader's computed result (display only)
   Older clients ignore kinds they don't know (decode -> "kind"), so these never break a 0.4 duel.
@@ -169,7 +177,7 @@ local SPEC = {
   HEL = 2, HI = 3, INV = 4, ACC = 2, DEC = 2, RDY = 1, GO = 2, PNG = 1, SC = 5, END = 7, LOG = 4, BYE = 2, RQ = 2, FIN = 1,
   SP = 4, PSE = 3, RSM = 2, VER = 5,
   QS = 3, PRF = 8, CH = 3, QM = 3,
-  LDH = 6, LDI = 3, LDA = 3, LDQ = 6, LDS = 5, LDN = 2, LDG = 4, LDW = 6, LDC = 3, LDE = 7, LDL = 4, LDX = 2, LDR = 3,
+  LDJ = 6, LDI = 3, LDA = 3, LDQ = 6, LDS = 5, LDN = 2, LDG = 5, LDW = 7, LDC = 3, LDE = 7, LDL = 4, LDK = 3, LDX = 2, LDR = 3,
 }
 --- Loot Duel rules (WoW-only, peer-checked): same pieces for everyone, no spells, highest score.
 P.LOOT_RULESETS = {
@@ -274,7 +282,7 @@ function P.decode(s)
   elseif kind == "QM" then
     if not isMid(f[3]) or not isInt(f[4], 1, 9999) or not isInt(f[5], 1, #P.QUICK) then return nil, "bad" end
     m.mid, m.n, m.code = f[3], tonumber(f[4]), tonumber(f[5])
-  elseif kind == "LDH" then
+  elseif kind == "LDJ" then
     if not isMid(f[3]) or not P.LOOT_RULESETS[f[4]] or not isInt(f[5], 1, 9999) or not isInt(f[6], 1, 9999999)
       or not isC16(f[7]) or not isInt(f[8], 2, P.LOOT_MAX) then return nil, "bad" end
     m.lid, m.rs, m.engine, m.itemId, m.commit, m.count = f[3], f[4], tonumber(f[5]), tonumber(f[6]), f[7], tonumber(f[8])
@@ -309,17 +317,21 @@ function P.decode(s)
     if not isMid(f[3]) or not isNonce(f[4]) then return nil, "bad" end
     m.lid, m.nonce = f[3], f[4]
   elseif kind == "LDG" then
-    if not isMid(f[3]) or not isNonce(f[4]) or not f[5]:match("^%x%x%x%x%x%x%x%x$") or not (f[6] == "-" or isNonce(f[6])) then return nil, "bad" end
-    m.lid, m.nonce, m.revealHash, m.leaderNonce = f[3], f[4], f[5], f[6] ~= "-" and f[6] or nil
+    if not isMid(f[3]) or not isNonce(f[4]) or not f[5]:match("^%x%x%x%x%x%x%x%x$") or not (f[6] == "-" or isNonce(f[6]))
+      or not isInt(f[7], 0, 999) then return nil, "bad" end
+    m.lid, m.nonce, m.revealHash, m.leaderNonce, m.age = f[3], f[4], f[5], f[6] ~= "-" and f[6] or nil, tonumber(f[7])
   elseif kind == "LDW" then
-    if not isMid(f[3]) or not isNonce(f[4]) or not f[5]:match("^%x%x%x%x%x%x%x%x$")
-      or not isInt(f[6], 1, 9) or not isInt(f[7], 1, 9) or tonumber(f[6]) > tonumber(f[7]) then return nil, "bad" end
-    m.lid, m.nonce, m.revealHash, m.k, m.n, m.entries = f[3], f[4], f[5], tonumber(f[6]), tonumber(f[7]), {}
-    for part in (f[8] .. ","):gmatch("([^,]*),") do
+    if not isMid(f[3]) or not isNonce(f[4]) or not f[5]:match("^%x%x%x%x%x%x%x%x$") or not isInt(f[6], 0, 999)
+      or not isInt(f[7], 1, 9) or not isInt(f[8], 1, 9) or tonumber(f[7]) > tonumber(f[8]) then return nil, "bad" end
+    m.lid, m.nonce, m.revealHash, m.age, m.k, m.n, m.entries = f[3], f[4], f[5], tonumber(f[6]), tonumber(f[7]), tonumber(f[8]), {}
+    for part in (f[9] .. ","):gmatch("([^,]*),") do
       local i, nonce = part:match("^(%d+)%-([0-9a-z]+)$")
       if not i or not isInt(i, 1, P.LOOT_MAX) or not isNonce(nonce) or #m.entries >= P.LOOT_MAX then return nil, "bad" end
       m.entries[#m.entries + 1] = { i = tonumber(i), nonce = nonce }
     end
+  elseif kind == "LDK" then
+    if not isMid(f[3]) or not isInt(f[4], 1, P.LOOT_MAX) or not (f[5] == "e" or (#f[5] <= 60 and f[5]:match("^%d+[%d%.]*$"))) then return nil, "bad" end
+    m.lid, m.i, m.what = f[3], tonumber(f[4]), f[5]
   elseif kind == "LDC" then
     local t, sc = P.unb36(f[4]), P.unb36(f[5])
     if not isMid(f[3]) or not t or not sc then return nil, "bad" end
