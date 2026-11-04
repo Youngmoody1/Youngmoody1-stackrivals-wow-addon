@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.2 — Loot Duel for up to 40 at once, results and fixes (branch `feature/loot-duel-raid`, development, not released, not installed)
+
+- **2–40 players in one Loot Duel, all at once** (was 2–10): no heats, no 1v1 rounds. Invite All works for a full raid of 40 (confirmed with a second click), All / None tick or clear the list, Invite Selected takes 2–40. Nobody is entered automatically.
+- **Start in 2 leader messages at any size**: over 10 players the fixed list (`LDS`) and the go (`LDG`) are one message each, built on every PC from the joins and seed shares it already heard and checked against the leader's hashes; the full list / go (`LDQ` / `LDW`) follow only on repeats, for whoever missed a message. Repeats wait until the previous one has left the queue. 40 players: every run started 1.0 s after Start in the simulation (0.7.1's way: 10.2 s). The offer kind is `LDH` (0.7.1 dev `LDF`), so dev builds never mix.
+- **Verification at 40 without 40 × 40**: over 10 players only the best 10 claims (+ ties) send their log, once the claims are known, and every PC replays only those; a forged or missing top log is out and the next claim moves up; the rest show as NOT CHECKED and can't win. Replays run one per frame and never during your own run; logs are freed after the check. A player who goes offline without a claim is out at once (nobody waits for the deadline); one who goes offline before revealing cancels the start at once (no re-roll).
+- **Result colours with icons**: WINNER green (trophy), LOST red (⊗), PASSED red (⊖), TIE gold (=), playing blue (▶), topped out / finished (⚑), NOT CHECKED / NO RESULT / REPLAY FAILED / disconnected amber (?, ⚠) and never shown as a defeat. Names keep their class colour.
+- **CONGRATULATIONS!** on every participant's PC once every needed replay is checked: "[Name] wins the Loot Duel!", score, "#1 of n", "highest replay-checked score", with the item box above; a short glow and pop, once. A tie shows **TIE!** and "Roll off with /roll (the agreed tiebreak). No winner is invented." A local chat line, never group chat; Announce stays a manual click by the leader.
+- **Live list for 40**: 10 rows of 30 px, mouse-wheel scrolling through all players, your own row pinned when out of view, status icons, "provisional until the best runs are replayed", redrawn at most 4 times a second. Live scores every 4 / 5 / 6 s by group size. All results can be paged after the race (9 per page under the final header).
+- **Invite popup**: shorter text with room above the countdown bar.
+- **Spell Battle red box** (seen in the real Classic Era client): the Bomb target marker was a red-outlined frame above the board. It is now a faint red patch in the board's background layer under the pieces, hidden without mana. Regression test.
+- **Guild Duels** naming (from 0.7.0's branch) is in this build.
+- Tests: `tests/test_loot40.lua` (13: 2, 5, 10, 15, 20, 25, 40 players with message counts, peak traffic, replays, memory; 40 on a bad network with 5 at 5 fps; 3 disconnects; a forged top claim; seed manipulation; a leaver in the lobby; a member who missed messages). Previews for 5-man, 10 / 20 / 40 raids, winner / loser / passed, CONGRATULATIONS, TIE and the 40-player live board. See `docs/LOOT_DUEL.md`.
+
 ## 0.7.1 — Loot Duel for dungeons and raids (branch `feature/loot-duel-raid`, development, not released, not installed)
 
 - **2–10 players in one Loot Duel, all at once** (was 2–8): one race on the same pieces, no 1v1 rounds. Works in a party of 5 and in raids of up to 40 (the leader picks up to 10).

@@ -14,10 +14,11 @@
 | `docs/CROSS_PLATFORM_MULTIPLAYER.md` §6 | SR1 (agreed by vectors) |
 | `docs/SR2_DRAFT.md` | SR2 draft (Spell Battle vs Bot results) |
 
-**Nothing has been tested in a real WoW client yet.** All addon tests run in simulated clients.
+**No addon feature has been tested in a real WoW client yet** (only the 0.3.1 smoke test and one
+observation, the Spell Battle red box). All addon tests run in simulated clients.
 
-The 0.7.0 final polish (4 Nov 2026) and 0.7.1 (Loot Duel for 2–10 players, branch
-`feature/loot-duel-raid`) changed only the addon's own screens and its WoW-only Loot Duel
+The 0.7.0 final polish (4 Nov 2026), 0.7.1 (Loot Duel for 2–10 players) and 0.7.2 (Loot Duel
+for 2–40 players, result screens; branch `feature/loot-duel-raid`) changed only the addon's own screens and its WoW-only Loot Duel
 messages. **No format, code or contract for the website changed**: SR1, SRL1 / SRP1 and the
 vectors are the same as before. Loot Duel stays in WoW (peer-checked, never on the website).
 

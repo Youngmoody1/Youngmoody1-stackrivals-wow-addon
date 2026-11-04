@@ -20,7 +20,8 @@ Automatic tests are **not** real client tests. Real client tests are tracked in
 | 0.6.0 | `multiplayer` | + Challenge Friends | development, unchanged |
 | 0.6.1 | `feature/connected` | + Quickplay, cards, chat, account, sync, Battle.net | development, unchanged |
 | 0.7.0 | `feature/loot-duel` | 0.6.1 + review fixes + WoW colours + Loot Duel | development; **installed in Classic Era** for your first test (commit `9a68952`) |
-| **0.7.1** | `feature/loot-duel-raid` | 0.7.0 + Loot Duel for 2–10 at once, invites, live list, menu card, quick button | development (this one); not installed |
+| 0.7.1 | `feature/loot-duel-raid` | 0.7.0 + Loot Duel for 2–10 at once, invites, live list, menu card, quick button | development; not installed (superseded) |
+| **0.7.2** | `feature/loot-duel-raid` | 0.7.1 + Loot Duel for 2–40 at once, result colours, CONGRATULATIONS, Spell Battle red-box fix, Guild Duels name | development (this one); not installed |
 
 ## Features
 
@@ -38,7 +39,8 @@ Automatic tests are **not** real client tests. Real client tests are tracked in
 | Account link (one-time code) | SRL1 / SRP1 copy and paste | BUILT addon side, PROPOSED formats | copy and paste in WoW edit boxes | needs the website's Link page (missing) |
 | Profile (rank, level, XP, season, history) | the SRP1 snapshot, display only | BUILT addon side | — | no signature check yet; the website is the authority |
 | Sync: play challenge codes, export results | SR1C / SR1R (vector-checked with the web) | BUILT addon side | copy of 2–3 KB codes in WoW | needs the website's SR1 import (missing) |
-| Loot Duel (2–10 at once) | LD* group messages (start in 2), peer replay on every PC | BUILT, SIMULATED (0.7.1) | 5 and 10 real players, timing, Forever's loot methods | peer-checked; never touches loot |
+| Loot Duel (2–40 at once) | LD* group messages (start in 2 leader messages), best 10 (+ ties) replayed on every PC | BUILT, SIMULATED (0.7.2: 2, 5, 10, 15, 20, 25, 40) | **a real raid of 20–40** (start and result time, FPS, the same winner everywhere), Forever's loot methods | peer-checked; runs below the best 10 aren't replayed (can't win); never touches loot |
+| Loot Duel results (colours, icons, CONGRATULATIONS / TIE) | the standings every PC computes | BUILT, PREVIEWED (0.7.2) | readability at your UI scale | — |
 | Loot Duel quick button | own frame on UIParent | BUILT, SIMULATED (0.7.1) | placement next to each client's group frames, other addons | — |
 | Web Quickplay / live web ↔ WoW | — | BLOCKED | — | addons have no internet access |
 | Shards | — | not built (web project) | — | — |
@@ -127,7 +129,8 @@ Totals:
 * 0.6.0: 482
 * 0.6.1: 562
 * 0.7.0: 609 (Loot Duel), 615 (final polish), 617 (0.3.1 upgrade tests)
-* 0.7.1: see the CI log of `feature/loot-duel-raid`
+* 0.7.1: 646
+* 0.7.2: see the CI log of `feature/loot-duel-raid`
 
 ## Open blockers
 
