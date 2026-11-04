@@ -446,7 +446,7 @@ function UI:CreateMenu()
   end
   self.spellCard = vsCard("Spell Battle", "vs Bot", "frame", C.red, T.MEDIA .. "Spells\\bomb", function() UI:ShowSheet("spell") end)
   self.spellCard.tip = "Spells, mana and the stackrivals.io bot. Pick 2 spells for your board, 2 for the bot's."
-  self.duelBtn = vsCard("Guild Duel", "Guild, friends, group", "frame", C.steel, T.MEDIA .. "marksmall", function() UI:ShowSheet("duel") end)
+  self.duelBtn = vsCard("Guild Duels", "Guild, friends, group", "frame", C.steel, T.MEDIA .. "marksmall", function() UI:ShowSheet("duel") end)
   self.duelBtn.tip = "Guild Duels: challenge guild members, WoW and Battle.net friends, your group or anyone by name to a Duel or Spell Duel. A StackRivals puzzle duel, not WoW's /duel; both need StackRivals."
   if ns.BUILD and not ns.BUILD.duels then -- vs-Bot test build
     self.duelBtn:Disable(); self.duelBtn.desc:SetText("Off in this test build")

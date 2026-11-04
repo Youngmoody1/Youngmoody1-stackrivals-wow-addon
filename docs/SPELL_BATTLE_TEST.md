@@ -103,7 +103,7 @@ To spillere med 0.6.1 i samme guild. Alt er **UTESTET i WoW**. Previews er simul
 
 | # | Gør dette | Det skal ske | Resultat |
 |---|---|---|---|
-| D1 | A: `/sr` | Menuen viser Classic, Time Trial, Daily Challenge, den røde **QUICKPLAY**-knap, Spell Battle og Guild Duel | UTESTET |
+| D1 | A: `/sr` | Menuen viser Classic, Time Trial, Daily Challenge, den røde **QUICKPLAY**-knap, Spell Battle og Guild Duels | UTESTET |
 | D2 | A: **QUICKPLAY** → Duel 2:00 → **Search** ✱ | "SEARCHING" med tid og "Looking in: your guild…". "Web players (stackrivals.io): not connected" | UTESTET |
 | D3 | B: **QUICKPLAY** → Duel 2:00 → **Search** ✱ | Inden for ca. 20 s: begge får lobbyen "QUICK DUEL - MATCH FOUND". Ingen popup | UTESTET |
 | D4 | Kig på kortene | Navn, realm, faction i farve, race/class/level. B's kort hos A siger "unverified" | UTESTET |
@@ -134,7 +134,7 @@ To spillere, der er **Battle.net-venner** på **forskellige realms, der ikke er 
 
 | # | Gør dette | Det skal ske | Resultat |
 |---|---|---|---|
-| F1 | A: `/sr` → **Guild Duel** → fanen **Battle.net** → **Refresh** ✱ | B står som "ready" (ikke "other realm") | UTESTET |
+| F1 | A: `/sr` → **Guild Duels** → fanen **Battle.net** → **Refresh** ✱ | B står som "ready" (ikke "other realm") | UTESTET |
 | F2 | A: **Challenge** ud for B → B: Accept → begge Ready → spil færdig ✱ | En normal duel med resultatet "Confirmed by both PCs" | UTESTET |
 | F3 | Begge: **QUICKPLAY** → Duel 2:00 → Search | Match found inden for ca. 20 s | UTESTET |
 | F4 | Chat i lobbyen (også hvis I er Alliance og Horde) | Tekst kommer frem. Intet i WoW's chatvindue | UTESTET |

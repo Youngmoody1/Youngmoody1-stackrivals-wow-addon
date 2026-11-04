@@ -109,7 +109,7 @@ function UI:CreateDuelSheet()
   self.duelSheet = s
   local L = 24
   local cw = self.frame:GetWidth() - 2 * L - 2
-  local title = T.display(s, SZ.title, C.paper); title:SetPoint("TOPLEFT", L, -14); title:SetText("GUILD DUELS")
+  local title = T.display(s, SZ.title, C.paper); title:SetPoint("TOPLEFT", L, -14); title:SetText("GUILD DUELS"); s.title = title
   local sub = T.text(s, SZ.small, C.label); sub:SetPoint("TOPLEFT", L, -38)
   s.sub = sub
 

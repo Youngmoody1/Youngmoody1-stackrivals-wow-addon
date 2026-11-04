@@ -1,6 +1,6 @@
 # Guild Duels (was Challenge Friends; 0.6.0 on `multiplayer`, 0.6.1 on `feature/connected`; NOT tested in a real client)
 
-`/sr` → **Guild Duel** → pick a mode (Duel 2:00, Duel 3:00, Spell Duel) → pick a list → **Refresh** →
+`/sr` → **Guild Duels** → pick a mode (Duel 2:00, Duel 3:00, Spell Duel) → pick a list → **Refresh** →
 **Challenge** → the rival gets the usual popup (Accept / Decline) → lobby (Spell Battle: Pick
 Spells) → Ready → shared countdown → duel → result → Rematch.
 
