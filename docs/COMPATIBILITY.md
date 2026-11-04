@@ -1,4 +1,4 @@
-# Compatibility: every official WoW client (0.8.0, branch `feature/multi-client`)
+# Compatibility: every official WoW client (0.8.1, branch `feature/multi-client`)
 
 One addon, one code base, one game engine for every official client. Client differences live only in
 `Core/Client.lua` (which client, what it can do) and the transport (`Net/Comm.lua`). Private servers
@@ -14,14 +14,14 @@ client's data is in `tools/clients.json`.
 
 ## 1. The clients
 
-| Client | `WOW_PROJECT_ID` | Interface (TOC) | TOC suffix the client prefers | API family | Priority |
-|---|---|---|---|---|---|
-| **WoW Forever** 1.60.1 (launches 4 Nov 2026, 23:00 UTC) | 18 `WOW_PROJECT_CAMELOT` | 16001: the beta / test number; the live number is still blank on the wiki | `_Forever` / `_Camelot`, then `_Mainline` | **Mainline** (Retail's), not Classic Era's | highest |
-| **Classic Era** 1.15.9, incl. **Hardcore** and **Season of Discovery** realms | 2 `WOW_PROJECT_CLASSIC` | 11509 | `_Vanilla` | Classic (1.15.9's API "very closely matches" 2.5.6) | highest |
-| **Retail / Midnight** 12.1.5 | 1 `WOW_PROJECT_MAINLINE` | 120105 | `_Standard`, then `_Mainline` | Mainline | high |
-| **TBC Classic Anniversary** 2.5.6 (all Anniversary realms since Jan 2026) | 5 | 20506 | `_TBC` | Classic | high |
-| **Mists of Pandaria Classic** 5.5.4 | 19 | 50504 | `_Mists`, then `_Classic` | Classic | high |
-| **Titan Reforged – Chrono** 3.80.2 (China only) | 11 (Wrath game type) | 38002 | `_Wrath` | Classic (older; the 12.x-era APIs are not documented there) | high (no access from EU) |
+| Client | `WOW_PROJECT_ID` | Interface (TOC) | TOC suffix the client prefers | API family | CurseForge flavor | Priority |
+|---|---|---|---|---|---|---|
+| **WoW Forever** 1.60.1 (launches 4 Nov 2026, 23:00 UTC) | 18 `WOW_PROJECT_CAMELOT` | 16001: the beta / test number; the live number is still blank on the wiki | `_Forever` / `_Camelot`, then `_Mainline` | **Mainline** (Retail's), not Classic Era's | Forever | highest |
+| **Classic Era** 1.15.9, incl. **Hardcore** and **Season of Discovery** realms | 2 `WOW_PROJECT_CLASSIC` | 11509 | `_Vanilla` | Classic (1.15.9's API "very closely matches" 2.5.6) | Classic | highest |
+| **Retail / Midnight** 12.1.5 | 1 `WOW_PROJECT_MAINLINE` | 120105 | `_Standard`, then `_Mainline` | Mainline | Retail | high |
+| **TBC Classic Anniversary** 2.5.6 (all Anniversary realms since Jan 2026) | 5 | 20506 | `_TBC` | Classic | Classic TBC | high |
+| **Mists of Pandaria Classic** 5.5.4 | 19 | 50504 | `_Mists`, then `_Classic` | Classic | MoP Classic | high |
+| **Titan Reforged – Chrono** 3.80.2 (China only) | 11 (Wrath game type) | 38002 | `_Wrath` | Classic (older; the 12.x-era APIs are not documented there) | Titan Reforged Classic | high (no access from EU) |
 | Cataclysm Classic | 14 | 40402 | – | – | **gone**: it became the Mists pre-patch on 1 Jul 2025. Removed from the TOC |
 | Wrath Classic | 11 | 30405 | – | – | **no live realm found**. Removed from the TOC |
 | PTR / Beta (kept apart; never in a release TOC) | – | Retail PTR 120107; Forever Beta/Test 16001; Classic Era Test 11508 | – | – | test only |
@@ -122,5 +122,27 @@ Mainline-family client of its own type. Details are in `docs/FOREVER.md`.
   * a Start during a lockdown.
 * The profiles model what each client has **and lacks** (removed globals, missing namespaces),
   from the documentation. They are not the clients.
-* Real-client test guides: `docs/FOREVER.md` (Forever, incl. multiplayer) and
-  `docs/INSTALL_AND_TEST.md` (every client: install, the 10-minute check, what to report).
+* `/sr report` / `/sr commtest` are tested on every profile: report contents and privacy; delivery
+  proven by answers on Forever and Classic Era; a commtest during a lockdown.
+* Real-client test guides:
+  * `docs/FOREVER.md`: Forever, incl. multiplayer;
+  * `docs/INSTALL_AND_TEST.md`: install, the 10-minute check and what to report, for every client;
+  * `docs/TESTERS.md`: external testers for the clients you don't run;
+  * `docs/TROUBLESHOOTING.md`: per client.
+
+## 6. Covering clients we don't run ourselves
+
+You don't need every client installed. Each client is covered by:
+* this documentation and the mock profile (automated, every push);
+* an external tester's 15-minute script (`docs/TESTERS.md`);
+* players' `/sr report` lines.
+
+A report line names the client, its interface, its APIs, the lockdown state and the comm test
+result, so most problems can be fixed from the report alone (`tools/diag_report.py`). A client
+only moves to "client-tested" with a real report from that client.
+
+## 7. CurseForge
+
+One project and one universal ZIP. Each upload is tagged only with the flavors that passed their
+GO list. CurseForge doesn't read flavors from our TOC: the tags are set on upload, so suffixed
+TOCs wouldn't help. Details: `docs/CURSEFORGE.md` and `docs/RELEASE_PLAN.md`.

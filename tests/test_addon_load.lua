@@ -103,7 +103,7 @@ describe("hygiene", function()
     local net = NS.new({ seed = 3 })
     local before = {}
     local c = net.add({ name = "Hygiene", guild = "G" })
-    local allowed = { StackRivalsDB = 1, StackRivalsFrame = 1, StackRivalsMinimapButton = 1, StackRivalsLootDuelButton = 1, SLASH_STACKRIVALS1 = 1,
+    local allowed = { StackRivalsDB = 1, StackRivalsFrame = 1, StackRivalsMinimapButton = 1, StackRivalsLootDuelButton = 1, StackRivalsReport = 1, SLASH_STACKRIVALS1 = 1,
       SLASH_STACKRIVALS2 = 1, StackRivals_OnAddonCompartmentClick = 1 }
     -- everything the mock itself installs
     local M2 = dofile(testdir .. "/wowmock.lua")

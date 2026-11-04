@@ -77,6 +77,11 @@ function CL.apply(name, G, M)
   G.C_PartyInfo.GetLootMethod = function() return M.lootMethod or 3, 0, nil end
   p.apply(G, M)
   if name == "titan" then G.C_PartyInfo.GetLootMethod = nil end
+  -- Battle.net game data: C_BattleNet.SendGameData on every current client (12.0.0 / 1.15.9 /
+  -- 2.5.6 / 5.5.4 / Forever); Titan (older Wrath game type) keeps the old BNSendGameData
+  G.C_BattleNet = G.C_BattleNet or {}
+  if name == "titan" then G.C_BattleNet.SendGameData = nil; G.BNSendGameData = function() return true end
+  elseif not G.C_BattleNet.SendGameData then G.C_BattleNet.SendGameData = function() return 0 end end
   M.client = name
   return p
 end

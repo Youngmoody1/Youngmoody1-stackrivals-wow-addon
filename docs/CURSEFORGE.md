@@ -1,128 +1,168 @@
-# CurseForge submission kit (prepared — NOT submitted)
+# CurseForge kit (prepared, NOT submitted)
 
-Everything needed to create the project and upload the first file. Nothing is uploaded or
-published without the owner's explicit approval.
+Everything needed for one official StackRivals project serving every WoW client. **Nothing is
+created, uploaded or published without your GO.** The process and the GO lists are in
+`docs/RELEASE_PLAN.md`.
 
-## What we verified (CurseForge support docs, 29 Oct 2026)
+## What CurseForge does (checked 4 Nov 2026)
 
-- **Moderation starts at the first file.** A project page can be created and filled in without a
-  file; uploading the first file submits it for review ("Under Review"). No review time is published.
-- **Release options:** the upload form has a "Release Options" setting to publish the file
-  automatically after moderation *or at a later date*. We have not seen the form ourselves, so
-  confirm the exact choices when uploading.
-- **Release types:** *Release* syncs to the CurseForge app by default and is what the main download
-  button gives. *Beta* and *Alpha* reach app users only if they opted in to those channels; they are
-  still listed on the website. A project needs an approved Release (or Beta) to be available in the
-  app; with only Alpha files it is website-only. **So a Beta is public on the website.**
-- **Multi-TOC / flavours:** one project can serve several WoW versions. Each TOC file must start
-  with the folder name, and each needs an interface number. **Game versions are tagged by hand on
-  upload** and can be edited later. We use one TOC with a comma-separated `## Interface:` list —
-  the same approach Deadly Boss Mods uses in its current Forever-ready release
-  (`## Interface: 11509, 16001, 20506, …`, checked in the copy on the owner's PC).
-- **Project requirements:** unique name; English title and description; a sufficient, correct
-  description; a logo; license from the list or custom; main category + up to 4 related ones
-  (unrelated categories get sent back); a real `.zip` under 2 GB.
+Sources:
+* support.curseforge.com: Multi-TOC, Upload API, Creating a project, Moderation Policies, Project
+  statuses
+* CurseForge app release notes 1.321 / 1.324
+* live project file pages
+* the BigWigsMods packager
 
-## Recommended path to beat launch-night moderation
+| Question | Answer |
+|---|---|
+| One project for several WoW versions? | **Yes.** One file can be tagged with several flavors. Live examples: VersionCheck is tagged Retail + Forever + MoP Classic + Titan Reforged Classic + Classic; AllTheThings is tagged with six flavors |
+| Does CurseForge read our TOC to tag flavors? | **No evidence it does.** The author tags game versions on upload (or the BigWigs packager does it from the TOC before uploading). Tags can be edited later |
+| Does our universal ZIP (one TOC, `## Interface: 16001, 11509, 120105, 20506, 50504, 38002`) work? | **Yes**, as long as the upload is tagged correctly. Every target client reads comma interface lists. CurseForge's only TOC check is that the TOC name starts with the folder name (ours: `StackRivals/StackRivals.toc`). **No suffixed TOCs are needed**, so the engine and the file list exist once |
+| Flavor names on CurseForge | Retail · Classic (1.15.x; no separate Hardcore / SoD flavor) · Classic TBC (Anniversary, 2.5.x) · MoP Classic · Titan Reforged Classic · **Forever** (1.60.1; the app detects Forever installs since 1.324, 18 Oct 2026) |
+| Not yet confirmed | whether 12.1.5, 1.15.9 and 3.80.2 are selectable yet (the version list needs a login token). `tools/curseforge_upload.py` then picks the nearest lower version and says so |
+| Alpha / Beta / Release | Release syncs to the app by default; Beta and Alpha only reach users who opted in (all are listed on the website). **A project needs one Release file before it syncs to the app.** "Release Options" can hold a file after review until you release it by hand |
+| Moderation | Starts with the first file. Review time isn't published. A **rejected project can't be re-evaluated**, so get the description right the first time |
+| Rules that touch us | English, grammatical description. Logo 400×400 PNG, not blank, no copyrighted art. A changelog on every file. `.zip` only, under 2 GB. **No external download links.** Community and donation links only at the bottom, modest size (we have no donation link). AI-made showcase images need a visible label; our screenshots will be real |
+| Blizzard AddOn policy | free (no premium versions, paywalls, ads or in-game donation requests); code readable, not obfuscated; no harm to realms or players. **StackRivals meets all of these**: readable Lua, no libraries, free, no ads |
 
-1. Owner creates the project page now (text below, logo `docs/assets/curseforge-logo.png`).
-2. After the first real-client test (Retail/Classic) passes: upload `StackRivals-0.3.x.zip` as
-   **Beta**, game version **Forever** (+ only the clients that passed a real test), with the Beta
-   notice at the top of the description, and — if the form offers it — *publish at a later date*.
-3. Launch night: real Forever test → upload the verified build as **Release**.
+## Pipeline (manual, on purpose)
+
+1. `tools/build_release.sh` validates the addon, runs the tests and builds `dist/StackRivals-<v>.zip`.
+   It checks the ZIP against the commit and writes a manifest with the SHA-256 and the clients.
+2. `python3 tools/curseforge_upload.py --zip dist/StackRivals-<v>.zip --type beta --clients forever,vanilla`
+   is a **dry run**. It re-checks the ZIP against the commit, reads the changelog entry and prints
+   the exact metadata and flavor tags. Only the clients you name get tagged.
+3. Upload, by hand on authors.curseforge.com (recommended for the first file) or with the same
+   script. The script uploads only with `--go "I approve uploading StackRivals <v> as <type>"`,
+   `--project <id>` and `CF_API_TOKEN` set. It always sets **release manually**
+   (`isMarkedForManualRelease`).
+4. After CurseForge's review: you press release on the website.
+
+**There is no CI upload.** No token is stored in GitHub, and there is no tag-push workflow. The
+BigWigs packager would upload every untagged build as Alpha and can't hold a file for manual
+release.
 
 ## Project fields
 
 | Field | Value |
 |---|---|
 | Name | StackRivals |
-| Summary (≤ 120 chars) | Fast falling-block puzzle minigame for WoW Forever. Blitz 2:00, Daily challenge, auto-pause in combat. |
+| Summary (≤ 120 chars) | A falling-block puzzle game inside WoW: Loot Duels for up to 40, duels, spells and daily challenges. |
 | Main category | Minigames |
 | Extra categories | Miscellaneous |
-| License | Custom: "All Rights Reserved" — paste `LICENSE` from the repo |
-| Logo | `docs/assets/curseforge-logo.png` (400×400) |
+| License | Custom: paste `LICENSE` (All Rights Reserved; readable source as Blizzard's policy requires) |
+| Logo | `docs/assets/curseforge-logo.png` (400×400 PNG, the red X mark) |
 | Source / issues | https://github.com/Youngmoody1/Youngmoody1-stackrivals-wow-addon (public) |
-| Game versions on first upload | Forever only (add others only after their real test) |
+| Game versions on the first file | **only the clients that passed the Beta GO list** (plan: Forever + Classic) |
 
-## Description (paste as is; delete the Beta box once Forever is verified)
+## Description (English, paste as is; keep the status box in step with the tests)
 
-> **Beta.** StackRivals has passed automated tests and a real test in [CLIENT — fill in].
-> It has **not yet run in the live WoW Forever client**, which opens on 4 November. Please report
-> anything odd in the comments.
+> **Status of this version.** StackRivals 0.8.x is a **Beta**.
+> Tested in the real game client: [FILL IN: e.g. "WoW Forever and Classic Era: solo modes"].
+> Multiplayer features are [FILL IN: "verified on …" / "not verified with real players yet"].
+> Other WoW versions are included and pass our automated tests, but haven't been tested in their
+> real client yet. If you play one of them, `/sr report` and a comment help us a lot.
 
-**StackRivals** is a fast falling-block puzzle game you can play inside World of Warcraft: Forever,
-in the queue, while waiting for your group, or between quests. It gets out of your way the
-moment combat starts.
+**StackRivals** is a fast falling-block puzzle game you play inside World of Warcraft: in the
+queue, between pulls, or to settle who gets the loot. It gets out of your way the moment combat
+starts. Same pieces, rotation and scoring as **stackrivals.io**.
 
-It is the same game as **stackrivals.io**: same pieces, same rotation and wall kicks, same scoring.
+**⚔ LOOT DUEL: compete for dungeon and raid loot with up to 40 players!**
+Instead of `/roll`, the group races for an item: everyone plays the **same pieces at the same
+time** for one minute, and the highest replay-checked score wins.
+- Invite your party, the whole raid or selected players. Nobody is entered automatically; everyone
+  clicks Join or Pass.
+- A live leaderboard during the race; CONGRATULATIONS for the winner on every player's screen; TIE
+  when it's a tie (then roll off).
+- Fair by design: the pieces come from every player's secret share, so nobody (not even the
+  leader) can pick them. The best runs are replayed on every PC.
+- **It never hands out items.** The loot master (or the item's holder) does that by hand, under
+  your group's normal loot rules. Agree on it before the pull.
 
-**Modes**
-- **Blitz 2:00**: the best score you can make in two minutes.
-- **Daily Blitz**: every player gets the *same pieces* on the same day (resets 00:00 UTC). Compare scores with your guild.
-- **Classic**: endless; the speed goes up every 10 lines.
+**QUICKPLAY: challenge other StackRivals players.** Quick Duel and Spell Duel with players WoW
+lets the addon reach: your guild, group, friends, Battle.net friends and recent rivals. There is
+no global matchmaking server: addons can't go online.
 
-**Made for playing inside WoW**
-- **Pauses itself in combat.** The game stops, every key goes back to WoW, and the window hides until the fight is over.
-- **Never takes your keys.** Keys are only used while a run is live. Paused or on the menu, WoW gets every key. Enter pauses and opens chat.
-- **Never lose a run.** `/reload` or logging out keeps your unfinished game.
-- **Personal records**: top 5 per mode, today's Daily score, lifetime stats, one-click *Share to guild / group*.
-- Hold, 5-piece preview, ghost piece, combos and back-to-back bonuses.
-- Rebindable keys, scalable window, sound toggle, minimap button, "How to play" for new players.
-- Lightweight. No libraries, and nothing runs while the window is closed.
+**SPELL BATTLE: use spells and strategy.** Pick four spells, build mana by clearing lines, and
+bomb, freeze or black out your rival. Play it against the bot (five levels, Rookie to Rival) or in a duel.
+
+**Also included**
+- **Classic** (endless), **Time Trial 2:00**, **Daily Challenge** (same pieces for everyone that day)
+- **Guild Duels**: challenge guild members, friends, your group or anyone by name
+- **Match chat** during duels (text within one faction, quick messages across factions)
+- **Profile and Sync**: link your stackrivals.io account and move challenge codes in and out
+  (copy and paste: the addon never connects to the internet)
+- Pauses itself in combat and hands every key back to WoW; never acts in combat
+- Keeps an unfinished run through `/reload` and logout
+- Rebindable keys, scalable window, minimap button, "How to play"
+- **Free. No ads, no paid features, no account needed.**
+
+**Supported WoW versions**
+| Version | Status |
+|---|---|
+| WoW Forever | [FILL IN after the client test] |
+| Classic Era (incl. Hardcore and Season of Discovery realms) | [FILL IN] |
+| Retail (Midnight) | included; automated tests only so far |
+| Burning Crusade Classic Anniversary | included; automated tests only so far |
+| Mists of Pandaria Classic | included; automated tests only so far |
+
+**Known limitations**
+- Multiplayer uses WoW's addon messages, so it reaches only the players WoW lets addons talk to.
+  Duels across realms need connected realms or a Battle.net friendship in the same WoW version.
+- **Retail and WoW Forever block addon messages during boss fights, Mythic+ runs and PvP
+  matches.** Duels and Loot Duels wait until the fight is over. A Loot Duel can't be started
+  during one.
+- WoW Forever: whether Loot Duel works inside dungeons between pulls is [FILL IN after test F2].
+- Trial and Veteran accounts can't send addon messages, so they can't use the multiplayer modes.
+- Results are checked by the other players' addons (peer-checked), not by a server. That's good
+  against mistakes and naive cheats, but not proof against a modified addon. Use Loot Duel with
+  people you trust, like any loot rule.
 
 **Commands**
-`/sr` (or `/stackrivals`) open · `/sr blitz` · `/sr daily` · `/sr classic` · `/sr settings` · `/sr minimap` · `/sr reset`
-
-**Default controls** (all rebindable)
-←/→ move · ↑ / Z rotate · ↓ soft drop · Space hard drop · C hold · P pause/resume
-
-**Install**
-CurseForge app: search "StackRivals". Manual: in Battle.net select WoW Forever → gear icon →
-*Show in Explorer*, open `Interface\AddOns` and unzip there so that
-`AddOns\StackRivals\StackRivals.toc` exists, then fully restart the game.
+`/sr` open · `/sr loot` Loot Duel · `/sr quickplay` · `/sr spell` · `/sr daily` · `/sr settings` ·
+`/sr report` (copy a diagnostics line for bug reports) · `/sr commtest` (check addon messages in
+your group) · `/sr version`
 
 **FAQ**
-- *Does it work in Retail / Classic Era / Anniversary?* Planned. Each is added here only after it
-  passes a real in-game test.
-- *Are scores online / ranked?* No. Records are stored on your computer and are not verified. The
-  Daily challenge is fair because everyone gets the same pieces, but there is no online leaderboard yet.
-- *Will it get me in trouble in combat?* No. It never acts in combat; it pauses and hands back your keys.
-- *Does it cost anything?* No. Free, no ads, no donations, no accounts.
-- *My keys feel wrong.* Settings → click a key → press the new one. "Default controls" resets them.
-- *Something broke.* Post a comment or open a GitHub issue with `/sr version` and the error text.
+- *Does it hand out loot?* No. It only decides a winner; your loot master hands out the item.
+- *Is there online matchmaking or a ranked ladder in WoW?* No. WoW addons can't go online. You
+  play people WoW connects you with: guild, group, friends.
+- *Does it cost anything?* No. It's free, with no ads and no paid features.
+- *Will it get me killed?* It pauses the moment combat starts and gives your keys back.
+- *Something's wrong?* Type `/sr report`, copy the line, and post it with a short description
+  below or on GitHub. The line has no character or chat data.
 
-**Bug reports**
-Comments here, or https://github.com/Youngmoody1/Youngmoody1-stackrivals-wow-addon/issues.
-Include `/sr version` and any error text.
+**Bug reports and support**
+Comments here, or https://github.com/Youngmoody1/Youngmoody1-stackrivals-wow-addon/issues: please
+include the `/sr report` line.
 
 Not affiliated with or endorsed by Blizzard Entertainment.
 
-**Version history**: see Changelog (paste the top entries of CHANGELOG.md into each file's changelog field).
+*Community:* StackRivals Discord: discord.gg/KV5dTAn8c · Website: stackrivals.io
 
----
+## Screenshots (real WoW only, taken during the client tests; never the developer previews)
 
-## Keywords
+The developer previews in `docs/preview/` are simulated (a WoW API mock) and are **not** used on
+CurseForge.
 
-StackRivals, WoW Forever, Classic Plus, falling blocks, block puzzle, puzzle game, minigame, mini game,
-queue game, daily challenge, highscore, arcade.
-(Never use a third-party game's trademark as a keyword.)
+| # | Shot | Client | Taken |
+|---|---|---|---|
+| 1 | Loot Duel result in a dungeon party: CONGRATULATIONS, WINNER / LOST / PASSED | Forever (F1/F2) | no |
+| 2 | Loot Duel live leaderboard beside the board during a race | Forever or Classic Era | no |
+| 3 | Mode menu with the LOOT DUEL card and filled records | any | no |
+| 4 | Spell Battle vs Bot mid-match (spells and mana visible) | any | no |
+| 5 | Quickplay / duel lobby with two character cards | Classic Era or Forever | no |
+| 6 | The pause screen right after combat started | any | no |
 
-## Screenshots (real, in-game, after the client test — never the developer previews)
-
-1. Window over a busy city, mid-game, a "DOUBLE"/"QUAD" callout visible.
-2. Mode menu with records filled in.
-3. Blitz "TIME!" with NEW BEST.
-4. The pause screen right after combat ("You entered combat…") with the character in combat gear.
-5. Settings with key bindings.
-6. Records screen.
-
-1920×1080, default UI scale, no personal chat or names visible (crop or blur).
+1920×1080, default UI scale. Crop or blur other players' names, chat and guild names, unless they
+agree.
 
 ## Per-upload checklist
 
-- [ ] `tools/build_release.sh` passes; use the ZIP from `dist/` and note its sha256
-- [ ] Release type: Beta (pre-launch) / Release (verified on Forever)
-- [ ] Game versions: only clients with a real passing test
-- [ ] Changelog field: the version's CHANGELOG entry
-- [ ] Beta box in the description matches the real test status
-- [ ] Owner approved this upload
+- [ ] `docs/RELEASE_PLAN.md` §3 (Beta) or §4 (Release) GO list done for **each** client tagged
+- [ ] `tools/build_release.sh` green; ZIP sha256 noted; CI run linked
+- [ ] `tools/curseforge_upload.py … --clients <only the ones that passed>`: dry run reviewed
+- [ ] Status box and "Supported WoW versions" table match the test logs
+- [ ] Changelog = the version's CHANGELOG entry (the script fills it in)
+- [ ] Release type set; **release manually** after review
+- [ ] Your written GO

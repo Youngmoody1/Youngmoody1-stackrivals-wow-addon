@@ -74,6 +74,8 @@
     1:LDK:<lid>:<i>:<e|chunks>                         (0.7.3) "player at place i: send again" - e = your claim
                                                      (LDE), or the log chunks I miss, as 1.4.5; anyone
                                                      missing the same waits instead of asking too
+    1:CTP:<id>                                       (0.8.1) /sr commtest: "who gets this?" (group channel)
+    1:CTA:<id>:<addonVersion>                        (0.8.1) answer on the same channel, once per id
     1:LDX:<lid>:<cancel|left|noreveal>                 the leader cancelled
     1:LDR:<lid>:<hexWinner|->:<tie 0|1>                the leader's computed result (display only)
   Older clients ignore kinds they don't know (decode -> "kind"), so these never break a 0.4 duel.
@@ -177,7 +179,7 @@ local SPEC = {
   HEL = 2, HI = 3, INV = 4, ACC = 2, DEC = 2, RDY = 1, GO = 2, PNG = 1, SC = 5, END = 7, LOG = 4, BYE = 2, RQ = 2, FIN = 1,
   SP = 4, PSE = 3, RSM = 2, VER = 5,
   QS = 3, PRF = 8, CH = 3, QM = 3,
-  LDJ = 6, LDI = 3, LDA = 3, LDQ = 6, LDS = 5, LDN = 2, LDG = 5, LDW = 7, LDC = 3, LDE = 7, LDL = 4, LDK = 3, LDX = 2, LDR = 3,
+  LDJ = 6, LDI = 3, LDA = 3, LDQ = 6, LDS = 5, LDN = 2, LDG = 5, LDW = 7, LDC = 3, LDE = 7, LDL = 4, LDK = 3, LDX = 2, CTP = 1, CTA = 2, LDR = 3,
 }
 --- Loot Duel rules (WoW-only, peer-checked): same pieces for everyone, no spells, highest score.
 P.LOOT_RULESETS = {
@@ -279,6 +281,12 @@ function P.decode(s)
     local hex = f[5]
     if not isMid(f[3]) or not isInt(f[4], 1, 9999) or type(hex) ~= "string" or #hex < 2 or #hex > 2 * P.CHAT_MAX or #hex % 2 ~= 0 or not hex:match("^[0-9a-f]+$") then return nil, "bad" end
     m.mid, m.n, m.text = f[3], tonumber(f[4]), (hex:gsub("..", function(x) return string.char(tonumber(x, 16)) end))
+  elseif kind == "CTP" then
+    if not isMid(f[3]) then return nil, "bad" end
+    m.id = f[3]
+  elseif kind == "CTA" then
+    if not isMid(f[3]) or not isVer(f[4]) then return nil, "bad" end
+    m.id, m.version = f[3], f[4]
   elseif kind == "QM" then
     if not isMid(f[3]) or not isInt(f[4], 1, 9999) or not isInt(f[5], 1, #P.QUICK) then return nil, "bad" end
     m.mid, m.n, m.code = f[3], tonumber(f[4]), tonumber(f[5])

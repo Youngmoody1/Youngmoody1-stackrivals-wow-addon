@@ -143,7 +143,14 @@ function Comm.receive(prefix, text, channel, sender)
   Comm.stats.received = Comm.stats.received + 1
   Comm.traceEvent("recv", text, Comm.fullName(sender))
   local h = Comm.handlers[m.kind] or Comm.handlers["*"]
-  if h then h(m, Comm.fullName(sender), channel) end
+  if h then
+    -- an error in a handler is noted for /sr report (kind only, no message text), then raised as before
+    local okH, err = pcall(h, m, Comm.fullName(sender), channel)
+    if not okH then
+      if ns.Report and ns.Report.noteError then ns.Report.noteError("recv " .. tostring(m.kind), err) end
+      error(err, 0)
+    end
+  end
 end
 
 --- Queue a message. channel: "WHISPER" (target required), "GUILD", "PARTY", "RAID".

@@ -65,6 +65,18 @@ brief say **2–40 is the priority**. This plan follows 2–40.
 | Retail, Anniversary, Mists in the real clients | LATER: update the clients in the launcher first; 10-minute test each |
 | Cross-client Battle.net (Retail ↔ Forever) | unknown: F8 |
 
+## 4b. CurseForge launch (0.8.1 preparation; nothing submitted)
+
+| Requirement | Status |
+|---|---|
+| One project for every flavor, universal ZIP, correct flavor tags | DONE (prepared): CURSEFORGE.md. Tags are set on upload; only clients that passed their GO list |
+| Release pipeline with no auto-publish | DONE: build → dry run (`tools/curseforge_upload.py`) → upload only with GO + token, always "release manually" |
+| Alpha / Beta / Release definitions and GO / NO-GO lists | DONE: RELEASE_PLAN.md |
+| Diagnostics from players on any client (`/sr report`, `/sr commtest`, `tools/diag_report.py`) | DONE (mock-tested) |
+| External testers and troubleshooting per client | DONE: TESTERS.md, TROUBLESHOOTING.md |
+| Project page in English (features, limits, FAQ, bug link, Discord at the bottom) | DONE (text); **real screenshots missing** (taken during the Forever / Classic Era client tests) |
+| First Beta: Forever + Classic Era | waiting for the real-client tests (FOREVER.md S1–S7, Classic Era points 1–6) and your GO |
+
 ## 5. Out of scope here
 
 * The website and Shards: separate projects.

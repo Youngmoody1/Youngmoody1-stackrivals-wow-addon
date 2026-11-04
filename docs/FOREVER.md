@@ -82,20 +82,30 @@ exist). An install there is new, so nothing can be overwritten. Still, I ask fir
 
 **Instances and addon messages (2+ players, the decisive part):**
 
-Run the lockdown check in each place (one line, paste it in chat):
+**How to check delivery (0.8.1):** StackRivals' own `/sr commtest`.
 
-```
-/run print(C_ChatInfo.InChatMessagingLockdown(), C_RestrictedActions and C_RestrictedActions.IsAddOnRestrictionActive(Enum.AddOnRestrictionType.Map), C_ChatInfo.SendAddonMessage("SRTEST","x","PARTY"))
-```
+* The raw API one-liner in the 0.8.0 version of this plan was not good enough, for two reasons:
+  * it used a prefix that was never registered, so a receiving client would ignore it anyway;
+  * a send result of 0 only means "queued", not "arrived".
+* `/sr commtest` sends one ping with StackRivals' registered prefix on the group channel (PARTY /
+  RAID / INSTANCE_CHAT). Every other StackRivals in the group answers on the same channel. The
+  chat line then says, for example, "send result 0, 4 of 4 group members' StackRivals answered:
+  Ann 0.8.1, …".
+* **Only answers count as proof**: they show the message went out and came back. It also says when
+  WoW reported a lockdown.
+* Everyone in the group needs StackRivals 0.8.1+, and they don't have to do anything: their addon
+  answers by itself.
+* After each test, `/sr report` → copy the line → paste it in the test log. It holds the commtest
+  result, the lockdown state and reason, the instance type and the send result codes.
 
 | # | Where | Write down | Then (with StackRivals) | Result |
 |---|---|---|---|---|
-| F1 | Open world, in a party of 2–5 | the three values | Loot Duel: Invite Party, Join, Start, race: one result on every PC | NOT TESTED |
-| F2 | **Inside a dungeon, no fight going on** | the three values (`false … 0` = messages allowed) | the same Loot Duel inside the dungeon | NOT TESTED |
-| F3 | Dungeon, **during a boss fight** | the three values (expected: `true … 11`) | Loot Duel Start → refused with the boss-fight reason | NOT TESTED |
+| F1 | Open world, in a party of 2–5 | `/sr commtest` → "n of n answered"; `/sr report` line | Loot Duel: Invite Party, Join, Start, race: one result on every PC | NOT TESTED |
+| F2 | **Inside a dungeon, no fight going on** | `/sr commtest` (all answered = messages arrive in the dungeon); `/sr report` (`locked=0`) | the same Loot Duel inside the dungeon | NOT TESTED |
+| F3 | Dungeon, **during a boss fight** | `/sr commtest` (expected: result 11 or no answers, "lockdown"); `/sr report` (`locked=1;why=encounter`) | Loot Duel Start → refused with the boss-fight reason | NOT TESTED |
 | F4 | Dungeon: start a Loot Duel, then someone pulls a boss | – | "held by WoW" on the live list, runs go on, one result after the fight | NOT TESTED |
-| F5 | Dungeon, ordinary trash combat | the three values | does trash combat lock messages? (Retail: no) | NOT TESTED |
-| F6 | Raid (from 9 Dec), 10–20 players | the three values, between bosses | Loot Duel with everyone; start time, result time, FPS | NOT TESTED |
+| F5 | Dungeon, ordinary trash combat | `/sr commtest` during the fight (the game pauses; the test still runs) | does trash combat lock messages? (Retail: no) | NOT TESTED |
+| F6 | Raid (from 9 Dec), 10–20 players | `/sr commtest` between bosses: n of n | Loot Duel with everyone; start time, result time, FPS | NOT TESTED |
 | F7 | Loot method in the group or raid | `/dump C_PartyInfo.GetLootMethod()` | which methods exist; can the leader hand out an item by hand? | NOT TESTED |
 | F8 | Two Battle.net friends on different realms | – | Guild Duels → Battle.net tab → a duel (`C_BattleNet.SendGameData`) | NOT TESTED |
 | F9 | A trial account in the group (if anyone has one) | – | they can't join; the reason is shown | NOT TESTED |

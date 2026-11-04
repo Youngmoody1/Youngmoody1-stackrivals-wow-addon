@@ -136,6 +136,24 @@ for _, name in ipairs(CL.ORDER) do
       end
     end)
 
+    it("/sr report: one copyable line that names this client and its abilities, with no names or chat", function()
+      local M, ns = boot(name)
+      SlashCmdList.STACKRIVALS("report")
+      local w = ns.UI.reportFrame
+      ok(w and w:IsShown(), "report window shown")
+      local txt = w.box:GetText()
+      ok(txt:find("^SRDIAG1;"), "starts with SRDIAG1")
+      local kv = {}
+      for k, v in txt:gmatch("([%w]+)=([^;]*)") do kv[k] = v end
+      eq(kv.client, CL.EXPECT_KEY[name]); eq(kv.iface, tostring(prof.interface)); eq(kv.v, ns.VERSION)
+      eq(kv.hc, name == "hardcore" and "1" or "0"); eq(kv.sod, name == "sod" and "1" or "0")
+      ok(kv.api and kv.api:find("am1", 1, true), "addon messages API listed")
+      ok(kv.api:find("bn1", 1, true), "Battle.net game data API listed")
+      ok(not txt:find(ns.Comm.me() or "Player", 1, true), "no character name")
+      ok(not txt:find(GetRealmName(), 1, true), "no realm name")
+      ok(#txt < 1000, "short enough to paste anywhere: " .. #txt)
+    end)
+
     it("a trial / veteran account: no Loot Duel or duels, said plainly", function()
       local M, ns = boot(name, nil, function(G) G.IsTrialAccount = function() return true end end)
       local okC, why = ns.LootDuel.commState()
@@ -253,6 +271,34 @@ for _, client in ipairs({ "forever", "vanilla", "retail", "tbc", "mists" }) do
     end
   end)
 end
+
+describe("/sr commtest: proof that addon messages arrive (simulated clients)", function()
+  for _, client in ipairs({ "forever", "vanilla" }) do
+    it(CL.PROFILES[client].label .. ": a party of 5 - every other StackRivals answers, the chat line says who", function()
+      local net, list = lootGroup(610, client, 5, false)
+      local a = list[1]
+      a.env.SlashCmdList.STACKRIVALS("commtest")
+      net.step(60 * 7)
+      local c = a.ns.Report.last
+      eq(c.code, 0, "send accepted"); eq(c.answers, 4, "4 answers = delivered both ways")
+      ok(a.M.log[#a.M.log]:find("4 of 4", 1, true), a.M.log[#a.M.log])
+      ok(a.ns.Report.text():find("ct=PARTY,code0,ans4/4", 1, true), "in the report")
+      -- a second test right away is refused (no spam)
+      local okT, why = a.ns.Report.commTest()
+      eq(okT, false); eq(why, "cooldown")
+    end)
+  end
+  it("WoW Forever during a boss fight (lockdown): the test says so - result 11, no answers - instead of pretending", function()
+    local net, list = lootGroup(611, "forever", 5, false)
+    for _, c in ipairs(list) do c.lockdownUntil = net.time + 30 end
+    local a = list[1]
+    a.env.SlashCmdList.STACKRIVALS("commtest")
+    net.step(60 * 7)
+    local c = a.ns.Report.last
+    eq(c.answers, 0); ok(c.locked, "lockdown reported by the client")
+    ok(a.M.log[#a.M.log]:find("lockdown", 1, true), a.M.log[#a.M.log])
+  end)
+end)
 
 describe("client detection edge cases", function()
   it("an unreadable WOW_PROJECT_ID (secret) and an unknown interface never break loading", function()

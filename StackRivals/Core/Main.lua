@@ -371,12 +371,19 @@ local function slash(msg)
     end
   elseif cmd == "leave" then
     if ns.Duel.busy() then ns.Duel.leave(); App:Print("You left the duel.") end
+  elseif cmd == "report" or cmd == "diag" then
+    if ns.UI and ns.UI.ShowReport then ns.UI:ShowReport() end
+  elseif cmd == "commtest" then
+    local okT, why = ns.Report and ns.Report.commTest()
+    if okT then App:Print("comm test sent: waiting " .. ns.Report.WAIT .. " s for the other StackRivals in your group...")
+    else App:Print(({ not_in_group = "Join a party or raid first.", cooldown = "Wait a few seconds between comm tests.",
+      unavailable = "Addon messages are not available here." })[why or ""] or "Comm test not available.") end
   elseif cmd == "version" then
     local flavour = (ns.BUILD and ns.BUILD.flavour ~= "full") and (", build " .. ns.BUILD.flavour .. (ns.BUILD.duels and "" or " (duels off)")) or ""
     App:Print("version " .. ns.VERSION .. ", engine v" .. E.ENGINE_VERSION .. ", interface " .. tostring(select(4, GetBuildInfo())) .. flavour
       .. (ns.Client and (", " .. ns.Client.label()) or ""))
   else
-    App:Print("commands: /sr (open), /sr classic | trial | daily, /sr spell, /sr quickplay, /sr duel [Name] [3], /sr leave, /sr pause, /sr settings, /sr loot, /sr lootbutton [reset], /sr minimap, /sr scale 0.8, /sr reset, /sr sound, /sr stats, /sr version")
+    App:Print("commands: /sr (open), /sr classic | trial | daily, /sr spell, /sr quickplay, /sr duel [Name] [3], /sr leave, /sr pause, /sr settings, /sr loot, /sr lootbutton [reset], /sr minimap, /sr scale 0.8, /sr reset, /sr sound, /sr stats, /sr version, /sr report, /sr commtest")
   end
 end
 
