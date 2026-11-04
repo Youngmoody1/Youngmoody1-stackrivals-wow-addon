@@ -324,6 +324,11 @@ local function slash(msg)
     App:Pause("manual")
   elseif cmd == "settings" or cmd == "options" or cmd == "config" then
     ns.UI:Create(); ns.UI.frame:Show(); ns.UI:ShowSettings(true)
+  elseif cmd == "loot" and ns.LootButton and ns.LootButton.button then
+    ns.LootButton:Open() -- the Loot Duel lobby (sends nothing)
+  elseif cmd == "lootbutton" and ns.LootButton and ns.LootButton.button then
+    local on = ns.LootButton:Toggle(arg)
+    App:Print("Loot Duel button " .. (arg == "reset" and "reset to its place" or (on and "on (shown in a party or raid)" or "hidden")) .. ".")
   elseif cmd == "minimap" then
     ns.db.settings.minimapHide = not ns.db.settings.minimapHide
     ns.Minimap:Update()
@@ -364,7 +369,7 @@ local function slash(msg)
     local flavour = (ns.BUILD and ns.BUILD.flavour ~= "full") and (", build " .. ns.BUILD.flavour .. (ns.BUILD.duels and "" or " (duels off)")) or ""
     App:Print("version " .. ns.VERSION .. ", engine v" .. E.ENGINE_VERSION .. ", interface " .. tostring(select(4, GetBuildInfo())) .. flavour)
   else
-    App:Print("commands: /sr (open), /sr classic | trial | daily, /sr spell, /sr quickplay, /sr duel [Name] [3], /sr leave, /sr pause, /sr settings, /sr minimap, /sr scale 0.8, /sr reset, /sr sound, /sr stats, /sr version")
+    App:Print("commands: /sr (open), /sr classic | trial | daily, /sr spell, /sr quickplay, /sr duel [Name] [3], /sr leave, /sr pause, /sr settings, /sr loot, /sr lootbutton [reset], /sr minimap, /sr scale 0.8, /sr reset, /sr sound, /sr stats, /sr version")
   end
 end
 
@@ -408,6 +413,7 @@ ev:SetScript("OnEvent", function(_, event, arg1)
       -- build the (hidden) window now so a duel invite can be shown even if StackRivals was
       -- never opened this session
       ns.UI:Create()
+      if ns.LootButton then ns.LootButton:Create() end
     end
     if not ns.db.seenIntro then
       ns.db.seenIntro = true

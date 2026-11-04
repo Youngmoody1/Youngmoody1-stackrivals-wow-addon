@@ -387,7 +387,8 @@ function UI:CreateMenu()
   self.menuSub = ms
   self.modeButtons = {}
   local y = -62
-  for _, key in ipairs(Session.MODE_ORDER) do
+  -- big cards: Classic, Time Trial, then LOOT DUEL (Daily Challenge moved to the button row)
+  for _, key in ipairs({ "classic", "blitz" }) do
     local mode = Session.MODES[key]
     local b = T.button(menu, "", cw, CARD, key == "daily" and "gold" or "frame", function() ns.App:Start(key) end)
     b:SetPoint("TOP", menu, "TOP", 0, y)
@@ -413,6 +414,26 @@ function UI:CreateMenu()
     self.modeButtons[key] = b
   end
   self.cardStep = CARD + GAP
+  -- LOOT DUEL: the group races for an item (gold, the epic gem); opens the lobby, sends nothing
+  local lc = T.button(menu, "", cw, CARD, "gold", function() UI:ShowSheet("loot") end)
+  lc.noPress = true
+  lc.fs:ClearAllPoints(); lc.fs:SetPoint("TOPLEFT", 62, -7); lc.fs:SetJustifyH("LEFT")
+  T.setFont(lc.fs, T.DISPLAY_ITALIC, SZ.title)
+  lc.fs:SetText("LOOT DUEL")
+  lc.fs:SetTextColor(C.gold[1], C.gold[2], C.gold[3])
+  lc.desc = T.text(lc, SZ.small, C.body); lc.desc:SetPoint("TOPLEFT", 62, -29); lc.desc:SetWidth(170); lc.desc:SetJustifyH("LEFT")
+  lc.desc:SetText("Compete for raid loot")
+  lc.cta = T.display(lc, SZ.heading, C.gold); lc.cta:SetPoint("TOPRIGHT", -16, -8); lc.cta:SetJustifyH("RIGHT")
+  lc.side = T.text(lc, SZ.label, C.label); lc.side:SetPoint("TOPRIGHT", -16, -30); lc.side:SetJustifyH("RIGHT")
+  local ge = T.tex(lc, "ARTWORK", C.gold, 1); ge:SetPoint("TOPLEFT", 1, -1); ge:SetPoint("BOTTOMLEFT", 1, 1); ge:SetWidth(4)
+  lc.icon = lc:CreateTexture(nil, "ARTWORK"); lc.icon:SetSize(34, 34); lc.icon:SetPoint("LEFT", 14, 0); lc.icon:SetTexture(T.MEDIA .. "lootduel")
+  lc.shine = T.tex(lc, "BACKGROUND", C.gold, 0); lc.shine:SetPoint("TOPLEFT", 1, -1); lc.shine:SetPoint("BOTTOMRIGHT", -1, 1)
+  -- hover: a warm gold wash and the CTA in white (calm: no animation over gameplay)
+  lc:HookScript("OnEnter", function(self) self.shine:SetAlpha(0.10); self.cta:SetTextColor(C.paper[1], C.paper[2], C.paper[3]) end)
+  lc:HookScript("OnLeave", function(self) self.shine:SetAlpha(0); self.cta:SetTextColor(C.gold[1], C.gold[2], C.gold[3]) end)
+  lc.tip = "Loot Duel: 2-10 players in your party or raid race at once for one item, instead of /roll. Same pieces, no spells. The loot master still hands out the item by hand."
+  self.lootCard = lc
+  self.lootBtn = lc -- (the old name: everything that opened Loot Duel still does)
   -- QUICKPLAY: one wide red bar between the solo modes and the VERSUS row
   local qp = T.button(menu, "", cw, 34, "primary", function() UI:ShowSheet("quickplay") end)
   qp.noPress = true
@@ -462,10 +483,15 @@ function UI:CreateMenu()
   self.recBtn = T.button(self.navRow, "Records", 98, 28, "frame", function() UI:ShowSheet("records") end)
   self.accBtn = T.button(self.navRow, "Account", 98, 28, "frame", function() UI:ShowSheet("account") end)
   self.accBtn.tip = "Link this character to your stackrivals.io account (one-time code), import your profile, sync."
-  self.lootBtn = T.button(self.navRow, "Loot Duel", 98, 28, "gold", function() UI:ShowSheet("loot") end)
-  self.lootBtn.tip = "Raid loot: the group races for an item instead of /roll. The loot master still hands it out."
-  if ns.BUILD and not ns.BUILD.duels then self.lootBtn:Disable(); self.lootBtn.tip = "Off in this Spell Battle vs Bot test build." end
-  self:LayoutNav({ self.howBtn, self.recBtn, self.accBtn, self.lootBtn }, 6)
+  -- Daily Challenge keeps its mode, seed and records; it moved from the big cards to this row
+  self.dailyBtn = T.button(self.navRow, "Daily Challenge", 124, 28, "gold", function() ns.App:Start("daily") end)
+  self.modeButtons.daily = self.dailyBtn
+  if ns.BUILD and not ns.BUILD.duels then
+    lc:Disable(); lc.cta:SetText(""); lc.side:SetText("Off in this test build")
+    lc.tip = "This is a Spell Battle vs Bot test build: Loot Duel is switched off."
+  end
+  self.howBtn:SetWidth(90); self.recBtn:SetWidth(82); self.accBtn:SetWidth(84)
+  self:LayoutNav({ self.howBtn, self.recBtn, self.accBtn, self.dailyBtn }, 6)
   self.statsLine = T.text(menu, SZ.label, C.label); self.statsLine:SetPoint("BOTTOM", 0, 10)
   self.statsLine:SetWidth(cw)
   self.menuFade = T.fadeInAnim(menu, 0.2)
@@ -509,6 +535,7 @@ function UI:CreateSettings()
   self.toggles = {
     toggle("Sound effects", "sound", L, -66, function(v) ns.Sound.enabled = v end),
     toggle("Show ghost piece", "ghost", L, -92, function() UI.dirty = true end),
+    toggle("Loot Duel group button", "lootButton", L, -118, function() if ns.LootButton then ns.LootButton:Update() end end),
     toggle("Hide window in combat", "hideInCombat", R, -66),
     toggle("Hide minimap button", "minimapHide", R, -92, function() if ns.Minimap then ns.Minimap:Update() end end),
   }
@@ -1036,13 +1063,14 @@ function UI:RefreshMenu()
   for key, b in pairs(self.modeButtons) do
     local best = ns.App:BestFor(key)
     if key == "daily" then
+      -- the button row: today's best, tries and the reset time live in the tooltip
       local d = db.records.dailyToday
       local today = ns.App:Today()
       local tries = (d.date == today) and d.tries or 0
       local left = ns.App:SecondsToUtcMidnight()
-      b.best:SetText(best > 0 and T.commas(best) or "-")
-      b.side:SetText(string.format("new pieces in %dh %02dm", math.floor(left / 3600), math.floor(left % 3600 / 60)))
-      b.tip = (tries > 0 and (T.plural(tries, "try", "tries") .. " today. ") or "")
+      b.tip = "Daily Challenge: today " .. (best > 0 and T.commas(best) or "-")
+        .. (tries > 0 and ("  (" .. T.plural(tries, "try", "tries") .. ")") or "") .. ". "
+        .. string.format("New pieces in %dh %02dm. ", math.floor(left / 3600), math.floor(left % 3600 / 60))
         .. "Everyone gets the same pieces until 00:00 UTC (seed " .. today .. ")."
     else
       b.best:SetText(best > 0 and T.commas(best) or "-")
@@ -1050,6 +1078,7 @@ function UI:RefreshMenu()
     end
     if inCombat() then b:Disable() else b:Enable() end
   end
+  self:RefreshLootCard()
   -- Continue (if any) sits above the cards; the cards move down to make room
   local su = db.suspended
   self.continueBtn:SetShown(su ~= nil)
@@ -1060,8 +1089,7 @@ function UI:RefreshMenu()
   -- with a run to continue the subtitle makes room for the Continue button
   self.menuSub:SetShown(su == nil)
   local y = su and -74 or -62
-  for _, key in ipairs(Session.MODE_ORDER) do
-    local b = self.modeButtons[key]
+  for _, b in ipairs({ self.modeButtons.classic, self.modeButtons.blitz, self.lootCard }) do
     b:ClearAllPoints(); b:SetPoint("TOP", self.menu, "TOP", 0, y)
     y = y - self.cardStep
   end
@@ -1099,6 +1127,32 @@ function UI:RefreshMenu()
   end
   if inCombat() then self.statsLine:SetText("In combat. Play after the fight.")
   else self.statsLine:SetText(total > 0 and (T.commas(total) .. " runs  -  " .. T.commas(lines) .. " lines cleared") or "Combat pauses the game and gives your keys back.") end
+end
+
+--- The Loot Duel card's call to action: what a click does right now (it never sends anything).
+function UI:RefreshLootCard()
+  local lc = self.lootCard
+  local LD = ns.LootDuel
+  if not lc or not LD or (ns.BUILD and not ns.BUILD.duels) then return end
+  local d = LD.current
+  local me = ns.Comm and ns.Comm.me()
+  local cta, side
+  if d and d.state == "inviting" and d.role ~= "leader" and not d.myAnswer and me and ns.Comm.same and (function()
+    for _, n in ipairs(d.inviteOrder or {}) do if ns.Comm.same(n, me) then return true end end end)() then
+    cta, side = "Join now", "Invite from " .. (ns.Duel and ns.Duel.short(d.leader) or d.leader)
+  elseif d and (d.state == "inviting" or d.state == "revealing") then
+    cta, side = "Open lobby", (d.role == "leader") and (#LD.accepted(d) .. " joined") or "Waiting for the start"
+  elseif d and d.state == "playing" then
+    cta, side = "Live now", #(d.participants or {}) .. " players racing"
+  else
+    local n = #LD.roster()
+    local okLead = LD.mayLead()
+    if okLead then cta, side = "Create Loot Duel", ((IsInRaid and IsInRaid()) and "Raid of " or "Party of ") .. n
+    elseif LD.channel() then cta, side = "Open", "Your leader starts it"
+    else cta, side = "Create Loot Duel", "For parties and raids" end
+  end
+  lc.cta:SetText(cta); lc.side:SetText(side)
+  if inCombat() then lc:Disable() else lc:Enable() end
 end
 
 function UI:ShowOver(info)

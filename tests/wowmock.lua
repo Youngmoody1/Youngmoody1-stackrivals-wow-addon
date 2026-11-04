@@ -79,7 +79,7 @@ local function newTexture(parent, layer, sub)
   return strict(newRegion("Texture", {
     _parent = parent, _layer = layer or "ARTWORK", _sub = sub or 0, _order = nextOrder(),
     SetColorTexture = function(o, r, g, b, a) assert(type(r) == "number" and type(g) == "number" and type(b) == "number", "SetColorTexture needs numbers"); o._r, o._g, o._b, o._a = r, g, b, a end,
-    SetTexture = function(o, path) o._tex = path end,
+    SetTexture = function(o, path) o._tex = path end, GetTexture = function(o) return o._tex end,
     SetDesaturated = function(o, v) o._desat = v and true or false end,
     SetTexCoord = function(o, ...) o._coords = { ... } end,
     SetDrawLayer = function() end,

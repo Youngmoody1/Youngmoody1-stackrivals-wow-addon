@@ -309,4 +309,113 @@ describe("Loot Duel for dungeons and raids: inviting, leaders, trouble (simulate
   end)
 end)
 
+describe("main menu: Loot Duel is a main card (Daily Challenge kept)", function()
+  it("order: Classic, Time Trial, LOOT DUEL, Quickplay, Spell Battle | Guild Duels; Daily Challenge in the button row and still playable", function()
+    local net = NS.new({ seed = 220 })
+    local c = net.add({ name = "Solo", saved = { seenHelp = true } }) -- not in a group
+    net.step(30)
+    c.env.SlashCmdList.STACKRIVALS("")
+    local UI = c.ns.UI
+    local function y(b) return select(5, b:GetPoint(1)) end
+    ok(y(UI.modeButtons.classic) > y(UI.modeButtons.blitz) and y(UI.modeButtons.blitz) > y(UI.lootCard) and y(UI.lootCard) > y(UI.qpBar), "card order")
+    eq(UI.lootCard.fs:GetText(), "LOOT DUEL"); eq(UI.lootCard.desc:GetText(), "Compete for raid loot")
+    ok(UI.lootCard.icon:GetTexture():find("lootduel", 1, true), "own gem icon")
+    eq(UI.lootCard.cta:GetText(), "Create Loot Duel")
+    eq(UI.lootCard.side:GetText(), "For parties and raids")
+    UI.lootCard:Click()
+    ok(UI.lootSheet:IsShown(), "opens the lobby")
+    eq(c.ns.LootDuel.current, nil, "a click sends no invite")
+    UI.lootSheet:Hide(); UI:RefreshPhase()
+    eq(UI.dailyBtn.fs:GetText(), "Daily Challenge")
+    UI.dailyBtn:Click()
+    eq(c.ns.App.session.mode.key, "daily", "Daily Challenge still plays")
+  end)
+  it("the card's call to action follows the group: leader of a party, member, invited", function()
+    local net, cs, names = group(221, 5)
+    local lead, mem = cs[names[1]], cs[names[2]]
+    lead.env.SlashCmdList.STACKRIVALS(""); mem.env.SlashCmdList.STACKRIVALS("")
+    lead.ns.UI:RefreshMenu(); mem.ns.UI:RefreshMenu()
+    eq(lead.ns.UI.lootCard.cta:GetText(), "Create Loot Duel"); eq(lead.ns.UI.lootCard.side:GetText(), "Party of 5")
+    eq(mem.ns.UI.lootCard.cta:GetText(), "Open"); eq(mem.ns.UI.lootCard.side:GetText(), "Your leader starts it")
+    LD(lead).create(19019, "l060", { full(names[1]), full(names[2]) }); net.step(60 * 3)
+    mem.ns.UI:RefreshMenu()
+    eq(mem.ns.UI.lootCard.cta:GetText(), "Join now")
+  end)
+end)
+
+describe("Loot Duel quick-access button near the group frames", function()
+  local function solo(seed) local net = NS.new({ seed = seed }); local c = net.add({ name = "Solo", saved = { seenHelp = true } }); net.step(30); return net, c end
+  it("hidden solo; shown in a party and in a raid; hidden again after leaving the group", function()
+    local net, c = solo(230)
+    local b = c.ns.LootButton.button
+    ok(b, "created at login"); ok(not b:IsShown(), "solo: hidden")
+    local net2, cs, names = group(231, 5)
+    ok(cs[names[1]].ns.LootButton.button:IsShown(), "party leader")
+    ok(cs[names[3]].ns.LootButton.button:IsShown(), "party member (opens the lobby to join or watch)")
+    local net3, rs, rn = group(232, 12)
+    ok(rs[rn[1]].ns.LootButton.button:IsShown(), "raid")
+    local m = cs[names[2]]
+    m.o.group = nil; m.M.fire("GROUP_ROSTER_UPDATE")
+    ok(not m.ns.LootButton.button:IsShown(), "left the group: hidden")
+  end)
+  it("a click opens the Loot Duel lobby and sends nothing; in combat it stays hidden and opens nothing", function()
+    local net, cs, names = group(233, 5)
+    local c = cs[names[1]]
+    local sent = 0
+    net.tap = function(from) if from == c then sent = sent + 1 end end
+    local before = sent
+    c.ns.LootButton.button:Click("LeftButton")
+    net.step(60)
+    ok(c.ns.UI.frame:IsShown() and c.ns.UI.lootSheet:IsShown(), "the lobby is open")
+    eq(c.ns.LootDuel.current, nil, "no Loot Duel created")
+    local loot = 0
+    net.tap = function(from, text) if from == c and text:find(":LD[FIAQW]:") then loot = loot + 1 end end
+    net.step(60 * 5)
+    eq(loot, 0, "no invite or Loot Duel message")
+    net.tap = nil
+    c.ns.UI.lootSheet:Hide(); c.ns.UI.frame:Hide()
+    c.M.combat = true; c.M.fire("PLAYER_REGEN_DISABLED")
+    ok(not c.ns.LootButton.button:IsShown(), "hidden in combat")
+    c.ns.LootButton:Open()
+    ok(not c.ns.UI.frame:IsShown(), "opens nothing in combat")
+    c.M.combat = false; c.M.fire("PLAYER_REGEN_ENABLED")
+    ok(c.ns.LootButton.button:IsShown(), "back after combat")
+  end)
+  it("right-click hides it (saved); Settings and /sr lootbutton show it again; Shift-drag saves its place across a reload", function()
+    local net, cs, names = group(234, 5)
+    local c = cs[names[1]]
+    local b = c.ns.LootButton.button
+    b:Click("RightButton")
+    ok(not b:IsShown()); eq(c.ns.db.settings.lootButton, false)
+    c.env.SlashCmdList.STACKRIVALS("lootbutton")
+    ok(b:IsShown()); eq(c.ns.db.settings.lootButton, true)
+    -- the settings switch
+    c.ns.UI:ShowSettings(true)
+    local tg
+    for _, t in ipairs(c.ns.UI.toggles) do if t.key == "lootButton" then tg = t end end
+    ok(tg, "a switch in Settings"); tg:Click()
+    ok(not b:IsShown(), "switched off in Settings")
+    tg:Click(); ok(b:IsShown())
+    -- move: without Shift nothing moves; with Shift the place is saved
+    c.env.IsShiftKeyDown = function() return false end
+    b:GetScript("OnDragStart")(b); b:SetPoint("TOPLEFT", c.env.UIParent, "TOPLEFT", 300, -400); b:GetScript("OnDragStop")(b)
+    eq(c.ns.db.settings.lootButtonPos, nil, "no Shift: not moved")
+    c.env.IsShiftKeyDown = function() return true end
+    b:GetScript("OnDragStart")(b); b:ClearAllPoints(); b:SetPoint("TOPLEFT", c.env.UIParent, "TOPLEFT", 300, -400); b:GetScript("OnDragStop")(b)
+    eq(c.ns.db.settings.lootButtonPos.x, 300); eq(c.ns.db.settings.lootButtonPos.y, -400)
+    local c2 = net.reload(c)
+    local _, _, _, x, y = c2.ns.LootButton.button:GetPoint(1)
+    eq(x, 300); eq(y, -400)
+    c2.env.SlashCmdList.STACKRIVALS("lootbutton reset")
+    local _, _, _, x2 = c2.ns.LootButton.button:GetPoint(1)
+    eq(x2, c2.ns.LootButton.DEFAULT.x)
+  end)
+  it("a broken saved place is ignored (SavedVariables are cleaned)", function()
+    local net = NS.new({ seed = 235 })
+    local c = net.add({ name = "Solo", saved = { seenHelp = true, settings = { lootButton = "yes", lootButtonPos = { point = "NOPE", x = 1e9, y = "a" } } } })
+    net.step(30)
+    eq(c.ns.db.settings.lootButton, true); eq(c.ns.db.settings.lootButtonPos, nil)
+  end)
+end)
+
 return H

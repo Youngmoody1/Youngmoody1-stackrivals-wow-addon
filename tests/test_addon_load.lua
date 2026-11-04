@@ -103,7 +103,7 @@ describe("hygiene", function()
     local net = NS.new({ seed = 3 })
     local before = {}
     local c = net.add({ name = "Hygiene", guild = "G" })
-    local allowed = { StackRivalsDB = 1, StackRivalsFrame = 1, StackRivalsMinimapButton = 1, SLASH_STACKRIVALS1 = 1,
+    local allowed = { StackRivalsDB = 1, StackRivalsFrame = 1, StackRivalsMinimapButton = 1, StackRivalsLootDuelButton = 1, SLASH_STACKRIVALS1 = 1,
       SLASH_STACKRIVALS2 = 1, StackRivals_OnAddonCompartmentClick = 1 }
     -- everything the mock itself installs
     local M2 = dofile(testdir .. "/wowmock.lua")
@@ -311,9 +311,11 @@ describe("0.3.0 polish", function()
   it("daily button shows when the pieces change (UTC midnight)", function()
     local M, ns = boot(nil)
     SlashCmdList.STACKRIVALS("")
-    local txt = ns.UI.modeButtons.daily.side:GetText()
-    ok(txt:find("^new pieces in %d+h %d%dm$") ~= nil, txt)
-    ok(ns.UI.modeButtons.daily.tip:find("00:00 UTC") ~= nil)
+    -- (0.7.1: Daily Challenge sits in the button row; the reset time is in its tooltip)
+    local tip = ns.UI.modeButtons.daily.tip
+    ok(tip:find("New pieces in %d+h %d%dm") ~= nil, tip)
+    ok(tip:find("00:00 UTC") ~= nil)
+    eq(ns.UI.dailyBtn.fs:GetText(), "Daily Challenge")
     local left = ns.App:SecondsToUtcMidnight()
     ok(left > 0 and left <= 86400)
   end)

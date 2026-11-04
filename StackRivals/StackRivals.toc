@@ -45,5 +45,6 @@ UI\MatchChat.lua
 UI\AccountUI.lua
 UI\SyncUI.lua
 UI\LootDuelUI.lua
+UI\LootButton.lua
 UI\SpellUI.lua
 Core\Main.lua

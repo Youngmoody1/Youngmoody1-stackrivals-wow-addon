@@ -36,7 +36,7 @@ DB.SPELL_DIFFICULTIES = { "rookie", "challenger", "contender", "elite", "rival" 
 DB.SPELL_RULES = 2 -- vs-Bot win rule of the counted W/L/D (2 = first to top out loses)
 
 local function defaultSettings()
-  return { sound = true, ghost = true, hideInCombat = true, scale = 1.0, minimapHide = false, minimapAngle = 215 }
+  return { sound = true, ghost = true, hideInCombat = true, scale = 1.0, minimapHide = false, minimapAngle = 215, lootButton = true }
 end
 
 local function emptyRecord()
@@ -91,6 +91,13 @@ function DB.sanitize(raw)
   s.scale = num(rs.scale, s.scale, 0.7, 1.4)
   s.minimapHide = bool(rs.minimapHide, s.minimapHide)
   s.minimapAngle = num(rs.minimapAngle, s.minimapAngle, 0, 360)
+  -- Loot Duel quick-access button (0.7.1): shown?, and where (offsets from a UIParent corner)
+  s.lootButton = bool(rs.lootButton, s.lootButton)
+  local lp = rs.lootButtonPos
+  local POINTS = { TOPLEFT = true, TOPRIGHT = true, BOTTOMLEFT = true, BOTTOMRIGHT = true, TOP = true, BOTTOM = true, LEFT = true, RIGHT = true, CENTER = true }
+  if type(lp) == "table" and POINTS[lp.point] and type(lp.x) == "number" and type(lp.y) == "number" and math.abs(lp.x) <= 10000 and math.abs(lp.y) <= 10000 then
+    s.lootButtonPos = { point = lp.point, x = math.floor(lp.x), y = math.floor(lp.y) }
+  end
   db.settings = s
 
   local b, rb = {}, (type(raw.bindings) == "table") and raw.bindings or {}

@@ -265,7 +265,8 @@ function UI:CreateLootDuel()
   pcall(ev.RegisterEvent, ev, "GET_ITEM_INFO_RECEIVED")
   pcall(ev.RegisterEvent, ev, "LOOT_OPENED")
   pcall(ev.RegisterEvent, ev, "LOOT_CLOSED")
-  ev:SetScript("OnEvent", function() UI:RefreshLootDuel() end)
+  pcall(ev.RegisterEvent, ev, "GROUP_ROSTER_UPDATE")
+  ev:SetScript("OnEvent", function() UI:RefreshLootDuel(); if UI.RefreshLootCard then UI:RefreshLootCard() end end)
   if ns.Duel and ns.Duel.on then
     -- a StackRivals answer (HI) arrived: show it in the list
     local prev = ns.Duel.listeners and ns.Duel.listeners.players
@@ -274,6 +275,7 @@ function UI:CreateLootDuel()
   LD.on("changed", function(d)
     if d and d.state == "playing" and d.iPlay and s:IsShown() then s:Hide() end
     UI:RefreshLootDuel(); UI:RenderRival()
+    if UI.RefreshLootCard then UI:RefreshLootCard() end
   end)
   LD.on("live", function() UI:RenderRival(); UI:RefreshLootDuel() end)
   LD.on("invite", function(d)
