@@ -22,7 +22,7 @@
   "parse": [
     {
       "name": "full",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.7bb7b816",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.-.ba37bcde",
       "expect": {
         "ok": true,
         "snapshot": {
@@ -83,12 +83,12 @@
               "state": "live",
               "start": 1792999460,
               "end": 1793003060,
-              "value": 2
+              "value": 200
             }
           ]
         }
       },
-      "why": "Shards, asOf, three equipped slots, six owned ids (sorted), an upcoming storm and a live 2× Overdrive"
+      "why": "Shards, asOf, three equipped slots, six owned ids (sorted), an upcoming storm (25 Shards per claim) and a live 2× Overdrive (value 200 = 2.00×)"
     },
     {
       "name": "minimal",
@@ -136,7 +136,7 @@
     },
     {
       "name": "signed",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.t19twJJSqBrqgGMC558z78ChXS4uJBlgMGL0SdmKxAkRS8PbEUstzfr0bMzw8EupoTIPw4ooZJgm2aGfg6pVmxDg.3f621c6f",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.t1rMOi8_HATi4IC5wX4IyeZSmUe5MLjuSgweTkjRuw29F-MbHN0zVZzpsTc9_MEE7mblDgdHPpikTrwP2meoUtAQ.c61551d1",
       "expect": {
         "ok": true,
         "snapshot": {
@@ -168,7 +168,7 @@
           "achTotal": 4,
           "cosOwned": 6,
           "cosEquipped": "Solar Inferno",
-          "sig": "t19twJJSqBrqgGMC558z78ChXS4uJBlgMGL0SdmKxAkRS8PbEUstzfr0bMzw8EupoTIPw4ooZJgm2aGfg6pVmxDg",
+          "sig": "t1rMOi8_HATi4IC5wX4IyeZSmUe5MLjuSgweTkjRuw29F-MbHN0zVZzpsTc9_MEE7mblDgdHPpikTrwP2meoUtAQ",
           "shards": 1250,
           "asOf": 1793000060,
           "equipped": {
@@ -197,7 +197,7 @@
               "state": "live",
               "start": 1792999460,
               "end": 1793003060,
-              "value": 2
+              "value": 200
             }
           ]
         }
@@ -206,7 +206,7 @@
     },
     {
       "name": "check",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.7bb7b810",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.-.ba37bcd0",
       "expect": {
         "ok": false,
         "error": "check"
@@ -215,7 +215,7 @@
     },
     {
       "name": "fields",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.64b6a7cb",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.2b96acd3",
       "expect": {
         "ok": false,
         "error": "fields"
@@ -224,7 +224,7 @@
     },
     {
       "name": "version_srp3",
-      "code": "SRP3.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.df60ad33",
+      "code": "SRP3.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.-.5f717325",
       "expect": {
         "ok": false,
         "error": "version"
@@ -233,7 +233,7 @@
     },
     {
       "name": "base_level",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.zzzzzzz.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.fe8f4ea7",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.zzzzzzz.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.-.d01d6c59",
       "expect": {
         "ok": false,
         "error": "base"
@@ -242,7 +242,7 @@
     },
     {
       "name": "shards_bad",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.-1.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.65e49232",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.-1.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.-.c398b18a",
       "expect": {
         "ok": false,
         "error": "shards"
@@ -251,7 +251,7 @@
     },
     {
       "name": "asof_future",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p9.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.ff376b89",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p9.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.-.f42060d7",
       "expect": {
         "ok": false,
         "error": "asOf"
@@ -260,7 +260,7 @@
     },
     {
       "name": "asof_old",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tngd17.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.ebe240a1",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tngd17.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.-.46ba8f2f",
       "expect": {
         "ok": false,
         "error": "asOf"
@@ -269,7 +269,7 @@
     },
     {
       "name": "equipped_slot",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.hat:skin_mono.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.ff8a8d6c",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.hat:skin_mono.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.-.cb1c7c58",
       "expect": {
         "ok": false,
         "error": "equipped"
@@ -278,7 +278,7 @@
     },
     {
       "name": "equipped_twice",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_mono~skin:skin_wire.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.8e190672",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_mono~skin:skin_wire.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.-.dad20cca",
       "expect": {
         "ok": false,
         "error": "equipped"
@@ -287,7 +287,7 @@
     },
     {
       "name": "owned_unsorted",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.skin_mono~skin_circuit.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.89521be2",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.skin_mono~skin_circuit.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.-.f86a3c1a",
       "expect": {
         "ok": false,
         "error": "owned"
@@ -296,7 +296,7 @@
     },
     {
       "name": "owned_duplicate",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.skin_mono~skin_mono.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.2b0bd0bc",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.skin_mono~skin_mono.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.-.243fcdc8",
       "expect": {
         "ok": false,
         "error": "owned"
@@ -325,7 +325,7 @@
   "sig": [
     {
       "name": "valid",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.t19twJJSqBrqgGMC558z78ChXS4uJBlgMGL0SdmKxAkRS8PbEUstzfr0bMzw8EupoTIPw4ooZJgm2aGfg6pVmxDg.3f621c6f",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.t1rMOi8_HATi4IC5wX4IyeZSmUe5MLjuSgweTkjRuw29F-MbHN0zVZzpsTc9_MEE7mblDgdHPpikTrwP2meoUtAQ.c61551d1",
       "expect": {
         "state": "verified",
         "kid": "t1"
@@ -334,7 +334,7 @@
     },
     {
       "name": "unsigned",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.7bb7b816",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.-.ba37bcde",
       "expect": {
         "state": "unverified",
         "reason": "unsigned"
@@ -343,7 +343,7 @@
     },
     {
       "name": "unknown_kid",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.zz9twJJSqBrqgGMC558z78ChXS4uJBlgMGL0SdmKxAkRS8PbEUstzfr0bMzw8EupoTIPw4ooZJgm2aGfg6pVmxDg.7c3abb5c",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.zzrMOi8_HATi4IC5wX4IyeZSmUe5MLjuSgweTkjRuw29F-MbHN0zVZzpsTc9_MEE7mblDgdHPpikTrwP2meoUtAQ.72786d56",
       "expect": {
         "state": "unverified",
         "reason": "unknown_kid"
@@ -352,7 +352,7 @@
     },
     {
       "name": "shards_changed",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.255r.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.t19twJJSqBrqgGMC558z78ChXS4uJBlgMGL0SdmKxAkRS8PbEUstzfr0bMzw8EupoTIPw4ooZJgm2aGfg6pVmxDg.daaaf3fb",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.255r.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.t1rMOi8_HATi4IC5wX4IyeZSmUe5MLjuSgweTkjRuw29F-MbHN0zVZzpsTc9_MEE7mblDgdHPpikTrwP2meoUtAQ.b693d62d",
       "expect": {
         "state": "invalid",
         "reason": "signature"
@@ -361,7 +361,7 @@
     },
     {
       "name": "owned_changed",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.skin_mono~skin_prismatic_overdrive.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.t19twJJSqBrqgGMC558z78ChXS4uJBlgMGL0SdmKxAkRS8PbEUstzfr0bMzw8EupoTIPw4ooZJgm2aGfg6pVmxDg.b995ca1d",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.skin_mono~skin_prismatic_overdrive.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.t1rMOi8_HATi4IC5wX4IyeZSmUe5MLjuSgweTkjRuw29F-MbHN0zVZzpsTc9_MEE7mblDgdHPpikTrwP2meoUtAQ.a488f5c3",
       "expect": {
         "state": "invalid",
         "reason": "signature"
@@ -370,7 +370,7 @@
     },
     {
       "name": "equipped_changed",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_prismatic_overdrive.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.t19twJJSqBrqgGMC558z78ChXS4uJBlgMGL0SdmKxAkRS8PbEUstzfr0bMzw8EupoTIPw4ooZJgm2aGfg6pVmxDg.dcf5d21d",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_prismatic_overdrive.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.t1rMOi8_HATi4IC5wX4IyeZSmUe5MLjuSgweTkjRuw29F-MbHN0zVZzpsTc9_MEE7mblDgdHPpikTrwP2meoUtAQ.54b58dc3",
       "expect": {
         "state": "invalid",
         "reason": "signature"
@@ -379,7 +379,7 @@
     },
     {
       "name": "event_changed",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-live-1-zzzzzz-zz.t19twJJSqBrqgGMC558z78ChXS4uJBlgMGL0SdmKxAkRS8PbEUstzfr0bMzw8EupoTIPw4ooZJgm2aGfg6pVmxDg.db222b14",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-live-1-zzzzzz-zz.t1rMOi8_HATi4IC5wX4IyeZSmUe5MLjuSgweTkjRuw29F-MbHN0zVZzpsTc9_MEE7mblDgdHPpikTrwP2meoUtAQ.85c94d16",
       "expect": {
         "state": "invalid",
         "reason": "signature"
@@ -388,7 +388,7 @@
     },
     {
       "name": "level_changed",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.2r.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.t19twJJSqBrqgGMC558z78ChXS4uJBlgMGL0SdmKxAkRS8PbEUstzfr0bMzw8EupoTIPw4ooZJgm2aGfg6pVmxDg.2ab04966",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.2r.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.t1rMOi8_HATi4IC5wX4IyeZSmUe5MLjuSgweTkjRuw29F-MbHN0zVZzpsTc9_MEE7mblDgdHPpikTrwP2meoUtAQ.6678961a",
       "expect": {
         "state": "invalid",
         "reason": "signature"
@@ -397,7 +397,7 @@
     },
     {
       "name": "srp1_signature_moved",
-      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.t1Y57LKzOcUVtxR_RXGVHUTfMZJQ7BXRREGNdv95Ma-DyGtjPKLCN6oimrJLsR4CbwkyzhM7p4v4B4ZtnPYVnuDw.4cad0a9f",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-5k.t1Y57LKzOcUVtxR_RXGVHUTfMZJQ7BXRREGNdv95Ma-DyGtjPKLCN6oimrJLsR4CbwkyzhM7p4v4B4ZtnPYVnuDw.c9e972c7",
       "expect": {
         "state": "invalid",
         "reason": "signature"

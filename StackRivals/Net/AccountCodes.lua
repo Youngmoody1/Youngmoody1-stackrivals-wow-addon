@@ -259,7 +259,7 @@ end
       equipped  "-" or slot:id joined by "~"; slot skin | frame | victory (each at most once); id [a-z0-9_]{1,32}
       owned     "-" or ids joined by "~", sorted ascending (byte order), unique, at most 64
       events    "-" or up to 4 <kind>-<up|live>-<start36>-<end36>-<value36> joined by "~"; kind storm | overdrive;
-                start < end; value: storm = Shards per claim on the website, overdrive = XP multiplier
+                start < end; value: storm = Shards per claim on the website, overdrive = XP multiplier x 100 (200 = 2x)
       sig       "-" or SRP2-SIG v1 (Ed25519 over "SRP2-SIG-v1\n" + fields 0-23; not checked by this version)
   Display only: nothing here buys, claims or credits anything; the website's ledger is the authority.
 ]]

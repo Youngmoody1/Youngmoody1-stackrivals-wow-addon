@@ -663,14 +663,14 @@ describe("profile view: one shape for every snapshot format, display only", func
       linkId = r.linkId, player = "Alice-Realm", accountId = "acc_7f3k2", name = "Alice Stack", issued = T0 + 3000, expires = T0 + 86400,
       level = 13, xp = 10, xpNext = 2100, seasonPct = 46, wins = 13, losses = 8, draws = 1, history = {},
       shards = 1250, asOf = T0 + 2990, equipped = { skin = "skin_solar_inferno" }, owned = { "skin_solar_inferno", "skin_circuit" },
-      events = { { kind = "overdrive", state = "live", start = T0 + 2000, ["end"] = T0 + 9000, value = 2 } },
+      events = { { kind = "overdrive", state = "live", start = T0 + 2000, ["end"] = T0 + 9000, value = 200 } },
     })
     local okI, res = Acc.import(code)
     eq(okI, true); eq(res, "updated")
     local v = Acc.profileView()
     eq(v.format, "SRP2"); eq(v.shards, 1250); eq(v.asOf, T0 + 2990); eq(v.level, 13)
     eq(v.equipped.skin, "skin_solar_inferno"); eq(#v.owned, 2); eq(v.owned[1], "skin_circuit")
-    eq(#v.events, 1); eq(v.events[1].kind, "overdrive"); eq(v.events[1].value, 2)
+    eq(#v.events, 1); eq(v.events[1].kind, "overdrive"); eq(v.events[1].value, 200)
     eq(v.verified, false) -- no signature check in this version: nothing is applied from it
     -- an SRP1 afterwards (newer) replaces it and the extras go away again (SRP1 has none)
     c.M.serverTime = T0 + 4000
