@@ -252,6 +252,31 @@ describe("SavedVariables fuzzing", function()
       SlashCmdList.STACKRIVALS(""); M.frames_step(3)
     end
   end)
+  it("a 0.3.1-style save from Classic Era 1.15.9 (synthetic) loads, plays and saves without losing anything", function()
+    local chunk = assert(loadfile(testdir .. "/fixtures/sv_0.3.1_classic_era.lua"))
+    local env = {}
+    setfenv(chunk, env); chunk()
+    local saved = env.StackRivalsDB
+    local binds = {}
+    for k, v in pairs(saved.bindings) do binds[k] = v end
+    local M, ns = boot(saved, "classic")
+    eq(ns.db.settings.minimapAngle, 123.456, "minimap position kept")
+    eq(ns.db.settings.sound, false, "sound setting kept")
+    for k, v in pairs(binds) do eq(ns.db.bindings[k], v, "key " .. k .. " kept") end
+    ok(ns.db.seenIntro, "intro not shown again")
+    eq(ns.db.records.classic.best, 9100, "Classic best kept")
+    eq(ns.db.records.classic.games, 2)
+    eq(ns.db.records.classic.top[1].s, 9100, "top list kept")
+    ok(StackRivalsDB.diag.clients["11509"], "0.3.1 diagnostics kept")
+    SlashCmdList.STACKRIVALS("blitz"); M.frames_step(181)
+    ns.App.session:finish("time"); M.frames_step(2)
+    eq(#M.blocked, 0)
+    M.fire("PLAYER_LOGOUT")
+    local _, ns2 = boot(StackRivalsDB, "classic")
+    eq(ns2.db.records.blitz.games, 1, "the new game is saved")
+    eq(ns2.db.records.classic.best, 9100)
+    eq(ns2.db.settings.minimapAngle, 123.456)
+  end)
   it("a saved file from a FUTURE addon version (schema 99) still loads", function()
     local M, ns = boot({ schema = 99, settings = { scale = 1.2, sound = false, newThing = { a = 1 } }, records = { blitz = { best = 500, extra = "x" } } }, "retail")
     eq(ns.db.settings.scale, 1.2); eq(ns.db.settings.sound, false); eq(ns.db.records.blitz.best, 500)
