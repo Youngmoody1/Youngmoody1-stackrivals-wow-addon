@@ -350,6 +350,30 @@ end)
 
 
 describe("Spell Battle HUD readability (simulated layout)", function()
+  it("regression (seen in a real client): the bomb target never covers the pieces - it lights the grid lines under the cells", function()
+    local M, ns = boot(nil)
+    local sess = startSpell(M, ns, "rookie", { "lineBlast", "bomb", "garbage", "blackout" })
+    local UI = ns.UI
+    sess.spell.me.mana = 20 -- Bomb castable: its target is shown
+    M.frames_step(2)
+    local bt = UI.bombTarget
+    ok(bt:IsShown(), "shown while Bomb can be cast")
+    eq(bt._parent, UI.field, "part of the board itself, not a frame above it")
+    eq(bt._layer, "BACKGROUND", "drawn under the cells (they are ARTWORK and opaque): only the 1-unit gaps show it")
+    ok((bt._a or 1) <= 0.6, "faint")
+    local cell = UI.field.cells[1].base
+    eq(cell._layer, "ARTWORK"); ok(cell._layer ~= bt._layer)
+    -- no frame of ours sits above the board with a red outline any more
+    for _, r in ipairs(M.regions) do
+      if r._parent and r._parent ~= UI.field and r._parent._parent == UI.field and r._r and r._r > 0.9 and r._g < 0.4 and r:IsShown() and (r._a or 1) > 0.5 then
+        ok(false, "a red element on a frame above the board")
+      end
+    end
+    -- and it still goes away when Bomb can't be cast
+    sess.spell.me.mana = 0; M.frames_step(2)
+    ok(not bt:IsShown(), "hidden without mana")
+  end)
+
   it("spell messages never cover your board; tile key / cost and the lane are big enough", function()
     local L = dofile(testdir .. "/layout.lua")
     local M, ns = boot(nil)

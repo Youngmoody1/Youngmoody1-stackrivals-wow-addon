@@ -189,14 +189,11 @@ function UI:CreateSpell()
   local fa = fg:CreateAnimation("Alpha"); fa:SetFromAlpha(0.4); fa:SetToAlpha(0); fa:SetDuration(0.45); fa:SetSmoothing("OUT")
   fg:SetScript("OnFinished", function() fx:SetAlpha(0) end)
   self.spellFxAnim = fg
-  -- bomb target: where Bomb would clear (shown while Bomb is castable)
-  local bt = CreateFrame("Frame", nil, field)
-  bt:SetFrameLevel(field:GetFrameLevel() + 2)
-  for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", nil, 2 }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, 2 }, { "TOPLEFT", "BOTTOMLEFT", 2, nil }, { "TOPRIGHT", "BOTTOMRIGHT", 2, nil } }) do
-    local l = T.tex(bt, "OVERLAY", C.redLight, 0.8)
-    l:SetPoint(side[1]); l:SetPoint(side[2])
-    if side[3] then l:SetWidth(side[3]) else l:SetHeight(side[4]) end
-  end
+  -- bomb target: where Bomb would clear (shown while Bomb is castable). 0.7.2: drawn in the
+  -- board's BACKGROUND layer, under the (opaque) cells, so only the 1-unit grid lines of that
+  -- 3x3 area glow faintly red. It never covers or tints a block. (Before: a 2-unit red frame on
+  -- a frame ABOVE the board, following the piece - the "red box" seen in a real client.)
+  local bt = T.tex(field, "BACKGROUND", C.redLight, 0.55, 2)
   bt:Hide()
   self.bombTarget = bt
   -- spell toast in the lane under the board: "LINE BLAST", "GARBAGE SENT", "INCOMING GARBAGE"
