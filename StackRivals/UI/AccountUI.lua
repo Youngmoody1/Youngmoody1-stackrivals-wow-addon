@@ -37,6 +37,12 @@ UI.accountAgo = ago
 local function safe(s) return s and (s:gsub("|", "||")) or nil end
 
 local function setSegment(b, on)
+  b.onReEnable = function(x) setSegment(x, on) end -- keep the selection after hover / re-enable
+  if b.greyed then -- disabled: grey, but the picked one keeps its border
+    local e = on and C.steel or C.line
+    b.border:SetColorTexture(e[1], e[2], e[3], 1)
+    return
+  end
   local c = on and C.steelDeep or C.surface2
   b.bgTex:SetColorTexture(c[1], c[2], c[3], 1)
   local e = on and C.steel or C.line

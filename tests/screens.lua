@@ -168,6 +168,11 @@ S.list = {
     a.ns.UI:RefreshDuelSheet()
     return a.M, a.ns, a.env.StackRivalsFrame
   end },
+  { "9c-duel-invite", "Duel invite popup (works with the window closed)", function()
+    local net, a, b = duelPair()
+    a.ns.Duel.challenge("Bob"); net.step(30)
+    return b.M, b.ns, b.ns.UI.invite
+  end },
   { "10-duel-lobby", "Duel - lobby (Ready)", function()
     local net, a, b = duelPair()
     a.ns.Duel.challenge("Bob"); net.step(30); b.ns.Duel.accept(); net.step(30)
@@ -426,6 +431,24 @@ S.list = {
     cs.Lead.ns.App:ShowMenu()
     cs.Lead.ns.UI:ShowSheet("loot")
     return cs.Lead.M, cs.Lead.ns, cs.Lead.env.StackRivalsFrame
+  end },
+  { "24d-loot-raid-pick", "Loot Duel - 20-player raid: the leader picks up to 8 (paged list)", function()
+    local _, _, _, NS = duelPair()
+    local net = NS.new({ seed = 43 })
+    local cls = { "WARRIOR", "SHAMAN", "MAGE", "ROGUE", "PRIEST", "DRUID", "HUNTER", "WARLOCK", "PALADIN" }
+    local nm = { "Lead", "Ann", "Ben", "Cid", "Dee", "Eve", "Fay", "Gus", "Hal", "Ivy", "Jon", "Kim", "Lou", "Max", "Ned", "Oda", "Pia", "Quin", "Rex", "Sue" }
+    local lead
+    for i, n in ipairs(nm) do
+      local c = net.add({ name = n, group = "R", raid = true, lead = (i == 1), class = cls[(i - 1) % #cls + 1], saved = { seenHelp = true } })
+      lead = lead or c
+    end
+    net.step(30)
+    lead.env.SlashCmdList.STACKRIVALS("")
+    lead.ns.UI.lootItemId = 19019
+    lead.ns.UI:ShowSheet("loot")
+    local s = lead.ns.UI.lootSheet
+    for i = 2, 4 do s.rows[i]:Click() end
+    return lead.M, lead.ns, lead.env.StackRivalsFrame
   end },
   { "8-records", "Records", function()
     local M, ns = boot(); seedRecords(ns); SlashCmdList.STACKRIVALS(""); ns.UI:ShowSheet("records"); M.frames_step(1); return M, ns

@@ -108,7 +108,17 @@ function NS.new(opts)
       if not e then return nil end
       return { gameAccountInfo = { isOnline = isOn(e.name, e.realm), clientProgram = "WoW", characterName = e.name, realmName = e.realm or "Realm", wowProjectID = e.project or 2, gameAccountID = 7000 + i } }
     end
-    env.IsInRaid = function() return false end
+    env.IsInRaid = function() return o.raid == true and o.group ~= nil end
+    -- a raid (o.raid = true on everyone in o.group): GetRaidRosterInfo over the group, you included
+    env.GetRaidRosterInfo = function(i)
+      if not (o.raid and o.group) then return nil end
+      local all = {}
+      for _, x in ipairs(net.clients) do if x.o.group == o.group then all[#all + 1] = x end end
+      local x = all[i]
+      if not x then return nil end
+      local cls = x.o.class or "WARRIOR"
+      return x.o.name, x.o.lead and 2 or (x.o.assist and 1 or 0), 1, 60, cls:sub(1, 1) .. cls:sub(2):lower(), cls, "", x.online, false, "NONE", x.o.ml == true
+    end
     -- Battle.net game data (C_BattleNet.SendGameData): only between mutual Battle.net friends; the
     -- receiver gets BN_CHAT_MSG_ADDON with the sender's game account ID as IT sees it (7000 + index
     -- in its own list). o.noBnetApi = an old client without the API.

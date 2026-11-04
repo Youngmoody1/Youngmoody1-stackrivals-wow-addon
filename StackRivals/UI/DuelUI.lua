@@ -83,6 +83,12 @@ local EMPTY = {
 }
 
 local function setSegment(b, on)
+  b.onReEnable = function(x) setSegment(x, on) end -- keep the selection after hover / re-enable
+  if b.greyed then -- disabled: grey, but the picked one keeps its border
+    local e = on and C.steel or C.line
+    b.border:SetColorTexture(e[1], e[2], e[3], 1)
+    return
+  end
   local c = on and C.steelDeep or C.surface2
   b.bgTex:SetColorTexture(c[1], c[2], c[3], 1)
   local e = on and C.steel or C.line
@@ -302,14 +308,14 @@ function UI:CreateInvitePopup()
   f:SetFrameStrata("DIALOG")
   f:SetClampedToScreen(true)
   local p = T.panel(f, C.steel, 0.97); p:SetAllPoints()
-  local mark = f:CreateTexture(nil, "ARTWORK")
+  local mark = p:CreateTexture(nil, "ARTWORK")
   mark:SetTexture(T.MEDIA .. "marksmall"); mark:SetSize(26, 26); mark:SetPoint("TOPLEFT", 14, -14)
-  f.kind = T.label(f, "STACKRIVALS DUEL"); f.kind:SetPoint("TOPLEFT", 50, -12); f.kind:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
-  f.title = T.display(f, SZ.title, C.paper); f.title:SetPoint("TOPLEFT", 50, -26); f.title:SetJustifyH("LEFT")
-  f.sub = T.text(f, SZ.small, C.body); f.sub:SetPoint("TOPLEFT", 50, -50); f.sub:SetJustifyH("LEFT")
+  f.kind = T.label(p, "STACKRIVALS DUEL"); f.kind:SetPoint("TOPLEFT", 50, -12); f.kind:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
+  f.title = T.display(p, SZ.title, C.paper); f.title:SetPoint("TOPLEFT", 50, -26); f.title:SetJustifyH("LEFT")
+  f.sub = T.text(p, SZ.small, C.body); f.sub:SetPoint("TOPLEFT", 50, -50); f.sub:SetJustifyH("LEFT")
   -- time left, as a shrinking bar under the text
-  local track = T.tex(f, "ARTWORK", C.line, 1); track:SetPoint("TOPLEFT", 14, -72); track:SetSize(312, 3)
-  f.bar = T.tex(f, "OVERLAY", C.steel, 1); f.bar:SetPoint("TOPLEFT", track, "TOPLEFT"); f.bar:SetSize(312, 3)
+  local track = T.tex(p, "ARTWORK", C.line, 1); track:SetPoint("TOPLEFT", 14, -72); track:SetSize(312, 3)
+  f.bar = T.tex(p, "OVERLAY", C.steel, 1); f.bar:SetPoint("TOPLEFT", track, "TOPLEFT"); f.bar:SetSize(312, 3)
   local acc = T.button(f, "Accept", 150, 30, "primary", function() ns.Duel.accept(); f:Hide() end)
   acc:SetPoint("BOTTOMRIGHT", f, "BOTTOM", -5, 12)
   local dec = T.button(f, "Decline", 150, 30, "frame", function() ns.Duel.decline("no"); f:Hide() end)
@@ -376,6 +382,8 @@ local function fillCard(c, name, p, own, waiting)
     return
   end
   p = p or {}
+  -- the character name in WoW's class colour (when the class is known)
+  c.name:SetText(p.class and T.classText(p.class, base or name) or (base or name))
   -- faction theme: Alliance blue, Horde red; unknown keeps the side's own colour
   local th = T.FACTION_THEME[p.faction or ""]
   if th then c:SetTheme(th.fill, th.edge, th.edge) else c:SetTheme(C.surface1, C.line, c.sideEdge) end
@@ -401,7 +409,8 @@ local function fillCard(c, name, p, own, waiting)
     c.cIcon:SetShown(tc ~= nil)
     if tc then c.cIcon:SetTexCoord(tc[1], tc[2], tc[3], tc[4]) end
   end
-  c.tip = (own and "Your character, from WoW." or "Self-reported by your rival's StackRivals: not verified (only the name is checked by WoW).")
+  c.tip = (base or name) .. " - " .. (realm or myRealm or "") .. "\n" .. ns.Card.describe(p) .. "\n"
+    .. (own and "Your character, from WoW." or "Self-reported by your rival's StackRivals: not verified (only the name and realm are checked by WoW).")
     .. "\nStackRivals rank / level: Unknown (needs a linked stackrivals.io account)."
     .. "\nDuels count played-out, replay-checked duels on that PC."
 end

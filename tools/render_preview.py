@@ -59,8 +59,14 @@ def render(dump, media, out_png):
             x0, y0, x1, y1 = map(int, box(l, b, r, t))
             if x1 <= x0 or y1 <= y0:
                 continue
-            if tex is None:  # Blizzard texture we don't have: neutral placeholder ring
-                d.ellipse((x0, y0, x1, y1), outline=(150, 150, 150, int(160 * a)), width=SCALE)
+            if tex is None:  # Blizzard texture we don't have: a neutral placeholder (not a fake icon)
+                name = row[6].replace("\\", "/").split("/")[-1]
+                if "/Icons/" in row[6].replace("\\", "/") or "QuestionMark" in name or name.startswith("Portrait"):
+                    d.rectangle((x0, y0, x1, y1), fill=(40, 44, 56, int(255 * a)), outline=(150, 150, 150, int(200 * a)), width=SCALE)
+                    d.line((x0, y0, x1, y1), fill=(110, 110, 110, int(160 * a)), width=SCALE)
+                    d.line((x0, y1, x1, y0), fill=(110, 110, 110, int(160 * a)), width=SCALE)
+                else:
+                    d.ellipse((x0, y0, x1, y1), outline=(150, 150, 150, int(160 * a)), width=SCALE)
                 continue
             tex = tex.resize((x1 - x0, y1 - y0), Image.LANCZOS)
             if len(row) > 7 and row[7] == "1":  # SetDesaturated(true)

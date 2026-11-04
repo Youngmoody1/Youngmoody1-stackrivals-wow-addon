@@ -105,6 +105,7 @@ local function newFontString(parent, layer)
     SetJustifyH = function(o, j) o._justify = j end,
     SetJustifyV = function() end,
     SetSpacing = function() end,
+    SetWordWrap = function(o, v) o._nowrap = not v end,
   }), "FontString")
 end
 
@@ -113,7 +114,7 @@ local KNOWN_EVENTS = {
   LOADING_SCREEN_ENABLED = 1, PLAYER_LEAVING_WORLD = 1, PLAYER_DEAD = 1,
   DISPLAY_SIZE_CHANGED = 1, UI_SCALE_CHANGED = 1,
   GUILD_ROSTER_UPDATE = 1, FRIENDLIST_UPDATE = 1, BN_FRIEND_INFO_CHANGED = 1, GROUP_ROSTER_UPDATE = 1,
-  BN_CHAT_MSG_ADDON = 1,
+  BN_CHAT_MSG_ADDON = 1, GET_ITEM_INFO_RECEIVED = 1,
 }
 
 local function newFrame(ftype, name, parent)
@@ -263,6 +264,7 @@ function M.install(G)
   G.GetNormalizedRealmName = function() return M.realm or "Realm" end
   G.UnitExists = function(u) return u == "player" end
   G.UnitIsGroupLeader = function() return false end
+  G.GetRaidRosterInfo = function() return nil end
   -- server time (unix s): fixed base + simulated time, or M.serverTime
   -- items (Loot Duel): M.items[id] = { name, quality, icon } or the defaults below
   local ITEMS = {

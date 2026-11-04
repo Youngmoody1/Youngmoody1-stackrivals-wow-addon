@@ -31,7 +31,7 @@ Automatic tests are **not** real client tests. Real client tests are tracked in
 | Guild Duels lists (guild, friends, Battle.net, group, recent, by name) | the client's rosters, presence via HEL/HI | BUILT, SIMULATED | the roster APIs, connected realms | — |
 | Battle.net transport (other realms) | `C_BattleNet.SendGameData` / `BN_CHAT_MSG_ADDON` | BUILT, SIMULATED | **whether it delivers** in Classic Era 1.15.9 and Forever 1.60.1, order, rate | Battle.net friends only, same WoW version |
 | Quickplay / Quick Duel | QS search, INV `q`, the duel lobby as ready check | BUILT, SIMULATED | guild / party / friend reach, timing | no global queue; web adapter "not connected" (BLOCKED) |
-| Character cards | `UnitFactionGroup/Race/Class/Level` + PRF | BUILT, SIMULATED | the APIs, emblem and portrait textures | the rival's data is self-reported |
+| Character cards | `UnitFactionGroup/Race/Class/Level` + PRF | BUILT, SIMULATED | the APIs, emblem and portrait textures | the rival's data is self-reported; no race icon (WoW's race icons need the gender, which isn't shared): class icon, faction emblem and your own portrait instead |
 | Class and faction colours | `C_ClassColor` → `RAID_CLASS_COLORS` → official values | BUILT | the colours match the raid frames | race has no official colour (by design) |
 | Match chat | CH / QM whispers or Battle.net | BUILT, SIMULATED | **cross-faction delivery**, keyboard focus while typing | text within one faction only (or over Battle.net) |
 | Account link (one-time code) | SRL1 / SRP1 copy and paste | BUILT addon side, PROPOSED formats | copy and paste in WoW edit boxes | needs the website's Link page (missing) |
@@ -97,6 +97,26 @@ Kept as documented limits (not fixable in the addon):
 * The faction claim and the profile snapshot are self-made data.
 * The website must never trust them.
 
+## Final polish (4 Nov 2026)
+
+No new features. Fixed or improved:
+
+* **Invite popups** (duel invite since 0.4, and the Loot Duel invite): the text sat on the frame
+  behind the inner panel, so it could be hidden. It is now on the panel itself. A new layout
+  check (`tests/test_layout.lua`, "text hidden under a child panel") catches this on every
+  screen.
+* **Loot Duel sheet**: a compact lobby; statuses joined / invited / declined / no StackRivals /
+  locking in / ready; "Start: needs 2" and "Invite expired"; the item name on one line with "…";
+  a question-mark icon until WoW has loaded the item, then a refresh; the quality colour and the
+  tooltip; "Winning doesn't hand out the item" in the subtitle, the popup and the result; tied
+  players share a rank.
+* **Large raids**: a paged list (7 per page, picked first), at most 8 per Loot Duel, and the
+  heats advice. No tournament, nobody entered without a click.
+* **Character cards**: the name in its class colour; the tooltip shows name - realm, faction,
+  race, class, level and whether the data is verified.
+* **Buttons**: a disabled button is clearly grey; a picked segment (mode, 1:00 / 2:00, tabs)
+  keeps its border while disabled and its colour after hover.
+
 ## Test counts
 
 `lua5.1 tests/run.lua`, run in GitHub CI on every push. The numbers per file are in the CI log.
@@ -104,7 +124,7 @@ Totals:
 
 * 0.6.0: 482
 * 0.6.1: 562
-* 0.7.0: 609
+* 0.7.0: 609 (Loot Duel), 615 (final polish)
 
 ## Open blockers
 

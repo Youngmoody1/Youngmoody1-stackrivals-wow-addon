@@ -4,7 +4,9 @@ Dette er den samlede guide. Detaljerede tjeklister ligger i:
 
 * `docs/TESTING_IN_WOW.md` (solo, engelsk);
 * `docs/SPELL_BATTLE_TEST.md` (procedure A–F, dansk);
-* `docs/LOOT_DUEL.md` (L1–L10).
+* `docs/LOOT_DUEL.md` (L1–L12);
+* `docs/FIRST_TEST_CLASSIC_ERA.md` (den korte plan til første test i Classic Era, og hvad der
+  kræver to rigtige spillere).
 
 **Status lige nu:** **0 rigtige klienttests.** Alt er kun testet automatisk i simulerede
 WoW-klienter (lua-tests i GitHub CI). Et punkt er først bestået, når du har krydset det af efter
@@ -61,7 +63,7 @@ Skriv resultatet for hvert punkt: **OK**, **FEJL** (med screenshot) eller **IKKE
 | 6 | Match-chat | 0.7.0 | 2 | D5, D6 (skriv **under** kampen: brikkerne må ikke flytte sig), D10 |
 | 7 | Konto-link og kode-import | 0.7.0 | 1 | procedure E (E1–E6). Hjemmesiden mangler Link-siden, så kun PENDING kan testes |
 | 8 | SavedVariables | alle | 1 | Log ud og ind: rekorder, indstillinger, konto-status og Sync-resultater er der stadig. Tjek backup og gendannelse fra afsnit 3 |
-| 9 | Loot Duel med en gruppe | 0.7.0 | 3–5, derefter raid | `LOOT_DUEL.md` L1–L10 |
+| 9 | Loot Duel med en gruppe | 0.7.0 | 3–5, derefter raid | `LOOT_DUEL.md` L1–L12 |
 
 **Ekstra ting at holde øje med under alle tests:**
 

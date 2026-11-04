@@ -16,6 +16,9 @@
 
 **Nothing has been tested in a real WoW client yet.** All addon tests run in simulated clients.
 
+The 0.7.0 final polish (4 Nov 2026) changed only the addon's own screens. **No format, code or
+contract changed**: SR1, SRL1 / SRP1 and the vectors are the same as before.
+
 ## 1. Status by category
 
 | Item | Implemented addon side | Ready for web integration | Needs the website to change | Needs a connection we don't have | Needs a real WoW test |

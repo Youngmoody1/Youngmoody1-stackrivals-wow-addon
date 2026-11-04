@@ -82,7 +82,31 @@ describe("layout of every screen", function()
           end
         end
       end
-      -- 5) the game-mode names (0.6.1): no screen shows a retired name (internal ids stay)
+      -- 5) text never sits UNDER a background panel that is a child frame of its own frame and
+      --    fills it (WoW draws child frames above their parent: the text would be hidden). Sheets
+      --    that cover the window on purpose don't fill their parent exactly, so they don't count.
+      local function childOf(fr, anc)
+        local cur = fr and fr._parent
+        while cur do if cur == anc then return true end; cur = cur._parent end
+        return false
+      end
+      for _, o in ipairs(texts) do
+        local r = R.rect(o)
+        local cx, cy = (r.l + r.r) / 2, (r.b + r.t) / 2
+        for _, tx in ipairs(items) do
+          local pr, fr = R.rect(tx._parent), R.rect(o._parent)
+          local fills = math.abs(pr.l - fr.l) < 1 and math.abs(pr.r - fr.r) < 1 and math.abs(pr.b - fr.b) < 1 and math.abs(pr.t - fr.t) < 1
+          if tx._kind == "Texture" and tx._r and (tx._a or 1) * R.alpha(tx) >= 0.5 and tx._parent ~= o._parent
+            and childOf(tx._parent, o._parent) and tx._parent._kind ~= "Button" and fills then
+            local tr = R.rect(tx)
+            if cx > tr.l and cx < tr.r and cy > tr.b and cy < tr.t then
+              problems[#problems + 1] = "text hidden under a child panel: " .. name(o)
+              break
+            end
+          end
+        end
+      end
+      -- 6) the game-mode names (0.6.1): no screen shows a retired name (internal ids stay)
       for _, o in ipairs(texts) do
         local t = L.stripCodes(o._text)
         if t:find("Blitz") or t:find("BLITZ") or t:find("Challenge Friends") or t:find("CHALLENGE FRIENDS") then

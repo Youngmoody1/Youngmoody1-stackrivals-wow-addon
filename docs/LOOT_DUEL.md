@@ -10,16 +10,34 @@ ranked, never on the website, no gold, no bets, no Shards.
 1. **Open it.** The leader, a raid assistant or the master looter opens **Loot Duel** from the menu.
 2. **Pick the item.** Shift-click it while the box has focus, paste its link, or type its item ID.
    The sheet shows the name in its quality colour, the icon and the WoW tooltip on hover.
+   * Long names are cut with "…" on one line; they never run into other text.
+   * An item the client hasn't seen yet shows a question-mark icon until WoW has loaded it
+     (`C_Item.RequestLoadItemDataByID`, then `GET_ITEM_INFO_RECEIVED` refreshes the sheet).
 3. **Pick the time and the players.** Choose **1:00** (default) or **2:00**, and 2–8 group members.
-   You can include yourself.
-4. **Invite.** Each player gets a popup with the item, the time and the rules, and clicks **Join**
-   or **Pass**.
+   You can include yourself (that click is your own Join).
+   * The list shows 7 names per page with **<** / **>** paging, sorted: picked first, then players
+     whose StackRivals answered, then online. Names are in class colours.
+   * Nobody is ever picked automatically. Picking a 9th player is refused.
+   * **10, 20 or 40 players want the item?** Run **heats** of up to 8, then a final between the
+     heat winners. Each heat is its own Loot Duel and everyone clicks Join every time. The sheet
+     says this. There is no tournament system, and nobody is entered without a click.
+   * The leader decides who is in a heat (for example by `/roll`, by raid group, or by who called
+     need). The addon doesn't pick.
+4. **Invite.** Each player gets a popup with the item (icon, quality colour), who invites, the
+   time, "same pieces, no spells", "**Winning doesn't hand you the item: the loot master does**",
+   and a 60 s bar. They click **Join** or **Pass**.
    * Nobody is entered automatically.
    * No answer within 60 s counts as not in.
    * A player whose addon never answers is marked "no StackRivals: /roll instead".
    * Joining sends only a **commitment** to a secret seed share, not the share itself.
 5. **Start (n).** The leader starts with everyone who joined (at least 2), within 80 s of the
    offer. After that the invite has expired and a new one is needed.
+   * The leader's list shows each player as **joined**, **invited…**, **declined**, **no
+     StackRivals**, **locking in** or **ready**, plus a "Joined n of m" line.
+   * With fewer than 2 joined, the button reads **Start: needs 2** and is disabled; a start with 1
+     is refused by the core as well (tested). After 80 s it reads **Invite expired**.
+   * Clear errors instead of silence: not in a group, not the leader / assistant / master looter,
+     no item, fewer than 2 or more than 8 picked, already running, in a duel, in combat.
    * The player list (names + commitments) and the rules are fixed at the start.
    * Every PC checks the list against the answers it saw itself:
      * a changed commitment cancels the race;
@@ -67,6 +85,21 @@ ranked, never on the website, no gold, no bets, no Shards.
 | No addon | Shown as "no StackRivals: /roll instead". The group decides how to include them (the usual fallback is `/roll`) |
 | Changes after the start | Not possible: the list and the rules are checked against the start's hash on every PC |
 | Busy players | Someone in a StackRivals duel can't join (answered as a pass) |
+| Uninvited players / fake offers | Only the leader, an assistant or the master looter can offer; offers from others or from outside the group are ignored. A name that wasn't invited in the start list cancels the race on every PC |
+| Manipulated or missing seed share | A share that doesn't match its commitment, or no share within 20 s, cancels the whole race. Nobody can re-roll the pieces |
+| Leavers | Leaving the group or logging out sends a cancel (leader) or makes the run "no result: out" (player) |
+| Replay mismatch | A log that replays to a different score, lines or hash is "replay failed: out" on every PC that sees it |
+
+**What peer-checking can't catch (said on screen and here):**
+
+* A modified addon that plays the run with a bot, or plays a perfect game from the start. The
+  log is valid, so the replay accepts it.
+* A modified leader addon can refuse to start, or cancel. It can't change the pieces, the list
+  or anyone's score without every other PC noticing.
+* Two players who agree to cheat together. Every PC still replays both runs, but nothing stops
+  someone from letting a friend play for them.
+* Very slow or lost messages: a run whose log never arrives is "no result: out". That is fair
+  to everyone else, but harsh for the player with the bad connection.
 
 **Trust level (shown on screen):** results are **peer-checked**. Every PC replays every run. That
 catches typos, broken clients and naive cheats, but it is **not proof against a modified addon**
@@ -125,12 +158,14 @@ Blizzard doesn't settle loot disputes between players. **Agree on the rules befo
 * Names travel as hex.
 * All messages are ≤ 255 bytes, with the same queue and rate limits as duels.
 
-## Tests (simulated, `tests/test_lootduel.lua`, 24)
+## Tests (simulated, `tests/test_lootduel.lua`, 26)
 
 An independent review (4 Nov 2026) found 8 problems. All are fixed, and each has its own test
 (R1–R9): commit–reveal, the left-out player, a missing share, expiry, the last finisher,
 frame rate, busy, inhuman logs, the leader reloading, the pause budget, and a lossy, reordering
-network. The original tests cover:
+network. Final polish added P1 (Start needs 2 who joined: the button says so and a start with
+1 is refused) and P2 (a 20-player raid: the list pages, nobody is entered without a click, at
+most 8 per Loot Duel). The original tests cover:
 
 * Protocol round-trip and malformed messages.
 * Standings: the score / lines / tie rules; a rejected run comes last.
@@ -162,6 +197,8 @@ Use 3–5 players in one party (then a raid), all with build 0.7.0.
 | L8 | A player without the addon | "no StackRivals: /roll instead" after 60 s | NOT TESTED |
 | L9 | In a 20+ player raid: time an invite → result | Note the minutes, and any lag or "slow" messages | NOT TESTED |
 | L10 | Master looter (not the leader) opens Loot Duel | Allowed | NOT TESTED |
+| L11 | In a 10+ raid: page through the list with < / >, pick 9 | Max 8; the heats line shows; nobody picked without a click | NOT TESTED |
+| L12 | An item nobody has seen this session (link from chat) | Question mark first, then the real icon within a second or two | NOT TESTED |
 
 Write down which loot method the raid used and how long the whole thing took. That decides
 whether 1:00 is the right default.

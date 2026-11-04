@@ -406,6 +406,59 @@ describe("Loot Duel between simulated clients", function()
     end
   end)
 
+  it("P1 Start needs 2 who joined: the button says so and a start with 1 is refused", function()
+    local net, cs = party(50, { "Lead", "Ann", "Ben" })
+    LD(cs.Lead).create(19019, "l060", { "Ann-Realm", "Ben-Realm" }); net.step(60)
+    LD(cs.Ann).answer(true); LD(cs.Ben).answer(false); net.step(120)
+    cs.Lead.env.SlashCmdList.STACKRIVALS("")
+    cs.Lead.ns.UI:ShowSheet("loot")
+    local s = cs.Lead.ns.UI.lootSheet
+    eq(s.go.fs:GetText(), "Start: needs 2"); ok(not s.go:IsEnabled())
+    local okS, why = LD(cs.Lead).start(); ok(not okS); eq(why, "few")
+    ok(s.note:GetText():find("needs at least 2", 1, true), s.note:GetText())
+    -- statuses read Joined / declined
+    local seen = {}
+    for _, row in ipairs(s.rows) do if row:IsShown() then seen[row.status:GetText()] = true end end
+    ok(seen.joined and seen.declined, "joined + declined shown")
+  end)
+
+  it("P2 a 20-player raid: the list pages, nobody is entered without a click, at most 8 per Loot Duel", function()
+    local net = NS.new({ seed = 51 })
+    local cs, names = {}, {}
+    local cls = { "WARRIOR", "SHAMAN", "MAGE", "ROGUE", "PRIEST", "DRUID", "HUNTER", "WARLOCK", "PALADIN" }
+    for i = 1, 20 do
+      local n = "P" .. string.char(96 + i) .. "x"
+      names[i] = n
+      cs[n] = net.add({ name = n, group = "R", raid = true, lead = (i == 1), class = cls[(i - 1) % #cls + 1], saved = { seenHelp = true } })
+    end
+    net.step(30)
+    local lead = cs[names[1]]
+    eq(#lead.ns.LootDuel.roster(), 20)
+    lead.env.SlashCmdList.STACKRIVALS("")
+    lead.ns.UI:ShowSheet("loot")
+    local UI = lead.ns.UI
+    local s = UI.lootSheet
+    ok(s.next:IsShown(), "more than one page"); eq(s.page:GetText(), "1 / 3")
+    -- pick 8 over two pages, the 9th is refused with the heats advice
+    local picked = 0
+    for _ = 1, 3 do
+      for _, row in ipairs(s.rows) do
+        if row:IsShown() and picked < 9 and not UI.lootPick[row.key] then row:Click(); picked = picked + 1 end
+      end
+      s.next:Click()
+    end
+    local n = 0
+    for _ in pairs(UI.lootPick) do n = n + 1 end
+    eq(n, 8, "at most 8")
+    ok(UI.lootNote and UI.lootNote:find("heats", 1, true), tostring(UI.lootNote))
+    -- inviting enters nobody: everyone must Join
+    s.input:SetText("19019"); s.setItem:Click()
+    s.go:Click(); net.step(120)
+    local acc = LD(lead).accepted(LD(lead).current)
+    ok(#acc == 0 or (#acc == 1 and acc[1].name == names[1] .. "-Realm"), "only the leader's own pick of himself counts as joined")
+    for _, nm in ipairs(names) do eq(cs[nm].ns.App.session, nil) end
+  end)
+
   it("the sheet: pick players, invite, join from the popup, start, result banner, announce only on click", function()
     local net, cs = party(18, { "Lead", "Ann", "Ben" })
     local UI = cs.Lead.ns.UI

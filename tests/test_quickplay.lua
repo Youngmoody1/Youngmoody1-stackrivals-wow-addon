@@ -271,7 +271,7 @@ describe("Quickplay (simulated clients)", function()
     ok(m and m.state == "lobby", "matched across realms (simulated: real delivery needs connected realms)")
     a.env.SlashCmdList.STACKRIVALS(""); a.ns.UI:RefreshPhase()
     eq(a.ns.UI.lobby.themCard.line3:GetText(), "Faraway")
-    eq(a.ns.UI.lobby.themCard.name:GetText(), "Dan")
+    eq(a.ns.UI.lobby.themCard.name:GetText():gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""), "Dan")
   end)
 
   it("an older StackRivals (no Quickplay) is never matched and nothing breaks", function()

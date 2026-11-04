@@ -232,13 +232,31 @@ function T.button(parent, label, w, h, style, onClick)
     end
   end)
   b:SetScript("OnLeave", function(self)
-    self.bgTex:SetColorTexture(st.bg[1], st.bg[2], st.bg[3], 1)
+    local c = self.greyed and T.C.surface2 or st.bg
+    self.bgTex:SetColorTexture(c[1], c[2], c[3], 1)
+    if not self.greyed and self.onReEnable then self:onReEnable() end
     if self.tip then GameTooltip:Hide() end
   end)
   b:SetScript("OnMouseDown", function(self) if self:IsEnabled() and not self.noPress then self.fs:SetPoint("CENTER", 1, -1) end end)
   b:SetScript("OnMouseUp", function(self) if not self.noPress then self.fs:SetPoint("CENTER", 0, 0) end end)
-  b:SetScript("OnDisable", function(self) self.fs:SetAlpha(0.4); self.bgTex:SetAlpha(0.5) end)
-  b:SetScript("OnEnable", function(self) self.fs:SetAlpha(1); self.bgTex:SetAlpha(1) end)
+  -- disabled = clearly grey (whatever the style), so "can't click" reads at a glance
+  -- (only on a real change: segment buttons colour themselves while enabled)
+  b:SetScript("OnDisable", function(self)
+    self.fs:SetAlpha(0.45)
+    if self.greyed then return end
+    self.greyed = true
+    local g, l = T.C.surface2, T.C.line
+    self.bgTex:SetColorTexture(g[1], g[2], g[3], 1); self.border:SetColorTexture(l[1], l[2], l[3], 1)
+    if self.onReEnable then self:onReEnable() end -- a segment keeps showing which one is picked
+  end)
+  b:SetScript("OnEnable", function(self)
+    self.fs:SetAlpha(1)
+    if not self.greyed then return end
+    self.greyed = false
+    local st2 = self.style
+    self.bgTex:SetColorTexture(st2.bg[1], st2.bg[2], st2.bg[3], 1); self.border:SetColorTexture(st2.border[1], st2.border[2], st2.border[3], 1)
+    if self.onReEnable then self:onReEnable() end
+  end)
   if onClick then b:SetScript("OnClick", onClick) end
   function b:SetLabel(t) self.fs:SetText(t) end
   return b

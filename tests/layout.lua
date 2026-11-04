@@ -58,7 +58,15 @@ local function textLines(fs)
   local path = fs._font and fs._font[1]
   local lines, maxw = {}, 0
   for raw in (txt .. "\n"):gmatch("(.-)\n") do
-    if fs._w and fs._w > 0 then
+    if fs._nowrap and fs._w and fs._w > 0 then
+      -- SetWordWrap(false): one line, cut with "..." like WoW does
+      local cut = raw
+      if L.textWidth(cut, size, path) > fs._w then
+        while #cut > 1 and L.textWidth(cut .. "...", size, path) > fs._w do cut = cut:sub(1, -2) end
+        cut = cut .. "..."
+      end
+      lines[#lines + 1] = cut
+    elseif fs._w and fs._w > 0 then
       -- greedy word wrap at the set width
       local cur = ""
       for word in raw:gmatch("%S+") do

@@ -9,13 +9,13 @@ local C = T.C
 local UI = ns.UI
 local SZ = T.SIZE
 
-local ROWS = 8
+local ROWS = 7 -- per page (a 40-player raid pages through the list)
 local STATUS = {
-  invited = { "invited...", C.label }, accepted = { "accepted", C.green }, declined = { "declined", C.redLight },
+  invited = { "invited...", C.label }, accepted = { "joined", C.green }, declined = { "declined", C.redLight },
   noanswer = { "no answer: no StackRivals? /roll instead", C.label }, version = { "other StackRivals version", C.label },
   verified = { "replay-checked", C.green }, rejected = { "replay failed: out", C.redLight }, missing = { "no result: out", C.redLight },
   pending = { "checking...", C.gold }, playing = { "playing", C.steel }, watching = { "", C.label },
-  locking = { "locking in...", C.gold }, locked = { "ready", C.green },
+  locking = { "locking in...", C.gold }, locked = { "ready", C.green }, picked = { "", C.label },
 }
 local REASON = {
   leader_cancelled = "The leader cancelled this Loot Duel.", cancelled = "Loot Duel cancelled.",
@@ -38,6 +38,12 @@ end
 UI.lootItemText = itemText
 
 local function setSeg(b, on)
+  b.onReEnable = function(x) setSeg(x, on) end -- keep the selection after hover / re-enable
+  if b.greyed then -- disabled: grey, but the picked one keeps its border
+    local e = on and C.gold or C.line
+    b.border:SetColorTexture(e[1], e[2], e[3], 1)
+    return
+  end
   local c = on and C.goldDeep or C.surface2
   b.bgTex:SetColorTexture(c[1], c[2], c[3], 1)
   local e = on and C.gold or C.line
@@ -52,13 +58,14 @@ function UI:CreateLootDuel()
   local cw = self.frame:GetWidth() - 2 * L - 2
   local title = T.text(s, SZ.title, C.gold, "", nil, "italic"); title:SetPoint("TOPLEFT", L, -14); title:SetText("LOOT DUEL")
   s.sub = T.text(s, SZ.small, C.label); s.sub:SetPoint("TOPLEFT", L, -38)
-  s.sub:SetText("Settle loot with a race instead of /roll. The loot master hands it out.")
+  s.sub:SetText("A race instead of /roll. Winning doesn't hand out the item.")
 
   -- the item
   local it = T.panel(s, C.gold)
   it:SetSize(cw, 46); it:SetPoint("TOPLEFT", L, -58)
   it.icon = it:CreateTexture(nil, "ARTWORK"); it.icon:SetSize(34, 34); it.icon:SetPoint("LEFT", 6, 0)
   it.name = T.display(it, SZ.heading, C.paper); it.name:SetPoint("TOPLEFT", 48, -8); it.name:SetWidth(cw - 56); it.name:SetJustifyH("LEFT")
+  if it.name.SetWordWrap then it.name:SetWordWrap(false) end -- one line: a long name ends in "..."
   it.hint = T.text(it, SZ.label, C.label); it.hint:SetPoint("TOPLEFT", 48, -28); it.hint:SetWidth(cw - 56); it.hint:SetJustifyH("LEFT")
   it:EnableMouse(true)
   it:SetScript("OnEnter", function(self)
@@ -70,7 +77,7 @@ function UI:CreateLootDuel()
   s.item = it
   -- item input (leader, before inviting): shift-click an item while the box has focus, or paste
   s.input = UI.accountEditBox(s, cw - 106, "Shift-click an item, or paste a link / item ID", 300)
-  s.input:SetPoint("TOPLEFT", L, -110)
+  s.input:SetPoint("TOPLEFT", L, -112)
   local function setItem()
     local id = LD.itemIdFrom(s.input:GetText())
     UI.lootItemId = id
@@ -92,22 +99,26 @@ function UI:CreateLootDuel()
   -- time + rules
   UI.lootRs = "l060"
   s.l060 = T.button(s, "1:00", 60, 24, "frame", function() UI.lootRs = "l060"; UI:RefreshLootDuel() end)
-  s.l060:SetPoint("TOPLEFT", L, -142)
+  s.l060:SetPoint("TOPLEFT", L, -144)
   s.l060.tip = "1 minute: quick enough between pulls."
   s.l120 = T.button(s, "2:00", 60, 24, "frame", function() UI.lootRs = "l120"; UI:RefreshLootDuel() end)
   s.l120:SetPoint("LEFT", s.l060, "RIGHT", 4, 0)
   s.l120.tip = "2 minutes: a bit more skill, a bit more waiting."
   s.rules = T.text(s, SZ.label, C.body); s.rules:SetPoint("LEFT", s.l120, "RIGHT", 10, 0); s.rules:SetWidth(cw - 140); s.rules:SetJustifyH("LEFT")
   s.rules:SetText("Same pieces, no spells. Highest score wins; tie: lines, then /roll.")
-  s.banner = T.display(s, SZ.title, C.gold); s.banner:SetPoint("TOPLEFT", L, -140); s.banner:SetWidth(cw); s.banner:SetJustifyH("LEFT")
+  s.banner = T.display(s, SZ.title, C.gold); s.banner:SetPoint("TOPLEFT", L, -114); s.banner:SetWidth(cw); s.banner:SetJustifyH("LEFT")
 
-  -- players
-  s.head = T.label(s, "PLAYERS"); s.head:SetPoint("TOPLEFT", L, -174)
+  -- players (paged: a raid can have 40)
+  s.head = T.label(s, "PLAYERS"); s.head:SetPoint("TOPLEFT", L, -176)
+  s.prev = T.button(s, "<", 26, 18, "frame", function() UI.lootPage = math.max(1, (UI.lootPage or 1) - 1); UI:RefreshLootDuel() end)
+  s.next = T.button(s, ">", 26, 18, "frame", function() UI.lootPage = (UI.lootPage or 1) + 1; UI:RefreshLootDuel() end)
+  s.next:SetPoint("TOPRIGHT", -L - 2, -172); s.prev:SetPoint("RIGHT", s.next, "LEFT", -4, 0)
+  s.page = T.text(s, SZ.label, C.label); s.page:SetPoint("RIGHT", s.prev, "LEFT", -6, 0)
   s.rows = {}
   UI.lootPick = {}
   for i = 1, ROWS do
     local row = CreateFrame("Button", nil, s)
-    row:SetSize(cw, 19); row:SetPoint("TOPLEFT", L, -190 - (i - 1) * 19)
+    row:SetSize(cw, 18); row:SetPoint("TOPLEFT", L, -194 - (i - 1) * 18)
     row.box = T.tex(row, "BORDER", C.line, 1); row.box:SetSize(12, 12); row.box:SetPoint("LEFT", 2, 0)
     row.fill = T.tex(row, "OVERLAY", C.gold, 1); row.fill:SetSize(8, 8); row.fill:SetPoint("CENTER", row.box, "CENTER")
     row.rank = T.display(row, SZ.small, C.label); row.rank:SetPoint("LEFT", 2, 0)
@@ -116,13 +127,21 @@ function UI:CreateLootDuel()
     row.status = T.text(row, SZ.label, C.label); row.status:SetPoint("RIGHT", -2, 0); row.status:SetWidth(144); row.status:SetJustifyH("RIGHT")
     row:SetScript("OnClick", function(self)
       if not self.pickable then return end
-      UI.lootPick[self.key] = not UI.lootPick[self.key] or nil
+      if not UI.lootPick[self.key] then
+        local n = 0
+        for _ in pairs(UI.lootPick) do n = n + 1 end
+        if n >= ns.Protocol.LOOT_MAX then UI.lootNote = LD.WHY.many_heats; UI:RefreshLootDuel(); return end
+        UI.lootPick[self.key] = true
+      else
+        UI.lootPick[self.key] = nil
+      end
+      UI.lootNote = nil
       UI:RefreshLootDuel()
     end)
     row:Hide()
     s.rows[i] = row
   end
-  s.empty = T.text(s, SZ.small, C.body); s.empty:SetPoint("TOPLEFT", L, -194); s.empty:SetWidth(cw); s.empty:SetJustifyH("LEFT")
+  s.empty = T.text(s, SZ.small, C.body); s.empty:SetPoint("TOPLEFT", L, -198); s.empty:SetWidth(cw); s.empty:SetJustifyH("LEFT")
   s.note = T.text(s, SZ.label, C.gold); s.note:SetPoint("BOTTOMLEFT", L, 54); s.note:SetWidth(cw); s.note:SetJustifyH("LEFT")
 
   -- actions
@@ -152,6 +171,10 @@ function UI:CreateLootDuel()
   s:SetScript("OnUpdate", function(_, e) acc = acc + e; if acc >= 1 then acc = 0; UI:RefreshLootDuel() end end)
 
   self:CreateLootPopup()
+  -- an item the client hadn't loaded yet arrives later: refresh name, quality colour and icon
+  local ev = CreateFrame("Frame")
+  pcall(ev.RegisterEvent, ev, "GET_ITEM_INFO_RECEIVED")
+  ev:SetScript("OnEvent", function() UI:RefreshLootDuel() end)
   LD.on("changed", function(d)
     if d and d.state == "playing" and d.iPlay and s:IsShown() then s:Hide() end
     UI:RefreshLootDuel(); UI:RenderRival()
@@ -175,17 +198,17 @@ end
 
 function UI:CreateLootPopup()
   local f = CreateFrame("Frame", nil, UIParent)
-  f:SetSize(340, 152)
+  f:SetSize(340, 172)
   f:SetPoint("TOP", UIParent, "TOP", 0, -140)
   f:SetFrameStrata("DIALOG")
   f:SetClampedToScreen(true)
   local p = T.panel(f, C.gold, 0.97); p:SetAllPoints()
-  f.icon = f:CreateTexture(nil, "ARTWORK"); f.icon:SetSize(30, 30); f.icon:SetPoint("TOPLEFT", 12, -12)
-  f.kind = T.label(f, "LOOT DUEL"); f.kind:SetPoint("TOPLEFT", 50, -10); f.kind:SetTextColor(C.gold[1], C.gold[2], C.gold[3])
-  f.title = T.display(f, SZ.big, C.paper); f.title:SetPoint("TOPLEFT", 50, -24); f.title:SetWidth(280); f.title:SetJustifyH("LEFT")
-  f.sub = T.text(f, SZ.label, C.body); f.sub:SetPoint("TOPLEFT", 50, -64); f.sub:SetWidth(280); f.sub:SetJustifyH("LEFT")
-  local track = T.tex(f, "ARTWORK", C.line, 1); track:SetPoint("TOPLEFT", 14, -100); track:SetSize(312, 3)
-  f.bar = T.tex(f, "OVERLAY", C.gold, 1); f.bar:SetPoint("TOPLEFT", track, "TOPLEFT"); f.bar:SetSize(312, 3)
+  f.icon = p:CreateTexture(nil, "ARTWORK"); f.icon:SetSize(30, 30); f.icon:SetPoint("TOPLEFT", 12, -12)
+  f.kind = T.label(p, "LOOT DUEL"); f.kind:SetPoint("TOPLEFT", 50, -10); f.kind:SetTextColor(C.gold[1], C.gold[2], C.gold[3])
+  f.title = T.display(p, SZ.big, C.paper); f.title:SetPoint("TOPLEFT", 50, -24); f.title:SetWidth(280); f.title:SetJustifyH("LEFT")
+  f.sub = T.text(p, SZ.label, C.body); f.sub:SetPoint("TOPLEFT", 50, -64); f.sub:SetWidth(280); f.sub:SetJustifyH("LEFT")
+  local track = T.tex(p, "ARTWORK", C.line, 1); track:SetPoint("TOPLEFT", 14, -118); track:SetSize(312, 3)
+  f.bar = T.tex(p, "OVERLAY", C.gold, 1); f.bar:SetPoint("TOPLEFT", track, "TOPLEFT"); f.bar:SetSize(312, 3)
   local acc = T.button(f, "Join", 150, 30, "gold", function() ns.LootDuel.answer(true); f:Hide(); UI:ShowSheet("loot") end)
   acc:SetPoint("BOTTOMRIGHT", f, "BOTTOM", -5, 12)
   local dec = T.button(f, "Pass", 150, 30, "frame", function() ns.LootDuel.answer(false); f:Hide() end)
@@ -200,7 +223,8 @@ function UI:CreateLootPopup()
     self.title:SetText(itemText(d))
     local frac = math.max(0, 1 - (GetTime() - d.createdAt) / ns.LootDuel.INVITE_TIME)
     self.bar:SetWidth(math.max(1, 312 * frac))
-    self.sub:SetText(short(d.leader) .. "  -  " .. ns.Protocol.LOOT_RULESETS[d.rs].name .. "  -  same pieces, no spells\nanswer within " .. math.ceil(ns.LootDuel.INVITE_TIME * frac) .. " s. Pass = not in (roll instead).")
+    self.sub:SetText(short(d.leader) .. "  -  " .. ns.Protocol.LOOT_RULESETS[d.rs].name .. "  -  same pieces, no spells\n"
+      .. "Winning doesn't hand you the item: the loot master does.\nAnswer within " .. math.ceil(ns.LootDuel.INVITE_TIME * frac) .. " s. Pass = not in (/roll instead).")
     if frac <= 0 then self:Hide() end
   end)
   self.lootPopup = f
@@ -231,6 +255,13 @@ function UI:RefreshLootDuel()
   end
   local editable = (not d or state == "cancelled") and mayLead
   s.input:SetShown(editable); s.setItem:SetShown(editable)
+  -- compact: without the item box, the rules and the list move up
+  local top = editable and 0 or 32
+  s.l060:ClearAllPoints(); s.l060:SetPoint("TOPLEFT", 24, -144 + top)
+  s.head:ClearAllPoints(); s.head:SetPoint("TOPLEFT", 24, -176 + top)
+  s.next:ClearAllPoints(); s.next:SetPoint("TOPRIGHT", -26, -172 + top)
+  for i, row in ipairs(s.rows) do row:ClearAllPoints(); row:SetPoint("TOPLEFT", 24, -194 + top - (i - 1) * 18) end
+  s.empty:ClearAllPoints(); s.empty:SetPoint("TOPLEFT", 24, -198 + top)
   -- rules / banner
   local rs = d and d.rs or self.lootRs
   setSeg(s.l060, rs == "l060"); setSeg(s.l120, rs == "l120")
@@ -256,13 +287,19 @@ function UI:RefreshLootDuel()
   -- rows
   local rows = {}
   if not d or state == "cancelled" then
-    s.head:SetText("PICK 2-8 PLAYERS (CLICK TO SELECT)")
+    local picked = 0
+    for _ in pairs(UI.lootPick) do picked = picked + 1 end
+    s.head:SetText("PICK 2-8 WHO WANT IT  -  " .. picked .. " PICKED")
     for _, e in ipairs(LD.roster()) do
       local key = e.name:lower()
       local p = ns.Duel and ns.Duel.presence(e.name)
+      local you = ns.Comm and ns.Comm.same(e.name, ns.Comm.me())
       rows[#rows + 1] = { name = e.name, class = e.class, pick = mayLead, picked = UI.lootPick[key] and true or false, key = key,
-        status = (p and "has StackRivals") or (ns.Comm and ns.Comm.same(e.name, ns.Comm.me()) and "you") or (e.online == false and "offline" or "") }
+        status = (p and "has StackRivals") or (you and "you") or (e.online == false and "offline" or ""),
+        order = (UI.lootPick[key] and 0 or 2) + ((p or you) and 0 or 1) + (e.online == false and 4 or 0) }
     end
+    -- picked first, then players whose StackRivals answered, then the rest (offline last)
+    table.sort(rows, function(a, b) if a.order ~= b.order then return a.order < b.order end return a.name:lower() < b.name:lower() end)
   elseif state == "inviting" then
     s.head:SetText("INVITED  -  " .. #LD.accepted(d) .. " JOINED")
     local left = math.max(0, math.ceil(LD.INVITE_TIME - (GetTime() - d.createdAt)))
@@ -297,8 +334,15 @@ function UI:RefreshLootDuel()
       prev, prevRank = x, rank
     end
   end
+  local pages = math.max(1, math.ceil(#rows / ROWS))
+  UI.lootPage = math.min(math.max(1, UI.lootPage or 1), pages)
+  s.prev:SetShown(pages > 1); s.next:SetShown(pages > 1); s.page:SetShown(pages > 1)
+  s.page:SetText(UI.lootPage .. " / " .. pages)
+  if UI.lootPage > 1 then s.prev:Enable() else s.prev:Disable() end
+  if UI.lootPage < pages then s.next:Enable() else s.next:Disable() end
+  local first = (UI.lootPage - 1) * ROWS
   for i, row in ipairs(s.rows) do
-    local r = rows[i]
+    local r = rows[first + i]
     if r then
       row.key, row.pickable = r.key, r.pick
       row.box:SetShown(r.pick and true or false); row.fill:SetShown(r.pick and r.picked or false)
@@ -329,7 +373,7 @@ function UI:RefreshLootDuel()
   elseif leader and state == "inviting" then
     local n = #LD.accepted(d)
     local open = LD.canStart(d)
-    s.go:SetLabel(open and ("Start (" .. n .. ")") or "Invite expired"); s.go:Show()
+    s.go:SetLabel(not open and "Invite expired" or n >= 2 and ("Start (" .. n .. ")") or "Start: needs 2"); s.go:Show()
     if n >= 2 and open then s.go:Enable() else s.go:Disable() end
   elseif leader and state == "done" then
     s.go:SetLabel("New Loot Duel"); s.go:Show(); s.go:Enable()
@@ -340,7 +384,7 @@ function UI:RefreshLootDuel()
   local note = self.lootNote
   if not note then
     if state == "done" then
-      note = "Every PC replayed every run (peer check, not proof against a modified addon). The loot master hands out the item in WoW."
+      note = "The winner does NOT get the item automatically: the loot master hands it out by hand. Every PC replayed every run (a peer check, not proof against a modified addon)."
       if d.agreement == "disputed" then note = "The leader's PC got a different result: check with the group before handing out loot. " .. note end
     elseif state == "cancelled" then note = REASON[d.endReason] or "Loot Duel cancelled."
     elseif d and d.leftOut and (state == "revealing" or state == "playing") then note = "You joined, but " .. short(d.leader) .. " left you out of the list. Tell the group before any loot is handed out."
@@ -350,7 +394,12 @@ function UI:RefreshLootDuel()
     elseif state == "playing" then note = "Same pieces for everyone. Pauses (combat, chat) count: past " .. LD.PAUSE_BUDGET .. " s in total your run ends where it is."
     elseif leader and state == "inviting" and not LD.canStart(d) then note = LD.WHY.expired
     elseif state == "inviting" and not leader then note = "Waiting for " .. short(d.leader) .. " to start. Players who don't join can /roll instead."
+    elseif leader and state == "inviting" then
+      local joined = #LD.accepted(d)
+      note = joined >= 2 and ("Joined " .. joined .. " of " .. #d.inviteOrder .. ". Start when everyone who wants it has joined (no answer = not in).")
+        or ("Joined " .. joined .. " of " .. #d.inviteOrder .. ": a Loot Duel needs at least 2 players who clicked Join.")
     elseif not mayLead then note = LD.WHY[why] or ""
+    elseif #LD.roster() > 8 then note = "More than 8 want it? Run heats of up to 8, then a final between the heat winners (each is its own Loot Duel; everyone clicks Join every time)."
     else note = "Players who join must click Join. Nobody is entered automatically; no loot is handed out by the addon." end
   end
   s.note:SetText(note)

@@ -130,6 +130,7 @@ LD.WHY = {
   no_item = "Pick an item first (shift-click it or paste its link / item ID).",
   few = "Pick at least 2 players.",
   many = "At most 8 players.",
+  many_heats = "At most 8 per Loot Duel. More want it? Run heats of up to 8, then a final between the heat winners.",
   busy = "A Loot Duel is already running.",
   duel = "Finish your duel first.",
   expired = "This invite has expired: start a new Loot Duel.",
@@ -149,13 +150,18 @@ function LD.itemIdFrom(text)
   return (id and id >= 1 and id <= 9999999) and id or nil
 end
 
---- name, link, quality, icon for an item ID (nil name while the client hasn't loaded it yet).
+--- name, link, quality, icon for an item ID (nil name while the client hasn't loaded it yet: the
+--- data is requested, GET_ITEM_INFO_RECEIVED refreshes the screens).
 function LD.itemInfo(id)
   local get = (C_Item and C_Item.GetItemInfo) or GetItemInfo
   local name, link, quality, icon
   if get then
     local ok, n, l, q, _, _, _, _, _, _, tex = pcall(get, id)
     if ok then name, link, quality, icon = n, l, q, tex end
+  end
+  if not name and id then
+    local req = C_Item and C_Item.RequestLoadItemDataByID
+    if req then pcall(req, id) end
   end
   if not icon then
     local inst = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
