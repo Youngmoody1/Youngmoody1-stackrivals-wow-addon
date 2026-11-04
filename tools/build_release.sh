@@ -23,7 +23,9 @@ INTERFACES=$(grep -E '^## Interface:' "$ADDON/$ADDON.toc" | sed 's/## Interface:
 COMMIT=$(git rev-parse HEAD 2>/dev/null || echo unknown)
 DIRTY=$( [ -z "$(git status --porcelain -- "$ADDON" 2>/dev/null)" ] && echo false || echo true )
 # All timestamps in the archive come from the commit, not from the build machine's clock.
-EPOCH=$(git log -1 --format=%ct 2>/dev/null || echo 1793750400)
+# (the last commit that changed the addon folder: docs-only commits never change the ZIP or its SHA-256)
+EPOCH=$(git log -1 --format=%ct -- "$ADDON" 2>/dev/null || echo 1793750400)
+ADDON_COMMIT=$(git log -1 --format=%H -- "$ADDON" 2>/dev/null || echo unknown)
 
 echo "== 1/5 validate addon folder"
 python3 tools/validate_addon.py "$ADDON"
@@ -90,6 +92,7 @@ cat > "dist/$ADDON-$VERSION$SUFFIX.json" <<JSON
   "version": "$VERSION",
   "flavor": "$FLAVOR",
   "commit": "$COMMIT",
+  "addonCommit": "$ADDON_COMMIT",
   "addonFolderDirty": $DIRTY,
   "sourceDateEpoch": $EPOCH,
   "interfaces": "$INTERFACES",
