@@ -22,7 +22,7 @@ for every phase 1 test. It gets no code changes.
 | Version | `## Version: 0.8.1` |
 | Interfaces | 16001, 11509, 120105, 20506, 50504, 38002 (= `tools/clients.json`) |
 | Addon code | `ae4c7f5` |
-| ZIP | `StackRivals-0.8.1.zip`, 82 files, equal to `git archive 2d1bd44 StackRivals` |
+| ZIP | `StackRivals-0.8.1-alpha.zip`, 82 files, equal to `git archive 2d1bd44 StackRivals` |
 | SHA-256 | `27fbb470f81c2a16ea106ba3a2a2aff43c86b777254596f0c4c611a611d7ea95` (the same on every rebuild) |
 | CI | green on `9176b8d`, `be664df`, `2d1bd44` (753 tests, Lua 5.1) |
 

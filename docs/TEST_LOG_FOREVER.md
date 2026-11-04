@@ -11,7 +11,7 @@ tests står i CI. Testpunkterne kommer fra `TEST_PLAN_FOREVER_CLASSIC.md` (S1–
 | Version | StackRivals 0.8.1 Alpha |
 | Branch | `alpha/0.8.1` (`2d1bd44`) |
 | Addon-kode | `ae4c7f5` |
-| ZIP | `StackRivals-0.8.1.zip`, 82 filer |
+| ZIP | `StackRivals-0.8.1-alpha.zip`, 82 filer |
 | SHA-256 | `27fbb470f81c2a16ea106ba3a2a2aff43c86b777254596f0c4c611a611d7ea95` |
 
 **Status:** IKKE INSTALLERET. Den installeres først, når du skriver GO.
