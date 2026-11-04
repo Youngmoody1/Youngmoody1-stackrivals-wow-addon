@@ -110,7 +110,10 @@ local function copyBox(parent, w, maxLetters)
   end)
   function eb:SetValue(v)
     if v ~= self.value then self.copied = false end
-    self.value = v; self.setting = true; self:SetText(v or ""); self.setting = false; self.locked = true
+    self.value = v; self.locked = true
+    -- only when the text really changes: SetText drops the selection, and the Account tab refreshes every
+    -- second (the expiry countdown), which cleared "Select" before the player could press Ctrl+C
+    if self:GetText() ~= (v or "") then self.setting = true; self:SetText(v or ""); self.setting = false end
   end
   -- WoW can't put text on the clipboard for an addon: the player presses Ctrl+C (Cmd+C on a Mac).
   -- We only say "Ctrl+C pressed" after seeing that key in the box, never "copied" before.

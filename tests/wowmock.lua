@@ -195,7 +195,8 @@ local function newFrame(ftype, name, parent)
     f.SetText = function(o, t)
       t = t or ""
       if (o._maxLetters or 0) > 0 and #t > o._maxLetters then t = t:sub(1, o._maxLetters) end
-      o._etext = t; local sc = o._scripts.OnTextChanged; if sc then sc(o, true) end
+      -- like WoW: SetText replaces the text and drops the selection (even when the text is the same)
+      o._etext = t; o._highlighted = false; local sc = o._scripts.OnTextChanged; if sc then sc(o, true) end
     end
     f.GetText = function(o) return o._etext end
     f.SetFocus = function(o) o._focus = true end

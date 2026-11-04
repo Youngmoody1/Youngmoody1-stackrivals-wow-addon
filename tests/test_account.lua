@@ -551,8 +551,16 @@ describe("profile view: one shape for every snapshot format, display only", func
     ok(a.request._highlighted and a.request._focus)
     ok(c.ns.UI.accountNote:find("^Selected"), c.ns.UI.accountNote)
     ok(not c.ns.UI.accountNote:lower():find("copied"), c.ns.UI.accountNote)
+    -- the tab refreshes every second (expiry countdown): the selection must survive it until Ctrl+C
+    -- (Classic Era 1.15.9, 4 Nov 2026: "the selection disappears" — every refresh re-set the same text)
+    local sheet = c.ns.UI.accountSheet
+    for _ = 1, 3 do sheet._scripts.OnUpdate(sheet, 1.1) end
+    ok(a.request._highlighted and a.request._focus, "still selected after three refreshes")
+    eq(a.request:GetText(), c.ns.Account.requestCode())
     c.M.ctrl = true; a.request._scripts.OnKeyDown(a.request, "C"); c.M.ctrl = false
     ok(c.ns.UI.accountNote:find("^Ctrl%+C pressed"), c.ns.UI.accountNote)
+    sheet._scripts.OnUpdate(sheet, 1.1)
+    ok(a.request._highlighted, "and after the refresh that shows 'Ctrl+C pressed'")
   end)
   it("a client without OnKeyDown on edit boxes still works (no 'Ctrl+C pressed', never a Lua error)", function()
     local net = NS.new({ seed = 54 })
