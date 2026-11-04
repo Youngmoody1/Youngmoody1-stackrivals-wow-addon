@@ -400,13 +400,19 @@ local function chunked(items)
   return chunks
 end
 
---- Offer + invitee list chunks (names hex; as many per message as fit).
+--- The invitee list chunks (names hex; as many per message as fit). The start names players by
+--- their place in this list, so it is sent again with the start when a reveal is missing.
+function LD.sendInvitees(d, opts)
+  local hx = {}
+  for _, n in ipairs(d.inviteOrder) do hx[#hx + 1] = P().hexName(n) end
+  for k, c in ipairs(chunked(hx)) do bcast(P().encode("LDI", d.lid, k, table.concat(c, ",")), { key = "LDI:" .. d.lid .. ":" .. k, front = opts and opts.front }) end
+end
+
+--- Offer + invitee list.
 function LD.sendOffer(d)
   d.offerAt = now()
   bcast(P().encode("LDF", d.lid, d.rs, d.engine, d.itemId, d.commit, #d.inviteOrder), { key = "LDF:" .. d.lid })
-  local hx = {}
-  for _, n in ipairs(d.inviteOrder) do hx[#hx + 1] = P().hexName(n) end
-  for k, c in ipairs(chunked(hx)) do bcast(P().encode("LDI", d.lid, k, table.concat(c, ",")), { key = "LDI:" .. d.lid .. ":" .. k }) end
+  LD.sendInvitees(d)
 end
 
 --- Invitee (or a leader who invited themselves): join / pass. Joining sends only a commitment.
@@ -694,6 +700,8 @@ function H.LDI(m, sender)
   local order = {}
   for k = 1, 9 do for _, n in ipairs(d.inviteChunks[k] or {}) do if #order < P().LOOT_MAX then order[#order + 1] = n end end end
   d.inviteOrder = order
+  -- a start list that arrived before the whole invite list can be checked now
+  if d.listMsg and d.count and #order >= d.count then LD.tryList(d) end
   if d.role == "member" and isInvitee(d, me()) and not d.prompted then
     d.prompted = true
     if d.engine ~= ns.Engine.ENGINE_VERSION then LD.answer(false); d.versionMismatch = true
@@ -857,7 +865,12 @@ function LD.update(t)
     if t - d.createdAt > LD.START_WAIT and d.role ~= "leader" then d.state, d.endReason = "cancelled", "not_started"; emit("changed", d) end
   elseif d.state == "revealing" then
     -- repeats only help someone who missed a message; each costs the sender's message budget
-    if d.role == "leader" and (d.listSends or 0) < 3 and t - (d.listAt or 0) >= 5 then LD.sendList(d) end
+    if d.role == "leader" and (d.listSends or 0) < 3 and t - (d.listAt or 0) >= 5 then
+      -- someone's share is missing: maybe they lost part of the invite list (the start refers to
+      -- it by place) - send it again, then the list (front of the queue: the list goes first)
+      LD.sendInvitees(d, { front = true })
+      LD.sendList(d)
+    end
     if d.role ~= "leader" and d.myNonce and isPart(d, me()) and (d.nSends or 0) < 4 and t - (d.nAt or 0) >= 5 then LD.sendReveal(d) end
     if t - d.revealAt > LD.REVEAL_TIME then
       if d.role == "leader" then LD.cancel("noreveal")

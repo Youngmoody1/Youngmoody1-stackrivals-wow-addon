@@ -210,6 +210,60 @@ describe("Loot Duel for dungeons and raids: inviting, leaders, trouble (simulate
     eq(cancelled, 0, "the start survived the bad network")
   end)
 
+  it("regression (CI, Lua 5.1): a member who lost part of the invite list still starts (it is sent again with the list)", function()
+    local net, cs, names = group(240, 10)
+    local lead = cs[names[1]]
+    local victim = cs[names[7]]
+    -- every copy of invite-list chunk 2 to player 7 is lost while the invite is open
+    local realSend, lossOn = net.send, true
+    local enqueueTo = {}
+    net.send = function(c, prefix, text, channel, target)
+      if lossOn and c == lead and text:find(":LDI:[^:]+:2:") then
+        -- deliver to everyone except player 7
+        for _, o in ipairs(net.clients) do
+          if o ~= victim and o.o.group == c.o.group and o.online then net.inject(o, c.name, text, channel) end
+        end
+        net.sent = net.sent + 1
+        return 0
+      end
+      return realSend(c, prefix, text, channel, target)
+    end
+    local inv = {}
+    for i = 1, 10 do inv[i] = full(names[i]) end
+    LD(lead).create(19019, "l060", inv); net.step(60 * 5)
+    for i = 2, 10 do LD(cs[names[i]]).answer(true) end
+    net.step(60 * 12)
+    ok(#LD(victim).current.inviteOrder < 10, "player 7 is missing part of the invite list")
+    lossOn = false
+    ok(LD(lead).start())
+    net.step(60 * 20)
+    net.send = realSend
+    ok(victim.ns.App.session and victim.ns.App.session.loot, "player 7 races")
+    eq(LD(lead).current.state, "playing", "nobody was cancelled")
+  end)
+
+  it("8 different bad networks (latency, duplicates, 5% loss) with 10 players: every start survives, one winner each time", function()
+    local cancelledRuns = 0
+    for seed = 300, 307 do
+      local net, cs, names = group(seed, 10, { latency = { 0.05, 2.5 }, dup = 0.2, drop = 0.05 })
+      local lead = cs[names[1]]
+      local inv = {}
+      for i = 1, 10 do inv[i] = full(names[i]) end
+      LD(lead).create(19019, "l060", inv); net.step(60 * 15)
+      for i = 2, 10 do LD(cs[names[i]]).answer(true) end
+      net.step(60 * 20)
+      LD(lead).start()
+      race(net, cs); net.step(60 * 160)
+      local w
+      for i = 1, 10 do
+        local d = LD(cs[names[i]]).history[1] or LD(cs[names[i]]).current
+        if d.state == "cancelled" then cancelledRuns = cancelledRuns + 1
+        else w = w or (d.winner or "tie"); eq(d.winner or "tie", w, "seed " .. seed .. " " .. names[i]) end
+      end
+    end
+    eq(cancelledRuns, 0)
+  end)
+
   it("identical play by all 10: a 10-way tie at the top (roll off), the same on every PC", function()
     local net, cs, names, last = run(207, 10, 10)
     for i = 1, 10 do

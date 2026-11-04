@@ -8,7 +8,8 @@
 - **Live list beside the window** for up to 10 players: class colours, your row marked, playing / topped out / finished / no signal / disconnected / checked, provisional until replayed. Results that don't count are listed apart under NOT COUNTED.
 - **Main menu**: Classic, Time Trial, **LOOT DUEL** (gold card with an original gem icon, "Compete for raid loot", "Create Loot Duel"), Quickplay, Spell Battle, Guild Duels. **Daily Challenge** moved to the button row (same mode, seed and records; details in its tooltip).
 - **Loot Duel quick button** near the group frames: StackRivals' own button (never touches Blizzard's frames), shown in a party or raid, hidden in combat, opens the lobby and sends nothing; Shift-drag moves it, right-click hides it, Settings / `/sr lootbutton [reset]` bring it back. `/sr loot` opens the lobby.
-- Tests: `tests/test_lootraid.lua` (21: 2–10 players in groups of 5–40, Invite Party / All, leaders and assistants, disconnect, bad network, low FPS, ties, forged and lost results, live board, loot window, menu, quick button). See `docs/LOOT_DUEL.md`.
+- Fixed before delivery (found by CI on Lua 5.1): a player who lost part of the invite list on a bad network couldn't read the compact start list, which cancelled the whole race; the invite list is now sent again with the start list. Regression test plus 8 bad networks.
+- Tests: `tests/test_lootraid.lua` (23: 2–10 players in groups of 5–40, Invite Party / All, leaders and assistants, disconnect, bad network, low FPS, ties, forged and lost results, live board, loot window, menu, quick button). See `docs/LOOT_DUEL.md`.
 
 ## 0.7.0 — WoW colours, Loot Duel, 0.6.1 review (branch `feature/loot-duel`, development, not released)
 

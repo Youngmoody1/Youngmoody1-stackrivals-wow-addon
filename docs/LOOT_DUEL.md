@@ -231,7 +231,7 @@ tournament system, and nobody is entered without a click.
 
 ## Tests (simulated)
 
-`tests/test_lootduel.lua` (26) and `tests/test_lootraid.lua` (21). Simulated WoW clients
+`tests/test_lootduel.lua` (26) and `tests/test_lootraid.lua` (23). Simulated WoW clients
 (`tests/netsim.lua`) with WoW's per-prefix throttle. **Not real clients.**
 
 * 2, 3, 5 players in a party of 5; 8 and 10 in a raid of 10; 10 in a raid of 40: same pieces,
@@ -240,7 +240,11 @@ tournament system, and nobody is entered without a click.
   answer → 4 race). Invite All (confirm with a second click; hidden over 10 online).
 * Party leader, raid leader and raid assistant may run it; a member may not.
 * 10 players, one disconnects: "disconnected" live, "no result: out", one winner everywhere.
-* 10 players on a bad network (latency up to 2.5 s, 20% duplicates, 5% loss) and one at 5 fps.
+* 10 players on a bad network (latency up to 2.5 s, 20% duplicates, 5% loss) and one at 5 fps;
+  the same on 8 more random bad networks (and 40 seeds checked by hand while fixing it).
+* Regression found by CI (Lua 5.1): a player who lost part of the invite list couldn't read the
+  start list (players are named by their place in it), so the whole race was cancelled. The
+  leader now sends the invite list again with each repeat of the start list.
 * 10 identical runs: a 10-way tie on every PC.
 * A forged result (rejected) and a lost log (missing): never the winner, listed under NOT COUNTED.
 * The live board: 10 rows in class colours, your row marked, beside the window.
