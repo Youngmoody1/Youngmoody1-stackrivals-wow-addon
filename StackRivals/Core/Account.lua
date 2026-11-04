@@ -146,7 +146,8 @@ function Acc.cancelLink()
 end
 
 --- Step 3 / later syncs: import a profile snapshot. Returns true, "linked" | "updated" or nil, error.
-function Acc.import(text)
+--- opts.step (optional): passed to the signature check (Account.importAsync uses coroutine.yield).
+function Acc.import(text, opts)
   -- a code of another kind pasted here: say where it belongs instead of a generic error
   local head = type(text) == "string" and text:match("^%s*(SR%w+)%.") or nil
   if head == "SRL1" then return nil, "is_request" end
@@ -157,7 +158,10 @@ function Acc.import(text)
   if not p then return nil, why end
   -- the website's signature (SRP1-SIG v1 / SRP2-SIG v1): a code changed after signing is refused; unsigned or
   -- signed with a key this version doesn't know is kept as UNVERIFIED (nothing locked is ever applied from it)
-  local sc = ns.SnapshotSig and ns.SnapshotSig.check(text) or { state = "unverified", reason = "unsigned" }
+  -- the same code again: nothing to check or change (and no signature work for it)
+  local _, rec = Acc.state()
+  if rec and rec.profile and rec.link and p.check == rec.profile.check and p.linkId == rec.link.linkId then return nil, "duplicate" end
+  local sc = ns.SnapshotSig and ns.SnapshotSig.check(text, nil, opts and opts.step) or { state = "unverified", reason = "unsigned" }
   if sc.state == "invalid" then return nil, "signature" end
   local me = Acc.me()
   if not me or not ns.Comm.same(p.player, me) then return nil, "player" end
@@ -233,6 +237,45 @@ function Acc.profileView()
     history = pr.history,
     shards = pr.shards, equipped = pr.equipped or {}, owned = pr.owned or {}, events = pr.events or {},
   }, st
+end
+
+--[[ Import without freezing WoW: the signature check (about 0.1 s of pure Lua) runs in a coroutine that yields
+  every few hundred field operations, resumed from OnUpdate within a small time budget per frame. Codes with
+  nothing to verify (unsigned, unknown kid, not parsable) finish at once, inside this call.
+  onDone(ok, resultOrError) is called exactly once. One import at a time: returns false, "busy" otherwise. ]]
+Acc.ASYNC_BUDGET_MS = 5   -- per frame, when the client has debugprofilestop (every client does)
+Acc.ASYNC_STEPS = 12      -- per frame without a clock (tests); one step is about a quarter of a millisecond here
+local driver
+function Acc.importAsync(text, onDone)
+  if Acc.busy then return false, "busy" end
+  local co = coroutine.create(function(t) return Acc.import(t, { step = coroutine.yield }) end)
+  local first = true
+  local function slice()
+    local clock = rawget(_G or {}, "debugprofilestop")
+    local t0, n = clock and clock() or 0, 0
+    while true do
+      local okc, a, b = coroutine.resume(co, first and text or nil)
+      first = false
+      if not okc then
+        Acc.busy = nil
+        if ns.Report and ns.Report.noteError then ns.Report.noteError("import: " .. tostring(a)) end
+        onDone(nil, "internal")
+        return true
+      end
+      if coroutine.status(co) == "dead" then Acc.busy = nil; onDone(a, b); return true end
+      n = n + 1
+      if clock then
+        if clock() - t0 >= Acc.ASYNC_BUDGET_MS then return false end
+      elseif n >= Acc.ASYNC_STEPS then return false end
+    end
+  end
+  Acc.busy = co
+  if slice() then return true end
+  driver = driver or CreateFrame("Frame")
+  driver:SetScript("OnUpdate", function(f)
+    if not Acc.busy or slice() then f:SetScript("OnUpdate", nil) end
+  end)
+  return true
 end
 
 --- Forget the link on this PC (the website keeps its side until unlinked there).

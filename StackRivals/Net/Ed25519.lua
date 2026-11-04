@@ -74,6 +74,11 @@ function Ed.useBitLib(lib)
 end
 if band then Ed.bitPath = "bit" else Ed.useBitLib(nil) end
 
+-- Optional "step" callback, set by Ed.verify for the duration of one verification: called between small
+-- slices of work so a caller can spread one verification over several frames (a coroutine yield).
+local STEP
+local function step() if STEP then STEP() end end
+
 ------------------------------------------------------------------ SHA-512 (words as hi, lo 32-bit halves)
 local K = {
   0x428a2f98, 0xd728ae22, 0x71374491, 0x23ef65cd, 0xb5c0fbcf, 0xec4d3b2f, 0xe9b5dba5, 0x8189dbbc, 0x3956c25b,
@@ -127,6 +132,7 @@ function Ed.sha512(msg, n)
   for i = 1, 16 do h[i] = H0[i] end
   local w = {}
   for blk = 0, total - 1, 128 do
+    step()
     for t = 0, 15 do
       local o = blk + t * 8
       w[2 * t + 1] = ((bytes[o] * 256 + bytes[o + 1]) * 256 + bytes[o + 2]) * 256 + bytes[o + 3]
@@ -272,6 +278,7 @@ local function inv25519(o, i)
   local c = gf()
   set25519(c, i)
   for a = 253, 0, -1 do
+    if a % 16 == 0 then step() end
     S(c, c)
     if a ~= 2 and a ~= 4 then M(c, c, i) end
   end
@@ -281,6 +288,7 @@ local function pow2523(o, i)
   local c = gf()
   set25519(c, i)
   for a = 250, 0, -1 do
+    if a % 16 == 0 then step() end
     S(c, c)
     if a ~= 1 then M(c, c, i) end
   end
@@ -332,6 +340,7 @@ local function doubleScalarmult(r, h, q, s)
   set25519(r[0], gf0); set25519(r[1], gf1); set25519(r[2], gf1); set25519(r[3], gf0)
   local started = false
   for i = 255, 0, -1 do
+    step()
     if started then add(r, r) end
     local x, y = bitOf(h, i), bitOf(s, i)
     if x == 1 and y == 1 then add(r, qb); started = true
@@ -437,7 +446,16 @@ end
 
 --- Verify an Ed25519 signature. pub: 32 bytes, sig: 64 bytes (0-based byte arrays), msg: string.
 --- Returns true only for a valid signature; false for anything else (never errors on bad input).
-function Ed.verify(pub, sig, msg)
+--- stepFn (optional): called every few hundred field operations (e.g. coroutine.yield, to spread the work
+--- over frames). The result doesn't depend on it.
+--- (No pcall around it: Lua 5.1 can't yield across a pcall, and verifyNow never errors on bad input.)
+function Ed.verify(pub, sig, msg, stepFn)
+  STEP = stepFn
+  local res = Ed.verifyNow(pub, sig, msg)
+  STEP = nil
+  return res
+end
+function Ed.verifyNow(pub, sig, msg)
   if type(pub) ~= "table" or type(sig) ~= "table" or type(msg) ~= "string" then return false end
   for i = 0, 31 do local v = pub[i]; if type(v) ~= "number" or v < 0 or v > 255 or v % 1 ~= 0 then return false end end
   for i = 0, 63 do local v = sig[i]; if type(v) ~= "number" or v < 0 or v > 255 or v % 1 ~= 0 then return false end end

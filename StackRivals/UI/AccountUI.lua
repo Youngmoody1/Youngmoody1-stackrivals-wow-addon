@@ -191,19 +191,31 @@ function UI:CreateAccount()
   a.select.tip = "WoW can't copy for an addon: this selects the whole request so Ctrl+C copies all of it."
   a.step2 = T.text(a, SZ.small, C.body); a.step2:SetPoint("TOPLEFT", L, -234); a.step2:SetWidth(cw); a.step2:SetJustifyH("LEFT")
   -- pending / linked: paste a snapshot
-  a.paste = editBox(a, cw - 106, "Paste the SRP1... snapshot here", ns.AccountCodes.MAX_CODE)
+  a.paste = editBox(a, cw - 106, "Paste the SRP1 or SRP2 snapshot here", ns.AccountCodes.MAX_CODE)
   local function doImport()
-    local okI, res = Acc.import(a.paste:GetText())
-    if okI then
-      a.paste:SetText("")
-      UI.accountNote = (res == "linked") and "Linked. Your stackrivals.io profile is on the Profile tab." or "Profile updated."
-      UI.accountNoteGood = true
-    else
-      -- the paste is refused and nothing changes: the profile you had stays as it was
-      UI.accountNote = "REJECTED: " .. (Acc.ERRORS[res] or ("can't import (" .. tostring(res) .. ")")); UI.accountNoteGood = false
-    end
+    if Acc.busy then return end
+    local text = a.paste:GetText()
     a.paste:ClearFocus()
-    UI:RefreshAccount()
+    local started = Acc.importAsync(text, function(okI, res)
+      if okI then
+        a.paste:SetText("")
+        local v = Acc.profileView()
+        local base = (res == "linked") and "Linked. Your stackrivals.io profile is on the Profile tab." or "Profile updated."
+        UI.accountNote = base .. ((v and v.verified) and " Signature checked: VERIFIED." or "")
+        UI.accountNoteGood = true
+      else
+        -- the paste is refused and nothing changes: the profile you had stays as it was
+        UI.accountNote = "REJECTED: " .. (Acc.ERRORS[res] or ("can't import (" .. tostring(res) .. ")")); UI.accountNoteGood = false
+      end
+      a.import:Enable()
+      UI:RefreshAccount()
+    end)
+    if started and Acc.busy then
+      -- a signed code: the check runs over the next frames, WoW keeps running
+      UI.accountNote = "Checking the website's signature..."; UI.accountNoteGood = false
+      a.import:Disable()
+      UI:RefreshAccount()
+    end
   end
   a.paste:SetScript("OnEnterPressed", doImport)
   a.import = T.button(a, "Import", 100, 24, "steel", doImport)
@@ -322,7 +334,7 @@ function UI:RefreshAccount()
     local line, trust
     if shown == "verified" then
       line = "Account " .. safe(pr.name) .. "  -  last update " .. when(pr.issued) .. " (" .. ago(pr.issued) .. ")"
-      trust = "The website's signature on this profile checked out."
+      trust = "Signed by stackrivals.io: proves its origin, not character ownership."
     elseif shown == "linked" then
       line = "Account " .. safe(pr.name) .. "  -  last update " .. when(pr.issued) .. " (" .. ago(pr.issued) .. ")"
       trust = (pr.sigNote == "unknown_kid") and "Signed with a key this version doesn't know: update StackRivals."
@@ -354,7 +366,7 @@ function UI:RefreshAccount()
     elseif state == "pending" then
       a.steps:SetText("Step 2 of 3. Select, Ctrl+C, then paste it on that website page:")
       a.request:SetValue(Acc.requestCode())
-      a.step2:SetText("Step 3 of 3. Paste the snapshot the website then shows (SRP1...):")
+      a.step2:SetText("Step 3 of 3. Paste the profile code the website shows (SRP...):")
       a.paste:SetPoint("TOPLEFT", 24, -254)
       a.cancel:SetPoint("TOPLEFT", 24, -290)
       a.expiry:SetPoint("LEFT", a.cancel, "RIGHT", 12, 0)
@@ -362,7 +374,7 @@ function UI:RefreshAccount()
       a.expiry:SetText(string.format("Code %s  -  this request expires in %d:%02d", ns.AccountCodes.prettyWebCode(r.pending.code), math.floor(left / 60), left % 60))
     else
       a.steps:SetText("Update: open " .. Acc.WEB.export .. ",\n"
-        .. "copy the snapshot (SRP1...), paste it here and click Import.")
+        .. "copy the snapshot (SRP1 or SRP2), paste it here and click Import.")
       a.paste:SetPoint("TOPLEFT", 24, -226)
       a.unlink:SetPoint("TOPLEFT", 24, -264)
       a.unlink:SetLabel(a.unlink.armed and "Click to confirm" or "Unlink")

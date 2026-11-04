@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.9.1 (development) — signed profiles ready for the production key (branch `feature/web-integration`, not released, not installed)
+
+0.9.0 Alpha is frozen on `alpha/0.9.0` (`84dbb62`). 0.9.1 is 0.9.0 plus the following.
+
+- **Key registry**:
+  - `Net/SnapshotKeys.lua` holds public keys only and is written by `tools/add_public_key.py`. The tool refuses
+    the test kid `t1`, the RFC 8032 test keys, malformed hex and non-curve points, and it can retire a kid.
+  - **No production key yet.** The website side creates it, with the owner's separate GO, and sends only the kid
+    and the 64-hex public key.
+  - See `docs/SIGNING_KEYS.md`.
+- **Signature checks never freeze WoW**:
+  - `Account.importAsync` runs the Ed25519 check in a coroutine, at most about 5 ms per frame
+    (`debugprofilestop`).
+  - Measured here: about 85 ms of work, spread over about 24 frames (0.4 s at 60 FPS). The Lua 5.1 times are in
+    the CI notes.
+  - While it runs, the Account tab says "Checking the website's signature..." and Import is disabled.
+  - Unsigned codes and codes with an unknown kid finish at once.
+  - The same code again is "already imported" with no second check.
+  - One import at a time.
+- **Account wording**:
+  - VERIFIED says "Signed by stackrivals.io: proves its origin, not character ownership."
+  - The paste box and steps mention SRP1 or SRP2.
+- **Tests** (`tests/test_signed_import.lua`):
+  - valid → VERIFIED;
+  - missing signature → UNVERIFIED;
+  - unknown kid → UNVERIFIED with "update StackRivals";
+  - edited XP / Shards / rank / character / display name / linkId / owned / signature → REJECTED;
+  - an edited code never overwrites a VERIFIED profile;
+  - an expired code is refused, and an aging VERIFIED profile shows OUT OF DATE;
+  - 0.8.x / 0.9.0 saves load as UNVERIFIED, and a saved `verified` with an unknown kid isn't trusted;
+  - timing (valid, invalid, 4 KB message), frames per import, longest slice;
+  - busy and repeated imports;
+  - the Checking state.
+- **Previews**:
+  - `23b2-account-verified` (simulated with the production key);
+  - `23b3-account-checking`.
+- `docs/TEST_PLAN_0.9.1.md`: install (after GO), the real-website test B1–B9, speed and display, Loot Duel
+  without an account.
+
 ## 0.9.0 Alpha — 4 Nov 2026 (branch `feature/web-integration`; download on stackrivals.io/wow)
 
 0.8.1 is frozen on `alpha/0.8.1` as the test version. This branch prepares the integration with

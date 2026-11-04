@@ -408,6 +408,34 @@ S.list = {
     ns.UI:ShowSheet("account"); M.frames_step(1)
     return M, ns
   end },
+  { "23b2-account-verified", "Account - VERIFIED (SIMULATED: a code signed with the production key, once it ships in 0.9.1)", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS("")
+    local T0 = 1793000000
+    M.serverTime = T0
+    local AC = ns.AccountCodes
+    local r = AC.parseLinkRequest(ns.Account.startLink(AC.makeWebCode("A7K9P2X")))
+    M.serverTime = T0 + 300
+    ns.Account.import(AC.profile2({ linkId = r.linkId, player = r.player, accountId = "6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01", name = "Alice Stack",
+      issued = T0 + 200, expires = T0 + 8 * 86400, level = 12, xp = 1240, xpNext = 2000, rank = "Gold II", season = "Season 1", seasonPct = 45,
+      wins = 12, losses = 8, draws = 1, history = {}, shards = 1250, asOf = T0 + 200 }))
+    local real = ns.Account.profileView
+    ns.Account.profileView = function() local v, st = real(); if v then v.verified = true; v.kid = "k1" end; return v, st end
+    ns.UI:ShowSheet("account"); M.frames_step(1)
+    return M, ns
+  end },
+  { "23b3-account-checking", "Account - checking a signed code (spread over frames; Import disabled meanwhile)", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS("")
+    local T0 = 1793000000
+    M.serverTime = T0
+    local AC = ns.AccountCodes
+    ns.Account.startLink(AC.makeWebCode("A7K9P2X"))
+    M.serverTime = T0 + 75
+    ns.UI:ShowSheet("account"); M.frames_step(1)
+    ns.UI.accountNote = "Checking the website's signature..."; ns.UI.accountNoteGood = false
+    ns.UI.accountSheet.acc.import:Disable()
+    ns.UI:RefreshAccount()
+    return M, ns
+  end },
   { "23c-profile", "Account - Profile tab (display only). Clock: 100 s after the snapshot was made -> just now", function()
     local M, ns = boot(); SlashCmdList.STACKRIVALS("")
     M.serverTime = 1793000000

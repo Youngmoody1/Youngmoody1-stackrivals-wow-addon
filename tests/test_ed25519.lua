@@ -6,7 +6,7 @@ local H = dofile(testdir .. "/harness.lua")
 local J = dofile(testdir .. "/jsonread.lua")
 local it, eq, ok, describe = H.it, H.eq, H.ok, H.describe
 local ns = H.load(root, { "Engine/Prng.lua", "Engine/Pieces.lua", "Engine/Engine.lua", "Net/Protocol.lua", "Net/Codes.lua",
-  "Net/AccountCodes.lua", "Net/Ed25519.lua", "Net/SnapshotSig.lua" })
+  "Net/AccountCodes.lua", "Net/Ed25519.lua", "Net/SnapshotSig.lua", "Net/SnapshotKeys.lua" })
 local Ed, Sig = ns.Ed25519, ns.SnapshotSig
 
 local function sha(s) local b, n = Ed.strBytes(s); return Ed.toHex(Ed.sha512(b, n), 64) end
