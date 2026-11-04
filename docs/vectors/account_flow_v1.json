@@ -266,26 +266,20 @@
       "step": "Import result (SR1R)"
     },
     {
-      "expect": "reject: link_mismatch (never credit the importing account)",
-      "input": "an SR1R whose link code belongs to another account's binding",
+      "expect": "reject: link_mismatch (nothing credited to anyone)",
+      "input": "an SR1R whose link (the binding's public linkId, a selector, not a secret) names a binding of ANOTHER account",
       "name": "result_other_account",
       "step": "Import result"
     },
     {
-      "expect": "reject: link_used (the link code inside a result is single-use)",
-      "input": "a second SR1R with the same one-time link code",
-      "name": "result_link_reused",
-      "step": "Import result"
-    },
-    {
       "expect": "reject: player_mismatch",
-      "input": "playerHex not the Name-Realm of the binding the link code belongs to",
+      "input": "player or platform not those of the binding the linkId names",
       "name": "result_player_mismatch",
       "step": "Import result"
     },
     {
       "expect": "reject: duplicate_run, flag for review",
-      "input": "the same run (runKey) under another name or account",
+      "input": "the same run (runKey) again, or under another name or account (re-imports included)",
       "name": "result_duplicate_run",
       "step": "Import result"
     },

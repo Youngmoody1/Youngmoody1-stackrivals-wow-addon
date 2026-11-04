@@ -460,6 +460,37 @@ S.list = {
     ns.UI:ShowSheet("account"); ns.UI.accountTab = "profile"; ns.UI:RefreshAccount(); M.frames_step(1)
     return M, ns
   end },
+  { "23e-collection", "Account - Collection: Shards, events, cosmetics from an SRP2 code (UNVERIFIED: unsigned). Clock: 30 min after the code", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS("")
+    local T0 = 1793000000
+    M.serverTime = T0
+    local AC = ns.AccountCodes
+    local r = AC.parseLinkRequest(ns.Account.startLink(AC.makeWebCode("A7K9P2X")))
+    M.serverTime = T0 + 300
+    assert(ns.Account.import(AC.profile2({ linkId = r.linkId, player = r.player, accountId = "6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01", name = "Alice Stack",
+      issued = T0 + 200, expires = T0 + 8 * 86400, level = 12, xp = 1240, xpNext = 2000, season = "Season 1", seasonPct = 45,
+      wins = 12, losses = 8, draws = 1, history = {}, achUnlocked = 1, achTotal = 4, cosOwned = 6, cosEquipped = "Solar Inferno",
+      shards = 1250, asOf = T0 + 200,
+      equipped = { skin = "skin_solar_inferno", frame = "frame_electric_blue", victory = "victory_fireworks" },
+      owned = { "frame_electric_blue", "skin_circuit", "skin_mono", "skin_shapes", "skin_solar_inferno", "victory_fireworks" },
+      events = { { kind = "storm", state = "up", start = T0 + 3800, ["end"] = T0 + 4700, value = 25 },
+        { kind = "overdrive", state = "live", start = T0 - 600, ["end"] = T0 + 3000, value = 200 } } })))
+    M.serverTime = T0 + 200 + 1800
+    ns.UI:ShowSheet("account"); ns.UI.accountTab = "collection"; ns.UI:RefreshAccount(); M.frames_step(1)
+    return M, ns
+  end },
+  { "23e2-collection-srp1", "Account - Collection with an SRP1 code: says how to get the SRP2 code", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS("")
+    local T0 = 1793000000
+    M.serverTime = T0
+    local AC = ns.AccountCodes
+    local r = AC.parseLinkRequest(ns.Account.startLink(AC.makeWebCode("A7K9P2X")))
+    M.serverTime = T0 + 300
+    assert(ns.Account.import(AC.profile({ linkId = r.linkId, player = r.player, accountId = "acc_7f3k2", name = "Alice Stack",
+      issued = T0 + 200, expires = T0 + 8 * 86400, level = 12, xp = 1240, xpNext = 2000, history = {} })))
+    ns.UI:ShowSheet("account"); ns.UI.accountTab = "collection"; ns.UI:RefreshAccount(); M.frames_step(1)
+    return M, ns
+  end },
   { "23d-sync", "Account - Sync: play a challenge code, copy result codes (manual copy / paste)", function()
     local M, ns = boot(); SlashCmdList.STACKRIVALS("")
     M.serverTime = 1793000000

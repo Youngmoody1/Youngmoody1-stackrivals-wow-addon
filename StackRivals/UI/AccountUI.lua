@@ -143,9 +143,9 @@ function UI:CreateAccount()
   sub:SetText("One account for stackrivals.io and WoW. Never type a password here.")
   self.accountTab = "account"
   s.tabs = {}
-  local tabs = { { "account", "Account" }, { "profile", "Profile" }, { "sync", "Sync" } }
+  local tabs = { { "account", "Account" }, { "profile", "Profile" }, { "sync", "Sync" }, { "collection", "Collection" } }
   for i, t in ipairs(tabs) do
-    if t[1] ~= "sync" or self.CreateSync then
+    if (t[1] ~= "sync" or self.CreateSync) and (t[1] ~= "collection" or self.CreateCollection) then
       local b = T.button(s, t[2], 100, 24, "frame", function() UI.accountTab = t[1]; UI.accountNote = nil; UI:RefreshAccount() end)
       b:SetPoint("TOPLEFT", L + (i - 1) * 104, -60)
       s.tabs[t[1]] = b
@@ -298,6 +298,7 @@ function UI:CreateAccount()
     if acc >= 1 then acc = 0; if UI.accountTab == "account" then UI:RefreshAccount() end end
   end)
   if self.CreateSync then self:CreateSync(s) end
+  if self.CreateCollection then self:CreateCollection(s) end
 end
 
 function UI:RefreshAccount()
@@ -309,6 +310,7 @@ function UI:RefreshAccount()
   s.acc:SetShown(tab == "account")
   s.prof:SetShown(tab == "profile")
   if s.sync then s.sync:SetShown(tab == "sync") end
+  if s.coll then s.coll:SetShown(tab == "collection") end
   local state, r = Acc.state()
   if tab == "account" then
     local a = s.acc
@@ -323,7 +325,8 @@ function UI:RefreshAccount()
       trust = "The website's signature on this profile checked out."
     elseif shown == "linked" then
       line = "Account " .. safe(pr.name) .. "  -  last update " .. when(pr.issued) .. " (" .. ago(pr.issued) .. ")"
-      trust = "Linked from a pasted snapshot. Not checked: no signatures yet."
+      trust = (pr.sigNote == "unknown_kid") and "Signed with a key this version doesn't know: update StackRivals."
+        or "Linked from a pasted snapshot. Not signed, so not checked."
     elseif shown == "not_synced" then
       line = "Account " .. safe(pr.name) .. "  -  last update " .. when(pr.issued) .. " (" .. ago(pr.issued) .. ")"
       trust = "Older than 7 days or expired: paste a new snapshot below."
@@ -347,7 +350,7 @@ function UI:RefreshAccount()
     a.cancel:ClearAllPoints(); a.unlink:ClearAllPoints(); a.paste:ClearAllPoints(); a.expiry:ClearAllPoints()
     if state == "not_linked" then
       a.steps:SetText("Step 1 of 3. Log in on stackrivals.io (on the website, never in WoW).\n"
-        .. "Open " .. Acc.WEB.link:gsub("^stackrivals%.io > ", "") .. ": it shows a one-time code.\nType that code here and click Link:")
+        .. "Open " .. Acc.WEB.link .. " for a one-time code.\nType that code here and click Link:")
     elseif state == "pending" then
       a.steps:SetText("Step 2 of 3. Select, Ctrl+C, then paste it on that website page:")
       a.request:SetValue(Acc.requestCode())
@@ -372,6 +375,8 @@ function UI:RefreshAccount()
     self:RefreshProfile(s.prof, state, r)
   elseif tab == "sync" and self.RefreshSync then
     self:RefreshSync()
+  elseif tab == "collection" and self.RefreshCollection then
+    self:RefreshCollection()
   end
 end
 

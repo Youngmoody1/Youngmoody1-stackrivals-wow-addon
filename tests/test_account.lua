@@ -468,14 +468,15 @@ describe("profile view: one shape for every snapshot format, display only", func
   it("every account screen names the website pages the same way (one table, Account.WEB)", function()
     local c = linked(50)
     local W = c.ns.Account.WEB
-    for _, k in ipairs({ "link", "export", "results", "unlink" }) do ok(W[k]:find("^stackrivals%.io > Account > "), k) end
+    for _, k in ipairs({ "link", "export", "results", "unlink" }) do ok(W[k]:find("^stackrivals%.io/wow > "), k) end
+    ok(W.results:find("(planned)", 1, true), "Import result isn't built on the website yet")
     c.env.SlashCmdList.STACKRIVALS("")
     c.ns.UI:ShowSheet("account")
     local s = c.ns.UI.accountSheet
     ok(s.acc.steps:GetText():find(W.export, 1, true), s.acc.steps:GetText())
     s.acc.unlink:Click(); s.acc.unlink:Click()
     ok(c.ns.UI.accountNote:find(W.unlink, 1, true), c.ns.UI.accountNote)
-    ok(s.acc.steps:GetText():find("Account > Link WoW character", 1, true), s.acc.steps:GetText())
+    ok(s.acc.steps:GetText():find("Link WoW character", 1, true), s.acc.steps:GetText())
   end)
   it("the Account tab never shows a plain green LINKED: a pasted snapshot is LINKED - UNVERIFIED; VERIFIED needs a checked signature", function()
     local c, Acc = linked(51)
@@ -486,7 +487,7 @@ describe("profile view: one shape for every snapshot format, display only", func
     local r, g, b = a.status.chip:GetTextColor()
     local gold = c.ns.T.C.gold
     ok(math.abs(r - gold[1]) < 0.01 and math.abs(g - gold[2]) < 0.01 and math.abs(b - gold[3]) < 0.01, "gold, not green")
-    ok(a.status.trust:GetText():find("Not checked", 1, true), a.status.trust:GetText())
+    ok(a.status.trust:GetText():find("not checked", 1, true), a.status.trust:GetText())
     -- only a view that says verified (a future signature check) turns it green
     local real = Acc.profileView
     Acc.profileView = function() local v, st = real(); v.verified = true; return v, st end

@@ -83,8 +83,8 @@ Full analysis: `docs/ACCOUNT_SECURITY.md`. Vectors: `docs/vectors/account_flow_v
 
 **SR1R import**
 1. Decode and replay (`importResult`).
-2. Credit only the account whose binding owns the result's **link code**.
-3. Link code single-use.
+2. Credit only when `link` (the binding's public `linkId`) names an active binding of the importing account.
+3. (Superseded by your C5 decision: no single-use code in results; `runKey` covers re-imports.)
 4. Player must match the binding.
 5. `runKey` unique.
 6. Apply the reward limits.
@@ -145,7 +145,7 @@ Our proposal (you decide):
 
 * The four page names (C2).
 * The error names on your import page: we proposed `code_unknown`, `code_expired`, `code_used`,
-  `link_mismatch`, `link_used`, `player_mismatch` and `duplicate_run`.
+  `link_mismatch`, `player_mismatch` and `duplicate_run` (`link_used` withdrawn, as you decided).
 * Whether the website shows "claimed WoW character" until verification.
 * How the website shows a WoW result's status: `server_verified` / `rejected` / `(unlinked)`.
 

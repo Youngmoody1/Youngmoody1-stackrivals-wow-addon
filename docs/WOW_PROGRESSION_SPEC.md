@@ -32,7 +32,7 @@ reward rates.
 | Level | Question | Who answers it | What it proves |
 |---|---|---|---|
 | **A. Legal replay** | Do the game events in this log produce this score? | Website: `importResult` / `verifySpellMatch` | The moves are legal and match the claim. **Not** that a human played: a real-time bot passes |
-| **B. Account attribution** | Whose result is it? | Website: the one-time link code in the result must belong to a binding of the importing account (single use); `runKey` unique | The result belongs to that account's **claimed** WoW character. Not proof of character ownership (only Battle.net OAuth would be) |
+| **B. Account attribution** | Whose result is it? | Website: the result's `link` (the public `linkId`) must name an active binding of the importing account; player + platform match it; `runKey` unique globally | The result belongs to that account's **claimed** WoW character. Not proof of character ownership (only Battle.net OAuth would be) |
 | **C. Reward eligibility** | Does it earn XP / Shards now? | Website: source allowed (§3), within caps and limits (§4), account rules (age, flags) | Only A + B + C together may earn anything |
 
 A result can pass A and fail B (someone else's run), or pass A and B and fail C (over the cap, or
@@ -108,8 +108,9 @@ Daily Shards). The addon answers none of these: it only carries the code.
 6. WoW shows the new values with "Last update …" and its UNVERIFIED / VERIFIED tag. Until signatures
    exist, the values are shown only and unlock nothing in WoW.
 
-No passwords, tokens or secrets are ever in a code or in WoW. The link code inside a result is
-single-use and consumed on its first successful import.
+No passwords, tokens or secrets are ever in a code or in WoW. A result's `link` is the binding's public
+`linkId`: a selector, not a secret and not single-use. Only the signed-in owner of that binding can import
+against it, and `runKey` stops re-imports (the website's decision, C5).
 
 ## 6. Decisions needed from stackrivals.io
 

@@ -14,8 +14,53 @@ stackrivals.io. New formats come from the website: `SRP2` v1 was defined there o
     stays fully supported; an `SRP3` is refused with "update" (the `newer_format` flow vector now uses SRP3).
   - **Profile view**: `format`, `shards` (the Profile tab's prepared "N SHARDS" now fills from SRP2), `asOf`,
     `equipped`, `owned`, `events`. Saved and sanitised (bounded like the parser).
-  - **Display only**: no signature check yet (SRP2-SIG v1 = Ed25519, a pure-Lua verifier is the next step), so the
-    state stays LINKED - UNVERIFIED and nothing is applied, bought or claimed from an SRP2 code. No local Shards.
+  - **Display only**: nothing is applied, bought or claimed from an SRP2 code. No local Shards.
+- **Signed profiles: SRP1-SIG v1 and SRP2-SIG v1 verified in WoW** (the website's C4 decision):
+  - `Net/Ed25519.lua`: Ed25519 verification (RFC 8032) with SHA-512 in **pure Lua 5.1**:
+    - no C library;
+    - WoW's `bit` library when present, normalised to unsigned 32-bit; byte tables otherwise;
+    - TweetNaCl's 16-bit limbs, exact in doubles;
+    - one-pass double scalar multiplication;
+    - S < L and point checks.
+    About 110–150 ms per verification here; the real WoW time is a client test.
+  - `Net/SnapshotSig.lua`: the website's rules exactly. These are tested with all 11 `srp1_sig_v1.json` cases
+    and all 9 SRP2 signature cases, plus RFC 8032 TEST 1–3:
+
+    | Code | Result |
+    |---|---|
+    | sig `-` | UNVERIFIED |
+    | Unknown kid | UNVERIFIED ("update StackRivals") |
+    | Signature invalid, or not kid + 86 characters | **REJECTED** (the code was changed after signing) |
+    | Valid | **VERIFIED** |
+
+    The domain strings differ per format, so a signature can't be moved between SRP1 and SRP2.
+  - **No production key ships yet.** The website owner creates it and publishes the public half. Until then
+    every real code shows UNVERIFIED.
+  - The RFC test key `t1` exists only in tests, and a test fails if it is ever shipped.
+  - VERIFIED survives a reload only while this version still ships that key, so a retired key's codes
+    become UNVERIFIED.
+  - `Account.canApplyCosmetic(id)` is the one gate for any future cosmetic drawing: it allows only a VERIFIED
+    profile that owns or equips the item. WoW draws no cosmetics yet.
+- **Collection tab** (Account > Collection), display only:
+  - **Shards**: the website's balance "as of <time>". A `-` code shows NOT AVAILABLE, never 0.
+  - **Events**: Shard Storm and XP Overdrive in the code's own wording:
+    - "upcoming …";
+    - "live until …, as of …";
+    - "ended" by this PC's clock.
+
+    Overdrive values are the multiplier × 100 (200 = 2x). Claims happen only on the website; a WoW match
+    earns nothing from events.
+  - **Cosmetics** from the website's catalog (`Core/CosmeticsCatalog.lua`, generated from
+    `cosmetics_catalog_v1.json` by `tools/gen_cosmetics.py`; 32 items):
+    - Equipped, then Owned, then Locked, with how each locked item is obtained;
+    - purchasable items say "Shop Upcoming";
+    - no buy, claim or equip button.
+  - Under the list: UNVERIFIED ("names only, nothing applied in WoW") or VERIFIED.
+- **Website names (C2)**: stackrivals.io/wow > Link WoW character / Sync status > Export snapshot / Unlink.
+  Import result is shown as "(planned)".
+- **Result attribution (C5)**: `link` in SR1R is the binding's public `linkId`, a selector, not a single-use
+  code. The flow vectors and docs are corrected (`result_link_reused` removed; `duplicate_run` covers
+  re-imports).
 - **Profile view** (`Account.profileView()`): the Profile tab reads one format-independent view
   instead of the raw snapshot. A later approved format is mapped into the same shape, so the screen
   doesn't change per format. It records where the data came from (`source = "manual"`), when the

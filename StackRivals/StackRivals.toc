@@ -24,6 +24,8 @@ Core\DB.lua
 Net\Protocol.lua
 Net\Codes.lua
 Net\AccountCodes.lua
+Net\Ed25519.lua
+Net\SnapshotSig.lua
 UI\Theme.lua
 Core\Sound.lua
 UI\Board.lua
@@ -32,6 +34,7 @@ UI\Minimap.lua
 Net\Comm.lua
 Net\BNet.lua
 Core\Social.lua
+Core\CosmeticsCatalog.lua
 Core\Account.lua
 Core\Sync.lua
 Core\Card.lua
@@ -46,6 +49,7 @@ UI\QuickplayUI.lua
 UI\MatchChat.lua
 UI\AccountUI.lua
 UI\SyncUI.lua
+UI\CollectionUI.lua
 UI\LootDuelUI.lua
 UI\LootButton.lua
 UI\SpellUI.lua

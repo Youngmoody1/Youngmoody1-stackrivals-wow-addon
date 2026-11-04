@@ -27,14 +27,14 @@ Acc.STALE_AFTER = 7 * 86400        -- s after the snapshot was made: NOT SYNCED
 Acc.CLOCK_SKEW = 10 * 60           -- s of clock difference tolerated between the website and WoW
 Acc.MAX_CHARS = 50                 -- characters kept in SavedVariables
 
---- Where things are on stackrivals.io, named in one place so every screen says the same. These are
---- the names proposed to the website in docs/ACCOUNT_SYNC_HANDOFF.md; until web Claude confirms the
---- real menu names they are provisional (docs/INTEGRATION_CHECKLIST.md, "Missing web contracts").
+--- Where things are on stackrivals.io, named in one place so every screen says the same. The website's
+--- names (its docs/WOW_ADDON_BRIDGE.md, C2): menu "WoW Addon" = stackrivals.io/wow, with Link WoW character,
+--- Sync status (Export snapshot, Unlink). Import result isn't built yet (C5): shown as planned.
 Acc.WEB = {
-  link = "stackrivals.io > Account > Link WoW character",
-  export = "stackrivals.io > Account > WoW > Export snapshot",
-  results = "stackrivals.io > Account > WoW > Import result",
-  unlink = "stackrivals.io > Account > WoW > Unlink",
+  link = "stackrivals.io/wow > Link WoW character",
+  export = "stackrivals.io/wow > Sync status > Export snapshot",
+  results = "stackrivals.io/wow > Import result (planned)",
+  unlink = "stackrivals.io/wow > Sync status > Unlink",
 }
 
 Acc.ERRORS = {
@@ -58,6 +58,14 @@ Acc.ERRORS = {
   future = "This snapshot is dated in the future (check the date on your PC).",
   older = "This snapshot is older than the one you already have. Nothing changed.",
   duplicate = "You already imported this snapshot.",
+  signature = "This snapshot was changed after stackrivals.io signed it. Export a new one.",
+  base = "A value in this snapshot is out of range. Export a new one on stackrivals.io.",
+  shards = "The Shards part of this snapshot is invalid. Export a new one.",
+  asOf = "This snapshot's 'as of' time doesn't fit its date. Export a new one.",
+  equipped = "The equipped cosmetics in this snapshot are invalid. Export a new one.",
+  owned = "The owned cosmetics in this snapshot are invalid. Export a new one.",
+  events = "The events in this snapshot are invalid. Export a new one.",
+  sig = "The signature in this snapshot is malformed (copy all of it again).",
   webcode_format = "A link code is 8 letters and digits, like A7K9-P2XM.",
   webcode_check = "That link code has a typo (check the letters).",
 }
@@ -147,6 +155,10 @@ function Acc.import(text)
   local p, why
   if head == "SRP2" then p, why = A().parseProfile2(text) else p, why = A().parseProfile(text) end
   if not p then return nil, why end
+  -- the website's signature (SRP1-SIG v1 / SRP2-SIG v1): a code changed after signing is refused; unsigned or
+  -- signed with a key this version doesn't know is kept as UNVERIFIED (nothing locked is ever applied from it)
+  local sc = ns.SnapshotSig and ns.SnapshotSig.check(text) or { state = "unverified", reason = "unsigned" }
+  if sc.state == "invalid" then return nil, "signature" end
   local me = Acc.me()
   if not me or not ns.Comm.same(p.player, me) then return nil, "player" end
   local st, r = Acc.state()
@@ -175,12 +187,29 @@ function Acc.import(text)
     wins = p.wins, losses = p.losses, draws = p.draws, history = p.history,
     achUnlocked = p.achUnlocked, achTotal = p.achTotal, cosOwned = p.cosOwned, cosEquipped = p.cosEquipped,
     signed = p.sig ~= nil, check = p.check,
+    verified = sc.state == "verified" or nil, kid = sc.kid, sigNote = sc.reason, -- sigNote: unsigned | unknown_kid
     -- SRP2 only (nil from SRP1): the website's balance, ownership and events as of asOf — display only
     format = p.format, shards = p.shards, asOf = p.asOf, equipped = p.equipped, owned = p.owned, events = p.events,
   }
   r.lastSync = t
   r.note = nil
   return true, result
+end
+
+--- May WoW apply (draw) this cosmetic? Only from a VERIFIED profile that owns or equips it. WoW draws no
+--- cosmetics yet; this is the one gate any future drawing code must use.
+function Acc.canApplyCosmetic(id)
+  local v = Acc.profileView()
+  if not (v and v.verified and type(id) == "string") then return false end
+  for _, e in pairs(v.equipped or {}) do if e == id then return true end end
+  for _, o in ipairs(v.owned or {}) do if o == id then return true end end
+  return false
+end
+
+--- True only for a profile whose website signature was checked with a key this version still ships.
+function Acc.isVerified(pr)
+  return pr ~= nil and pr.verified == true and type(pr.kid) == "string" and ns.SnapshotSig ~= nil
+    and ns.SnapshotSig.KEYS[pr.kid] ~= nil
 end
 
 --- What the Profile tab shows, independent of the snapshot format that delivered it.
@@ -196,7 +225,8 @@ function Acc.profileView()
   return {
     format = pr.format or "SRP1", source = "manual", -- pasted by the player; no live connection exists
     asOf = pr.asOf or pr.issued, importedAt = r.lastSync, expires = pr.expires, stale = (st == "not_synced"),
-    signed = pr.signed, verified = false,          -- no signature check in this version
+    -- VERIFIED only when the website's signature checked out with a key this version ships
+    signed = pr.signed, verified = Acc.isVerified(pr), kid = pr.kid, sigNote = pr.sigNote,
     name = pr.name, rank = pr.rank, level = pr.level, xp = pr.xp, xpNext = pr.xpNext,
     season = pr.season, seasonPct = pr.seasonPct, wins = pr.wins, losses = pr.losses, draws = pr.draws,
     achUnlocked = pr.achUnlocked, achTotal = pr.achTotal, cosOwned = pr.cosOwned, cosEquipped = pr.cosEquipped,
@@ -252,6 +282,10 @@ function Acc.sanitize(raw)
             history = hist, achUnlocked = num(pr.achUnlocked, 0, 9999), achTotal = num(pr.achTotal, 0, 9999),
             cosOwned = num(pr.cosOwned, 0, 99999), cosEquipped = txt(pr.cosEquipped, 24),
             signed = pr.signed == true, check = id(pr.check, "^%x+$", 8, 8) or "00000000",
+            -- verified only with a kid this version still ships (a retired key's codes become UNVERIFIED)
+            verified = (pr.verified == true and type(pr.kid) == "string" and ns.SnapshotSig and ns.SnapshotSig.KEYS[pr.kid] ~= nil) or nil,
+            kid = id(pr.kid, "^[a-z0-9]+$", 2, 2),
+            sigNote = (pr.sigNote == "unsigned" or pr.sigNote == "unknown_kid") and pr.sigNote or nil,
           }
           if pr.format == "SRP2" then -- SRP2 extras, bounded like the parser (anything else is dropped)
             local P2, cid = o.profile, function(v) return id(v, "^[a-z0-9_]+$", 1, 32) end

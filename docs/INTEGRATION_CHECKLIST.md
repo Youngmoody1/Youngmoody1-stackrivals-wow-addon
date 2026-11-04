@@ -47,23 +47,21 @@ WoW test.
 | 11 | **Signed snapshots** | `sig` field reserved, not checked. The Profile tab says UNVERIFIED (VERIFIED in green once a scheme exists). Nothing is unlocked from an unsigned snapshot | A signing scheme (e.g. Ed25519 public key in the addon) | `SRP1`/`SRP2` `sig` | sign/verify vectors | Web proposal, then an addon verifier in pure Lua | – |
 | 12 | **Quickplay / shared matchmaking** | WoW Quickplay works between WoW players; the web adapter honestly shows "not connected" | Nothing possible without a transport | – | – | A verified transport (none exists) | – |
 
-## Proposal for the website: `SRP2` (profile snapshot v2, DRAFT for web Claude to accept or change)
+## `SRP2` v1: defined by the website (replaces this project's proposal)
 
-`SRP2` would be `SRP1`'s fields in the same order, plus:
+The website answered the proposal with its own **SRP2 v1**:
+* the spec is `docs/WOW_SRP2.md` and the TypeScript reference is `src/lib/wow/srp2.ts`, both in the web repo;
+* the vectors are `docs/vectors/srp2_v1.json` (16 parse + 9 signature cases) and the catalog is
+  `docs/vectors/cosmetics_catalog_v1.json`, both copied here unchanged.
 
-```
-.<shards36>.<asOf36>.<equipped>.<achList>
-  shards36   Shards balance, base 36 (display only; "-" = not shown)
-  asOf36     unix seconds the balance and rank were read on the website
-  equipped   "-" or slot:id pairs joined by "~", e.g. board:neon~pieces:classic  (ids [a-z0-9_]{1,24})
-  achList    "-" or up to 10 recent achievement ids joined by "~"
-```
+What it contains:
+* Shards and `asOf`;
+* `equipped`, per slot `skin`, `frame` and `victory`;
+* `owned`;
+* `events` (Overdrive value = multiplier × 100);
+* the SRP2-SIG v1 signature.
 
-* `sig` stays reserved until a scheme is agreed.
-* **Without a valid `sig`, the addon never applies a cosmetic. It only names it.**
-* The addon reads `SRP1` and `SRP2`. An unknown `SRP3` is refused with "update".
-* **Nothing is built until web Claude agrees.** The fields, their order and the limits come from
-  the website. This is only a proposal, so we don't each invent our own.
+`achList` was dropped. **`SRP1` is unchanged.** The addon reads both, and refuses `SRP3` with "update".
 
 ## When web Claude's report arrives (reception process)
 
@@ -114,20 +112,20 @@ Result of step 2: a short reply to web Claude, per format: **agreed** / **change
 website, paste the new snapshot back, check the Profile tab. Forever and Classic Era. Results go in
 the test logs, never from simulations.
 
-## Missing web contracts (C1–C10, 4 Nov 2026)
+## Web contracts C1–C10 (status after the website's answers, 4 Nov 2026)
 
 | # | Contract | Status | Blocks |
 |---|---|---|---|
-| C1 | Web link code + `SRL1` + `SRP1` (draft v1) | proposed with 84 vectors; **not confirmed** by the website | linking in a real client |
-| C2 | Real menu names: Link WoW character, Export snapshot, Import result, Unlink | proposed; the addon keeps them in one table (`Account.WEB`) | exact instructions on screen |
-| C3 | `SRP2`: Shards balance + `asOf`, equipped cosmetics, achievement list | proposal above; **no answer yet** | the Shards line, cosmetics names |
-| C4 | Snapshot signature scheme (e.g. Ed25519 public key in the addon) | **not proposed by the website** | VERIFIED tag, applying cosmetics |
-| C5 | `SR1R` import page (`importResult`) and website-issued `SR1C` challenges | format **agreed** (77/77 vectors); page not built | XP from WoW play |
-| C6 | Reward rules for WoW results: sources, XP, Shards, caps, anti-farming | proposal: `docs/WOW_PROGRESSION_SPEC.md`; **website decides** | any progression from WoW |
-| C7 | `SR2` (Spell Battle vs Bot results) | draft; agree or postpone | Spell Battle XP |
-| C8 | Cosmetic ids + art references for WoW skins | not started | skins in WoW |
-| C9 | Confirmation: Loot Duel and WoW duels earn nothing | addon side enforced by a test | — |
-| C10 | Binding policy: two accounts claim the same Name-Realm; bindings stored as claims, not proof | new (security analysis, `ACCOUNT_SECURITY.md` T6) | fair attribution |
+| C1 | Web link code + `SRL1` + `SRP1` (draft v1) | **AGREED** by the website (all vectors reproduced) | – |
+| C2 | Menu names | **AGREED**: stackrivals.io/wow > Link WoW character, Sync status > Export snapshot / Unlink; Import result planned. In `Account.WEB` | – |
+| C3 | Shards, cosmetics, events | **DEFINED by the website: `SRP2` v1**. Parser + import (web-Claude, `4e08d86`), **Collection tab** (0.9.0) | the website's SRP2 export on /wow (built, waits for publishing) |
+| C4 | Signatures | **SRP1-SIG v1 / SRP2-SIG v1** (Ed25519). **Verifier built in pure Lua 5.1**, all web vectors pass | the **production public key** from the owner |
+| C5 | `SR1R` import, `SR1C` challenges | **NOT NOW** (web branch only). Attribution rule changed: `link` = public `linkId`, not single-use | – |
+| C6 | XP / Shards from WoW results | **NOT NOW** (no rewards from manual sync) | – |
+| C7 | `SR2` | **NOT NOW** | – |
+| C8 | Cosmetic art in WoW | **NOT NOW**: names from the catalog; nothing drawn; any future drawing only via `Account.canApplyCosmetic` (VERIFIED) | – |
+| C9 | Loot Duel / WoW duels earn nothing | **AGREED**; enforced by a test | – |
+| C10 | One character, two accounts | **CHANGED**: one ACTIVE binding per platform + Name-Realm; a new link moves it | – |
 
 Website pages the addon names (all **PLANNED**, none exists yet; names in `Account.WEB`, to be
 replaced with the real ones): Link WoW character, Export snapshot, Import result, Unlink.

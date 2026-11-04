@@ -1,0 +1,110 @@
+{
+  "format": "SRP1-SIG v1 (proposal, web → addon)",
+  "note": "Ed25519 (RFC 8032). sig = kid (2 × [a-z0-9]) + base64url without padding of the 64-byte signature (86) = 88 characters. Signed message = UTF-8 of 'SRP1-SIG-v1\\n' + the code's fields 0–18 joined by '.'. The keys below are the PUBLIC RFC 8032 test vectors — tests only.",
+  "keys": {
+    "t1": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+  },
+  "testOnlySeed": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+  "signedMessageOfValid": "SRP1-SIG-v1\nSRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.classic-w-99c-6y0-tni7nk.1-4.5-4e656f6e2047726964",
+  "cases": [
+    {
+      "name": "valid",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.classic-w-99c-6y0-tni7nk.1-4.5-4e656f6e2047726964.t1PIH1SWsnJUxUmQm-yqmAKLRn4qRTSAFBIZS1295fOIXUirKC_M3rNh98VuKbMK8yr0QLKyh-oza1bpHHMj9qDw.9502dbe1",
+      "expect": {
+        "state": "verified",
+        "kid": "t1"
+      },
+      "why": "signed with t1 over domain + fields 0–18"
+    },
+    {
+      "name": "unsigned",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.classic-w-99c-6y0-tni7nk.1-4.5-4e656f6e2047726964.-.9b1dc899",
+      "expect": {
+        "state": "unverified",
+        "reason": "unsigned"
+      },
+      "why": "sig is '-': show LINKED - UNVERIFIED, apply nothing locked"
+    },
+    {
+      "name": "unknown_kid",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.classic-w-99c-6y0-tni7nk.1-4.5-4e656f6e2047726964.zzPIH1SWsnJUxUmQm-yqmAKLRn4qRTSAFBIZS1295fOIXUirKC_M3rNh98VuKbMK8yr0QLKyh-oza1bpHHMj9qDw.ea379506",
+      "expect": {
+        "state": "unverified",
+        "reason": "unknown_kid"
+      },
+      "why": "a kid the addon does not know (newer key, or retired): UNVERIFIED, suggest updating the addon"
+    },
+    {
+      "name": "level_changed",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.2r.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.classic-w-99c-6y0-tni7nk.1-4.5-4e656f6e2047726964.t1PIH1SWsnJUxUmQm-yqmAKLRn4qRTSAFBIZS1295fOIXUirKC_M3rNh98VuKbMK8yr0QLKyh-oza1bpHHMj9qDw.91830fe0",
+      "expect": {
+        "state": "invalid",
+        "reason": "signature"
+      },
+      "why": "a signed value edited and the check value recomputed: the signature no longer matches"
+    },
+    {
+      "name": "xp_changed",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.1jj.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.classic-w-99c-6y0-tni7nk.1-4.5-4e656f6e2047726964.t1PIH1SWsnJUxUmQm-yqmAKLRn4qRTSAFBIZS1295fOIXUirKC_M3rNh98VuKbMK8yr0QLKyh-oza1bpHHMj9qDw.8ae0581a",
+      "expect": {
+        "state": "invalid",
+        "reason": "signature"
+      },
+      "why": "same, another field"
+    },
+    {
+      "name": "other_character",
+      "code": "SRP1.k3v9q2m7x1aa.426f6262792d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.classic-w-99c-6y0-tni7nk.1-4.5-4e656f6e2047726964.t1PIH1SWsnJUxUmQm-yqmAKLRn4qRTSAFBIZS1295fOIXUirKC_M3rNh98VuKbMK8yr0QLKyh-oza1bpHHMj9qDw.9f19f3da",
+      "expect": {
+        "state": "invalid",
+        "reason": "signature"
+      },
+      "why": "the character is signed too"
+    },
+    {
+      "name": "expires_extended",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tozx18.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.classic-w-99c-6y0-tni7nk.1-4.5-4e656f6e2047726964.t1PIH1SWsnJUxUmQm-yqmAKLRn4qRTSAFBIZS1295fOIXUirKC_M3rNh98VuKbMK8yr0QLKyh-oza1bpHHMj9qDw.ac41ca8d",
+      "expect": {
+        "state": "invalid",
+        "reason": "signature"
+      },
+      "why": "issued / expires are signed"
+    },
+    {
+      "name": "signature_byte_changed",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.classic-w-99c-6y0-tni7nk.1-4.5-4e656f6e2047726964.t1PIH1SWsnAUxUmQm-yqmAKLRn4qRTSAFBIZS1295fOIXUirKC_M3rNh98VuKbMK8yr0QLKyh-oza1bpHHMj9qDw.623973d2",
+      "expect": {
+        "state": "invalid",
+        "reason": "signature"
+      },
+      "why": "one character of the signature changed"
+    },
+    {
+      "name": "kid_changed",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.classic-w-99c-6y0-tni7nk.1-4.5-4e656f6e2047726964.t2PIH1SWsnJUxUmQm-yqmAKLRn4qRTSAFBIZS1295fOIXUirKC_M3rNh98VuKbMK8yr0QLKyh-oza1bpHHMj9qDw.812be64c",
+      "expect": {
+        "state": "unverified",
+        "reason": "unknown_kid"
+      },
+      "why": "kid t2 is not in the key table"
+    },
+    {
+      "name": "wrong_key_same_kid",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.classic-w-99c-6y0-tni7nk.1-4.5-4e656f6e2047726964.t1jLd-RUjrfJ207_4JxiFiNiBwyjYFXZPNacAxt3ya26yBja3DGVdtrbSSAWSVjo_T45ykw83on-xLuzlducOeCQ.acdf8da2",
+      "expect": {
+        "state": "invalid",
+        "reason": "signature"
+      },
+      "why": "signed by another private key claiming kid t1"
+    },
+    {
+      "name": "sig_wrong_length",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.classic-w-99c-6y0-tni7nk.1-4.5-4e656f6e2047726964.t1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA.8a1263f5",
+      "expect": {
+        "state": "invalid",
+        "reason": "format"
+      },
+      "why": "passes SRP1's 16–128 rule, but SRP1-SIG v1 is exactly 2 + 86 characters"
+    }
+  ]
+}

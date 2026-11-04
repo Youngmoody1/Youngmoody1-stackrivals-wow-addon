@@ -45,7 +45,7 @@ accepted. The addon therefore treats every snapshot as **display data**:
 
 | # | Threat | Addon today | Website must | Residual risk | Tests and vectors |
 |---|---|---|---|---|---|
-| T1 | **Forged profile snapshot** (edited XP, rank, Shards, cosmetics, recomputed check) | Accepted as display data only, marked UNVERIFIED; unlocks nothing; HTML/escape codes shown as text | **Sign snapshots** (C4) | A player can make their own WoW screen show fake numbers. It affects only their own PC | `forged_but_rechecked`; escape-code test |
+| T1 | **Forged profile snapshot** (edited XP, rank, Shards, cosmetics, recomputed check) | **Signed codes are verified** (SRP1-SIG / SRP2-SIG v1, Ed25519, `Net/SnapshotSig.lua`): a signed code changed afterwards is REJECTED; unsigned or unknown key = UNVERIFIED, display only, unlocks nothing; escape codes shown as text | Sign every export with the production key and publish its public half (C4) | Until the production key ships, every code is UNVERIFIED: a player can make their own screen show fake numbers, on their own PC only | `forged_but_rechecked`, `srp1_sig_v1.json`, `srp2_v1.json` sig cases |
 | T2 | **Replay of an old confirmation** to finish a new link request | Refused if issued before the request (`too_old_for_link`); the request lives 15 min (`pending_expired`); refused if dated in the future | Make each snapshot for the current binding only | none known | `made_before_request`, `request_expired`, `future_dated` |
 | T3 | **Re-using a one-time web code** | The addon can't know (no connection) | **Single use**, about 10 min lifetime, rate limit, bound to the logged-in account that created it | brute force, if the rate limit is missing | websiteChecks `code_reused`, `code_expired`, `code_brute_force`, `code_other_account` |
 | T4 | **Import on the wrong character** | Refused: the snapshot's `player` must be this character (`player`) | Export only for the binding's `Name-Realm` + platform | none | `wrong_character` |
@@ -54,7 +54,7 @@ accepted. The addon therefore treats every snapshot as **display data**:
 | T7 | **Old or stale Shards / XP shown** | `asOf` shown; OUT OF DATE after 7 days or `expires`; an older snapshot never replaces a newer one; the same one twice changes nothing | Put `asOf` in `SRP2` (C3) | The balance can be up to 7 days old (said on screen) | `older_than_current`, `same_twice`, `expired` |
 | T8 | **Manipulated cosmetics** | Only **named**, never applied (nothing to apply yet) | Signature (C4) + cosmetic ids (C8) before any "apply" | none today | `forged_but_rechecked` |
 | T9 | **A snapshot from another link or account** | Refused (`link_other`) | – | none | `other_link_while_pending`, `other_link_when_linked` |
-| T10 | **Result codes claiming another player** (SR1R `player` or `link` edited) | The addon puts this character and its link into the code; it can't stop an edit | Credit only the account whose binding owns the **link code**; **reject a mismatch**; link code single-use; `runKey` unique; replay | Unlinked results show as `(unlinked)` and earn nothing | websiteChecks `result_other_account`, `result_link_reused`, `result_player_mismatch`, `result_duplicate_run`, `result_unlinked` |
+| T10 | **Result codes claiming another player** (SR1R `player` or `link` edited) | The addon puts this character and its `linkId` into the code; it can't stop an edit | Attribute only when the importer is signed in and the `link` (the binding's **public `linkId`**, a selector, not a secret and not single-use) names an ACTIVE binding **of the importing account**; player + platform must match it; replay; `runKey` unique globally (website decision, C5) | Unlinked results show as `(unlinked)` and earn nothing | websiteChecks `result_other_account`, `result_player_mismatch`, `result_duplicate_run`, `result_unlinked` |
 | T11 | **Manipulated result scores** | – | Replay (`importResult`) | A bot playing in real time passes replay; covered by caps (WOW_PROGRESSION_SPEC.md §4) | sr1.json (77 vectors) |
 | T12 | **Secrets in the addon** | None exist: no password, e-mail, session token or API key is ever asked for, sent or stored | Never put a secret in a code | – | test "link request carries nothing secret" |
 | T13 | **Loot Duel / WoW duel results as rewards** | No export exists; Loot Duel never calls Account or Sync | Never reward `peer_checked` | – | `test_lootduel.lua` "works without any stackrivals.io account" |
@@ -73,10 +73,10 @@ accepted. The addon therefore treats every snapshot as **display data**:
 3. Export snapshots only for that binding, with `asOf`, and **signed** (C4).
 4. On result import:
    1. replay;
-   2. credit only the binding that owns the link code;
-   3. treat the link code as single-use;
-   4. keep `runKey` unique;
-   5. then apply the reward limits.
+   2. attribute only to an active binding of the importing account named by `link` (the public `linkId`);
+   3. player + platform equal that binding;
+   4. keep `runKey` unique globally (this also stops re-imports);
+   5. then apply the reward limits. (The web link code is used once, by SRL1, and never appears in a result.)
 
 ## What the addon does (and keeps doing)
 
