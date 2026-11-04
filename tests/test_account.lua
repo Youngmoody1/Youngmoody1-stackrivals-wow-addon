@@ -646,15 +646,56 @@ describe("profile view: one shape for every snapshot format, display only", func
     end
     ok(n >= 20, "checked " .. n .. " texts")
   end)
-  it("a newer format (SRP2) is refused with 'update' and leaves the current profile as it was", function()
+  it("a newer format (SRP3) is refused with 'update' and leaves the current profile as it was", function()
     local c, Acc, r = linked(45)
     local before = Acc.profileView()
     c.M.serverTime = T0 + 3600
     local s2 = snap({ linkId = r.linkId, issued = T0 + 3000, expires = T0 + 86400 })
-    local okI, why = Acc.import("SRP2" .. s2:sub(5))
+    local okI, why = Acc.import("SRP3" .. s2:sub(5))
     eq(okI, nil); eq(why, "version"); ok(Acc.ERRORS.version:find("update"), Acc.ERRORS.version)
     local after = Acc.profileView()
     eq(after.asOf, before.asOf); eq(after.importedAt, before.importedAt); eq(after.shards, nil)
+  end)
+  it("an SRP2 snapshot updates the profile with the website's Shards, cosmetics and events (display only)", function()
+    local c, Acc, r = linked(45)
+    c.M.serverTime = T0 + 3600
+    local code = A.profile2({
+      linkId = r.linkId, player = "Alice-Realm", accountId = "acc_7f3k2", name = "Alice Stack", issued = T0 + 3000, expires = T0 + 86400,
+      level = 13, xp = 10, xpNext = 2100, seasonPct = 46, wins = 13, losses = 8, draws = 1, history = {},
+      shards = 1250, asOf = T0 + 2990, equipped = { skin = "skin_solar_inferno" }, owned = { "skin_solar_inferno", "skin_circuit" },
+      events = { { kind = "overdrive", state = "live", start = T0 + 2000, ["end"] = T0 + 9000, value = 2 } },
+    })
+    local okI, res = Acc.import(code)
+    eq(okI, true); eq(res, "updated")
+    local v = Acc.profileView()
+    eq(v.format, "SRP2"); eq(v.shards, 1250); eq(v.asOf, T0 + 2990); eq(v.level, 13)
+    eq(v.equipped.skin, "skin_solar_inferno"); eq(#v.owned, 2); eq(v.owned[1], "skin_circuit")
+    eq(#v.events, 1); eq(v.events[1].kind, "overdrive"); eq(v.events[1].value, 2)
+    eq(v.verified, false) -- no signature check in this version: nothing is applied from it
+    -- an SRP1 afterwards (newer) replaces it and the extras go away again (SRP1 has none)
+    c.M.serverTime = T0 + 4000
+    eq(Acc.import(snap({ linkId = r.linkId, issued = T0 + 3500, expires = T0 + 86400 })), true)
+    v = Acc.profileView()
+    eq(v.format, "SRP1"); eq(v.shards, nil); eq(#v.owned, 0); eq(#v.events, 0)
+  end)
+  it("SRP2 extras survive a reload (saved variables) and stay bounded", function()
+    local c, Acc, r = linked(45)
+    c.M.serverTime = T0 + 3600
+    local code = A.profile2({
+      linkId = r.linkId, player = "Alice-Realm", accountId = "acc_7f3k2", name = "Alice Stack", issued = T0 + 3000, expires = T0 + 86400,
+      level = 13, xp = 10, xpNext = 2100, seasonPct = 46, wins = 13, losses = 8, draws = 1, history = {},
+      shards = 77, asOf = T0 + 3000, equipped = { frame = "frame_neon_rival" }, owned = { "frame_neon_rival" },
+      events = { { kind = "storm", state = "up", start = T0 + 5000, ["end"] = T0 + 5900, value = 25 } },
+    })
+    eq(Acc.import(code), true)
+    local raw = Acc.rec()
+    local clean = Acc.sanitize({ ["Alice-Realm"] = raw })
+    local pr = clean["Alice-Realm"].profile
+    eq(pr.format, "SRP2"); eq(pr.shards, 77); eq(pr.equipped.frame, "frame_neon_rival"); eq(pr.owned[1], "frame_neon_rival")
+    eq(pr.events[1].kind, "storm"); eq(pr.events[1].value, 25)
+    raw.profile.shards, raw.profile.owned = -5, { "BAD ID", "ok_id" }
+    pr = Acc.sanitize({ ["Alice-Realm"] = raw })["Alice-Realm"].profile
+    eq(pr.shards, nil); eq(#pr.owned, 1); eq(pr.owned[1], "ok_id")
   end)
 end)
 

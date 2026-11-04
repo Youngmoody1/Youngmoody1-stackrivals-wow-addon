@@ -3,9 +3,19 @@
 ## 0.9.0 (development) — Ready for the website integration (branch `feature/web-integration`, not released, not installed)
 
 0.8.1 is frozen on `alpha/0.8.1` as the test version. This branch prepares the integration with
-stackrivals.io **without new formats**: `SRP2` and any other new contract wait for web Claude's
-approval.
+stackrivals.io. New formats come from the website: `SRP2` v1 was defined there on 2026-11-04 (below).
 
+- **SRP2 v1 (2026-11-04, defined by stackrivals.io)** — the website answered C3 with its own spec (`docs/WOW_SRP2.md`
+  on the website; shared vectors `docs/vectors/srp2_v1.json`, catalog `docs/vectors/cosmetics_catalog_v1.json`):
+  - `AccountCodes.parseProfile2` / `profile2`: SRP1's fields 1–18 (same rules) + `shards`, `asOf`, `equipped`
+    (skin / frame / victory), `owned` (sorted ids, byte order), `events` (Shard Storm / XP Overdrive, up / live).
+    All 16 website parse vectors decode or fail exactly as stated, and every decoded code re-encodes byte for byte.
+  - **Import**: an `SRP2` paste goes through the same checks as `SRP1` (character, link, clock, newest wins). SRP1
+    stays fully supported; an `SRP3` is refused with "update" (the `newer_format` flow vector now uses SRP3).
+  - **Profile view**: `format`, `shards` (the Profile tab's prepared "N SHARDS" now fills from SRP2), `asOf`,
+    `equipped`, `owned`, `events`. Saved and sanitised (bounded like the parser).
+  - **Display only**: no signature check yet (SRP2-SIG v1 = Ed25519, a pure-Lua verifier is the next step), so the
+    state stays LINKED - UNVERIFIED and nothing is applied, bought or claimed from an SRP2 code. No local Shards.
 - **Profile view** (`Account.profileView()`): the Profile tab reads one format-independent view
   instead of the raw snapshot. A later approved format is mapped into the same shape, so the screen
   doesn't change per format. It records where the data came from (`source = "manual"`), when the

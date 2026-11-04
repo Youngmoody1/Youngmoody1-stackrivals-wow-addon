@@ -144,7 +144,8 @@ function Acc.import(text)
   if head == "SRL1" then return nil, "is_request" end
   if head == "SR1R" then return nil, "is_result" end
   if head == "SR1C" then return nil, "is_challenge" end
-  local p, why = A().parseProfile(text)
+  local p, why
+  if head == "SRP2" then p, why = A().parseProfile2(text) else p, why = A().parseProfile(text) end
   if not p then return nil, why end
   local me = Acc.me()
   if not me or not ns.Comm.same(p.player, me) then return nil, "player" end
@@ -174,6 +175,8 @@ function Acc.import(text)
     wins = p.wins, losses = p.losses, draws = p.draws, history = p.history,
     achUnlocked = p.achUnlocked, achTotal = p.achTotal, cosOwned = p.cosOwned, cosEquipped = p.cosEquipped,
     signed = p.sig ~= nil, check = p.check,
+    -- SRP2 only (nil from SRP1): the website's balance, ownership and events as of asOf — display only
+    format = p.format, shards = p.shards, asOf = p.asOf, equipped = p.equipped, owned = p.owned, events = p.events,
   }
   r.lastSync = t
   r.note = nil
@@ -183,21 +186,22 @@ end
 --- What the Profile tab shows, independent of the snapshot format that delivered it.
 --- Every later format (once stackrivals.io approves one) maps into this same shape, so the UI
 --- never reads a format directly. Fields a format doesn't carry stay nil and aren't shown.
---- shards: the website's balance, display only. SRP1 carries none, so it is always nil for now;
---- the addon never computes, adds or spends Shards.
+--- shards: the website's balance, display only (SRP2; SRP1 carries none, so it is nil then).
+--- The addon never computes, adds or spends Shards. equipped / owned / events (SRP2) are display data as of asOf:
+--- nothing is applied, bought or claimed from them (no signature check in this version).
 function Acc.profileView()
   local st, r = Acc.state()
   local pr = r and r.profile
   if not pr then return nil, st end
   return {
-    format = "SRP1", source = "manual",           -- pasted by the player; no live connection exists
-    asOf = pr.issued, importedAt = r.lastSync, expires = pr.expires, stale = (st == "not_synced"),
+    format = pr.format or "SRP1", source = "manual", -- pasted by the player; no live connection exists
+    asOf = pr.asOf or pr.issued, importedAt = r.lastSync, expires = pr.expires, stale = (st == "not_synced"),
     signed = pr.signed, verified = false,          -- no signature check in this version
     name = pr.name, rank = pr.rank, level = pr.level, xp = pr.xp, xpNext = pr.xpNext,
     season = pr.season, seasonPct = pr.seasonPct, wins = pr.wins, losses = pr.losses, draws = pr.draws,
     achUnlocked = pr.achUnlocked, achTotal = pr.achTotal, cosOwned = pr.cosOwned, cosEquipped = pr.cosEquipped,
     history = pr.history,
-    shards = nil,
+    shards = pr.shards, equipped = pr.equipped or {}, owned = pr.owned or {}, events = pr.events or {},
   }, st
 end
 
@@ -249,6 +253,28 @@ function Acc.sanitize(raw)
             cosOwned = num(pr.cosOwned, 0, 99999), cosEquipped = txt(pr.cosEquipped, 24),
             signed = pr.signed == true, check = id(pr.check, "^%x+$", 8, 8) or "00000000",
           }
+          if pr.format == "SRP2" then -- SRP2 extras, bounded like the parser (anything else is dropped)
+            local P2, cid = o.profile, function(v) return id(v, "^[a-z0-9_]+$", 1, 32) end
+            P2.format, P2.shards = "SRP2", num(pr.shards, 0, 1e12)
+            local asOf = num(pr.asOf, 0, 1e11)
+            P2.asOf = (asOf and asOf <= issued and issued - asOf <= 86400) and asOf or issued
+            P2.equipped, P2.owned, P2.events = {}, {}, {}
+            if type(pr.equipped) == "table" then
+              for _, slot in ipairs({ "skin", "frame", "victory" }) do P2.equipped[slot] = cid(pr.equipped[slot]) end
+            end
+            if type(pr.owned) == "table" then
+              for i = 1, math.min(#pr.owned, 64) do local v = cid(pr.owned[i]); if v then P2.owned[#P2.owned + 1] = v end end
+            end
+            if type(pr.events) == "table" then
+              for i = 1, math.min(#pr.events, 4) do
+                local e = pr.events[i]
+                if type(e) == "table" and (e.kind == "storm" or e.kind == "overdrive") and (e.state == "up" or e.state == "live") then
+                  local s0, e0, v0 = num(e.start, 0, 1e11), num(e["end"], 0, 1e11), num(e.value, 0, 1e9)
+                  if s0 and e0 and v0 and e0 > s0 then P2.events[#P2.events + 1] = { kind = e.kind, state = e.state, start = s0, ["end"] = e0, value = v0 } end
+                end
+              end
+            end
+          end
           o.lastSync = num(r.lastSync, 0, 1e11)
         end
       end

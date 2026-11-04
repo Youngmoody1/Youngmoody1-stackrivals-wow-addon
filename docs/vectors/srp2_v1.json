@@ -1,0 +1,408 @@
+{
+  "format": "SRP2 v1 (DRAFT v1 extension) + SRP2-SIG v1",
+  "spec": "docs/WOW_SRP2.md",
+  "reference": "src/lib/wow/srp2.ts",
+  "testKey": {
+    "kid": "t1",
+    "seed": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+    "public": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+    "note": "RFC 8032 §7.1 TEST 1 — publicly known, tests only"
+  },
+  "fields": [
+    "SRP2",
+    "1–18 = SRP1 fields 1–18",
+    "19 shards",
+    "20 asOf",
+    "21 equipped",
+    "22 owned",
+    "23 events",
+    "24 sig",
+    "25 check"
+  ],
+  "parse": [
+    {
+      "name": "full",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.7bb7b816",
+      "expect": {
+        "ok": true,
+        "snapshot": {
+          "linkId": "k3v9q2m7x1aa",
+          "player": "Alice-Realm",
+          "accountId": "6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01",
+          "name": "Alice Stack",
+          "issued": 1793000060,
+          "expires": 1793604860,
+          "level": 12,
+          "xp": 1240,
+          "xpNext": 2000,
+          "rank": null,
+          "season": "Season 1",
+          "seasonPct": 45,
+          "wins": 12,
+          "losses": 8,
+          "draws": 1,
+          "history": [
+            {
+              "mode": "bot",
+              "res": "w",
+              "my": 12000,
+              "their": 9000,
+              "at": 1793000000
+            }
+          ],
+          "achUnlocked": 1,
+          "achTotal": 4,
+          "cosOwned": 6,
+          "cosEquipped": "Solar Inferno",
+          "sig": null,
+          "shards": 1250,
+          "asOf": 1793000060,
+          "equipped": {
+            "skin": "skin_solar_inferno",
+            "frame": "frame_electric_blue",
+            "victory": "victory_fireworks"
+          },
+          "owned": [
+            "frame_electric_blue",
+            "skin_circuit",
+            "skin_mono",
+            "skin_shapes",
+            "skin_solar_inferno",
+            "victory_fireworks"
+          ],
+          "events": [
+            {
+              "kind": "storm",
+              "state": "up",
+              "start": 1793003660,
+              "end": 1793004560,
+              "value": 25
+            },
+            {
+              "kind": "overdrive",
+              "state": "live",
+              "start": 1792999460,
+              "end": 1793003060,
+              "value": 2
+            }
+          ]
+        }
+      },
+      "why": "Shards, asOf, three equipped slots, six owned ids (sorted), an upcoming storm and a live 2× Overdrive"
+    },
+    {
+      "name": "minimal",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.-.tni7p8.-.-.-.-.7b692e15",
+      "expect": {
+        "ok": true,
+        "snapshot": {
+          "linkId": "k3v9q2m7x1aa",
+          "player": "Alice-Realm",
+          "accountId": "6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01",
+          "name": "Alice Stack",
+          "issued": 1793000060,
+          "expires": 1793604860,
+          "level": 12,
+          "xp": 1240,
+          "xpNext": 2000,
+          "rank": null,
+          "season": "Season 1",
+          "seasonPct": 45,
+          "wins": 12,
+          "losses": 8,
+          "draws": 1,
+          "history": [
+            {
+              "mode": "bot",
+              "res": "w",
+              "my": 12000,
+              "their": 9000,
+              "at": 1793000000
+            }
+          ],
+          "achUnlocked": 1,
+          "achTotal": 4,
+          "cosOwned": 6,
+          "cosEquipped": "Solar Inferno",
+          "sig": null,
+          "shards": null,
+          "asOf": 1793000060,
+          "equipped": {},
+          "owned": [],
+          "events": []
+        }
+      },
+      "why": "every extra '-': Shards not shown, nothing equipped / owned, no events"
+    },
+    {
+      "name": "signed",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.t19twJJSqBrqgGMC558z78ChXS4uJBlgMGL0SdmKxAkRS8PbEUstzfr0bMzw8EupoTIPw4ooZJgm2aGfg6pVmxDg.3f621c6f",
+      "expect": {
+        "ok": true,
+        "snapshot": {
+          "linkId": "k3v9q2m7x1aa",
+          "player": "Alice-Realm",
+          "accountId": "6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01",
+          "name": "Alice Stack",
+          "issued": 1793000060,
+          "expires": 1793604860,
+          "level": 12,
+          "xp": 1240,
+          "xpNext": 2000,
+          "rank": null,
+          "season": "Season 1",
+          "seasonPct": 45,
+          "wins": 12,
+          "losses": 8,
+          "draws": 1,
+          "history": [
+            {
+              "mode": "bot",
+              "res": "w",
+              "my": 12000,
+              "their": 9000,
+              "at": 1793000000
+            }
+          ],
+          "achUnlocked": 1,
+          "achTotal": 4,
+          "cosOwned": 6,
+          "cosEquipped": "Solar Inferno",
+          "sig": "t19twJJSqBrqgGMC558z78ChXS4uJBlgMGL0SdmKxAkRS8PbEUstzfr0bMzw8EupoTIPw4ooZJgm2aGfg6pVmxDg",
+          "shards": 1250,
+          "asOf": 1793000060,
+          "equipped": {
+            "skin": "skin_solar_inferno",
+            "frame": "frame_electric_blue",
+            "victory": "victory_fireworks"
+          },
+          "owned": [
+            "frame_electric_blue",
+            "skin_circuit",
+            "skin_mono",
+            "skin_shapes",
+            "skin_solar_inferno",
+            "victory_fireworks"
+          ],
+          "events": [
+            {
+              "kind": "storm",
+              "state": "up",
+              "start": 1793003660,
+              "end": 1793004560,
+              "value": 25
+            },
+            {
+              "kind": "overdrive",
+              "state": "live",
+              "start": 1792999460,
+              "end": 1793003060,
+              "value": 2
+            }
+          ]
+        }
+      },
+      "why": "the same as full, signed (field 24)"
+    },
+    {
+      "name": "check",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.7bb7b810",
+      "expect": {
+        "ok": false,
+        "error": "check"
+      },
+      "why": "check value wrong (typo)"
+    },
+    {
+      "name": "fields",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.64b6a7cb",
+      "expect": {
+        "ok": false,
+        "error": "fields"
+      },
+      "why": "a field missing"
+    },
+    {
+      "name": "version_srp3",
+      "code": "SRP3.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.df60ad33",
+      "expect": {
+        "ok": false,
+        "error": "version"
+      },
+      "why": "a newer version: ask the player to update the addon"
+    },
+    {
+      "name": "base_level",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.zzzzzzz.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.fe8f4ea7",
+      "expect": {
+        "ok": false,
+        "error": "base"
+      },
+      "why": "an SRP1 field (level) out of range — fields 1–18 follow SRP1's rules exactly"
+    },
+    {
+      "name": "shards_bad",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.-1.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.65e49232",
+      "expect": {
+        "ok": false,
+        "error": "shards"
+      },
+      "why": "Shards: '-' or base 36 ≤ 1e12"
+    },
+    {
+      "name": "asof_future",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p9.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.ff376b89",
+      "expect": {
+        "ok": false,
+        "error": "asOf"
+      },
+      "why": "asOf after issued"
+    },
+    {
+      "name": "asof_old",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tngd17.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.ebe240a1",
+      "expect": {
+        "ok": false,
+        "error": "asOf"
+      },
+      "why": "asOf more than one day before issued"
+    },
+    {
+      "name": "equipped_slot",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.hat:skin_mono.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.ff8a8d6c",
+      "expect": {
+        "ok": false,
+        "error": "equipped"
+      },
+      "why": "unknown slot (skin / frame / victory)"
+    },
+    {
+      "name": "equipped_twice",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_mono~skin:skin_wire.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.8e190672",
+      "expect": {
+        "ok": false,
+        "error": "equipped"
+      },
+      "why": "a slot at most once"
+    },
+    {
+      "name": "owned_unsorted",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.skin_mono~skin_circuit.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.89521be2",
+      "expect": {
+        "ok": false,
+        "error": "owned"
+      },
+      "why": "owned ids sorted ascending (byte order), no duplicates"
+    },
+    {
+      "name": "owned_duplicate",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.skin_mono~skin_mono.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.2b0bd0bc",
+      "expect": {
+        "ok": false,
+        "error": "owned"
+      },
+      "why": "duplicate id"
+    },
+    {
+      "name": "event_kind",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.raid-live-1-2-3.-.345b6e1d",
+      "expect": {
+        "ok": false,
+        "error": "events"
+      },
+      "why": "unknown event kind (storm / overdrive)"
+    },
+    {
+      "name": "event_times",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-5-5-1.-.b15370ba",
+      "expect": {
+        "ok": false,
+        "error": "events"
+      },
+      "why": "end must be after start"
+    }
+  ],
+  "sig": [
+    {
+      "name": "valid",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.t19twJJSqBrqgGMC558z78ChXS4uJBlgMGL0SdmKxAkRS8PbEUstzfr0bMzw8EupoTIPw4ooZJgm2aGfg6pVmxDg.3f621c6f",
+      "expect": {
+        "state": "verified",
+        "kid": "t1"
+      },
+      "why": "signed with t1 over 'SRP2-SIG-v1\\n' + fields 0–23"
+    },
+    {
+      "name": "unsigned",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.-.7bb7b816",
+      "expect": {
+        "state": "unverified",
+        "reason": "unsigned"
+      },
+      "why": "sig '-': show UNVERIFIED, never apply a cosmetic"
+    },
+    {
+      "name": "unknown_kid",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.zz9twJJSqBrqgGMC558z78ChXS4uJBlgMGL0SdmKxAkRS8PbEUstzfr0bMzw8EupoTIPw4ooZJgm2aGfg6pVmxDg.7c3abb5c",
+      "expect": {
+        "state": "unverified",
+        "reason": "unknown_kid"
+      },
+      "why": "a kid the addon does not know"
+    },
+    {
+      "name": "shards_changed",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.255r.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.t19twJJSqBrqgGMC558z78ChXS4uJBlgMGL0SdmKxAkRS8PbEUstzfr0bMzw8EupoTIPw4ooZJgm2aGfg6pVmxDg.daaaf3fb",
+      "expect": {
+        "state": "invalid",
+        "reason": "signature"
+      },
+      "why": "the balance edited and the check recomputed"
+    },
+    {
+      "name": "owned_changed",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.skin_mono~skin_prismatic_overdrive.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.t19twJJSqBrqgGMC558z78ChXS4uJBlgMGL0SdmKxAkRS8PbEUstzfr0bMzw8EupoTIPw4ooZJgm2aGfg6pVmxDg.b995ca1d",
+      "expect": {
+        "state": "invalid",
+        "reason": "signature"
+      },
+      "why": "ownership is signed"
+    },
+    {
+      "name": "equipped_changed",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_prismatic_overdrive.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.t19twJJSqBrqgGMC558z78ChXS4uJBlgMGL0SdmKxAkRS8PbEUstzfr0bMzw8EupoTIPw4ooZJgm2aGfg6pVmxDg.dcf5d21d",
+      "expect": {
+        "state": "invalid",
+        "reason": "signature"
+      },
+      "why": "equipped is signed"
+    },
+    {
+      "name": "event_changed",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-live-1-zzzzzz-zz.t19twJJSqBrqgGMC558z78ChXS4uJBlgMGL0SdmKxAkRS8PbEUstzfr0bMzw8EupoTIPw4ooZJgm2aGfg6pVmxDg.db222b14",
+      "expect": {
+        "state": "invalid",
+        "reason": "signature"
+      },
+      "why": "events are signed"
+    },
+    {
+      "name": "level_changed",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.2r.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.t19twJJSqBrqgGMC558z78ChXS4uJBlgMGL0SdmKxAkRS8PbEUstzfr0bMzw8EupoTIPw4ooZJgm2aGfg6pVmxDg.2ab04966",
+      "expect": {
+        "state": "invalid",
+        "reason": "signature"
+      },
+      "why": "the SRP1 part is signed too"
+    },
+    {
+      "name": "srp1_signature_moved",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.6f1c2b9e-0d4a-4c1e-9a77-2f3b5c8d9e01.416c69636520537461636b.tni7p8.tnv6d8.c.yg.1jk.-.536561736f6e2031.45.c.8.1.bot-w-99c-6y0-tni7nk.1-4.6-536f6c617220496e6665726e6f.yq.tni7p8.skin:skin_solar_inferno~frame:frame_electric_blue~victory:victory_fireworks.frame_electric_blue~skin_circuit~skin_mono~skin_shapes~skin_solar_inferno~victory_fireworks.storm-up-tniah8-tnib68-p~overdrive-live-tni78k-tnia0k-2.t1Y57LKzOcUVtxR_RXGVHUTfMZJQ7BXRREGNdv95Ma-DyGtjPKLCN6oimrJLsR4CbwkyzhM7p4v4B4ZtnPYVnuDw.4cad0a9f",
+      "expect": {
+        "state": "invalid",
+        "reason": "signature"
+      },
+      "why": "a valid SRP1 signature of the same profile does not verify in SRP2 (different domain string)"
+    }
+  ]
+}

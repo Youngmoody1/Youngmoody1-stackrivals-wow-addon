@@ -89,7 +89,7 @@ function M.build()
   case("no_request", "a snapshot without a link request on this character", 11, "none", T0 + 60, P())
   case("request_expired", "the link request is older than 15 minutes", 12, "pending", T0 + 16 * 60, P({ issued = T0 + 15 * 60 }))
   case("newer_format", "an unknown newer version is refused, never guessed", 13, "linked", T0 + 3600,
-    function(A, base) return "SRP2" .. A.profile(with(base, { issued = T0 + 3000 })):sub(5) end)
+    function(A, base) return "SRP3" .. A.profile(with(base, { issued = T0 + 3000 })):sub(5) end)
   case("link_request_pasted", "the player's own SRL1 pasted in the snapshot box", 14, "pending", T0 + 60,
     function(A, base) return A.linkRequest({ code = A.makeWebCode(WEB_CODE), platform = "wow-forever", player = "Alice-Realm", linkId = base.linkId, addon = "0.9.0", engine = 1, issued = T0 }) end)
   case("typo", "one character changed: the check catches it", 15, "pending", T0 + 60, function(A, base)

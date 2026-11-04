@@ -1,0 +1,263 @@
+{
+  "format": "StackRivals cosmetics catalog v1 (display reference for the WoW addon)",
+  "source": "public.cosmetics on stackrivals.io, read 2026-11-04 (all rows active)",
+  "note": "Display only. Prices and availability are decided by the website; ownership and equipped items come from a signed SRP2 code. The Shop is not open yet on the website (shop_enabled off), so the addon shows purchasable items as Upcoming and never sells anything.",
+  "items": [
+    {
+      "id": "frame_electric_blue",
+      "name": "Electric Blue",
+      "slot": "frame",
+      "rarity": "common",
+      "acquisition": "purchase",
+      "priceShards": 500
+    },
+    {
+      "id": "frame_neon_rival",
+      "name": "Neon Rival",
+      "slot": "frame",
+      "rarity": "common",
+      "acquisition": "purchase",
+      "priceShards": 500
+    },
+    {
+      "id": "frame_rival_crown",
+      "name": "Rival Crown",
+      "slot": "frame",
+      "rarity": "legendary",
+      "acquisition": "level_reward",
+      "priceShards": null
+    },
+    {
+      "id": "frame_steel",
+      "name": "Steel Frame",
+      "slot": "frame",
+      "rarity": "rare",
+      "acquisition": "level_reward",
+      "priceShards": null
+    },
+    {
+      "id": "s1_bronze_frame",
+      "name": "S1 Bronze frame",
+      "slot": "frame",
+      "rarity": "season",
+      "acquisition": "season_reward",
+      "priceShards": null
+    },
+    {
+      "id": "s1_diamond_frame",
+      "name": "S1 Diamond frame",
+      "slot": "frame",
+      "rarity": "season",
+      "acquisition": "season_reward",
+      "priceShards": null
+    },
+    {
+      "id": "s1_gold_frame",
+      "name": "S1 Gold frame",
+      "slot": "frame",
+      "rarity": "season",
+      "acquisition": "season_reward",
+      "priceShards": null
+    },
+    {
+      "id": "s1_master_frame",
+      "name": "S1 Master frame",
+      "slot": "frame",
+      "rarity": "season",
+      "acquisition": "season_reward",
+      "priceShards": null
+    },
+    {
+      "id": "s1_platinum_frame",
+      "name": "S1 Platinum frame",
+      "slot": "frame",
+      "rarity": "season",
+      "acquisition": "season_reward",
+      "priceShards": null
+    },
+    {
+      "id": "s1_rival_frame",
+      "name": "S1 Rival frame",
+      "slot": "frame",
+      "rarity": "season",
+      "acquisition": "season_reward",
+      "priceShards": null
+    },
+    {
+      "id": "s1_silver_frame",
+      "name": "S1 Silver frame",
+      "slot": "frame",
+      "rarity": "season",
+      "acquisition": "season_reward",
+      "priceShards": null
+    },
+    {
+      "id": "s1_bronze_skin",
+      "name": "S1 Bronze skin",
+      "slot": "skin",
+      "rarity": "season",
+      "acquisition": "season_reward",
+      "priceShards": null
+    },
+    {
+      "id": "s1_diamond_skin",
+      "name": "S1 Diamond skin",
+      "slot": "skin",
+      "rarity": "season",
+      "acquisition": "season_reward",
+      "priceShards": null
+    },
+    {
+      "id": "s1_gold_skin",
+      "name": "S1 Gold skin",
+      "slot": "skin",
+      "rarity": "season",
+      "acquisition": "season_reward",
+      "priceShards": null
+    },
+    {
+      "id": "s1_master_skin",
+      "name": "S1 Master skin",
+      "slot": "skin",
+      "rarity": "season",
+      "acquisition": "season_reward",
+      "priceShards": null
+    },
+    {
+      "id": "s1_platinum_skin",
+      "name": "S1 Platinum skin",
+      "slot": "skin",
+      "rarity": "season",
+      "acquisition": "season_reward",
+      "priceShards": null
+    },
+    {
+      "id": "s1_rival_skin",
+      "name": "S1 Rival skin",
+      "slot": "skin",
+      "rarity": "season",
+      "acquisition": "season_reward",
+      "priceShards": null
+    },
+    {
+      "id": "s1_silver_skin",
+      "name": "S1 Silver skin",
+      "slot": "skin",
+      "rarity": "season",
+      "acquisition": "season_reward",
+      "priceShards": null
+    },
+    {
+      "id": "skin_circuit",
+      "name": "Circuit",
+      "slot": "skin",
+      "rarity": "common",
+      "acquisition": "default",
+      "priceShards": null
+    },
+    {
+      "id": "skin_crimson_core",
+      "name": "Crimson Core",
+      "slot": "skin",
+      "rarity": "epic",
+      "acquisition": "level_reward",
+      "priceShards": null
+    },
+    {
+      "id": "skin_ember_line",
+      "name": "Ember Line",
+      "slot": "skin",
+      "rarity": "rare",
+      "acquisition": "level_reward",
+      "priceShards": null
+    },
+    {
+      "id": "skin_mono",
+      "name": "Monochrome",
+      "slot": "skin",
+      "rarity": "common",
+      "acquisition": "default",
+      "priceShards": null
+    },
+    {
+      "id": "skin_prismatic_overdrive",
+      "name": "Prismatic Overdrive",
+      "slot": "skin",
+      "rarity": "legendary",
+      "acquisition": "purchase",
+      "priceShards": 2400
+    },
+    {
+      "id": "skin_shapes",
+      "name": "Clear Shapes",
+      "slot": "skin",
+      "rarity": "common",
+      "acquisition": "default",
+      "priceShards": null
+    },
+    {
+      "id": "skin_solar_inferno",
+      "name": "Solar Inferno",
+      "slot": "skin",
+      "rarity": "rare",
+      "acquisition": "purchase",
+      "priceShards": 900
+    },
+    {
+      "id": "skin_void_reactor",
+      "name": "Void Reactor",
+      "slot": "skin",
+      "rarity": "epic",
+      "acquisition": "purchase",
+      "priceShards": 1400
+    },
+    {
+      "id": "skin_wire",
+      "name": "Wireframe",
+      "slot": "skin",
+      "rarity": "common",
+      "acquisition": "default",
+      "priceShards": null
+    },
+    {
+      "id": "victory_block_rain",
+      "name": "Block rain",
+      "slot": "victory",
+      "rarity": "rare",
+      "acquisition": "level_reward",
+      "priceShards": null
+    },
+    {
+      "id": "victory_fireworks",
+      "name": "Fireworks",
+      "slot": "victory",
+      "rarity": "common",
+      "acquisition": "default",
+      "priceShards": null
+    },
+    {
+      "id": "victory_line_storm",
+      "name": "Line storm",
+      "slot": "victory",
+      "rarity": "rare",
+      "acquisition": "level_reward",
+      "priceShards": null
+    },
+    {
+      "id": "victory_shard_tempest",
+      "name": "Shard Tempest",
+      "slot": "victory",
+      "rarity": "epic",
+      "acquisition": "purchase",
+      "priceShards": 1400
+    },
+    {
+      "id": "victory_supernova",
+      "name": "Supernova Victory",
+      "slot": "victory",
+      "rarity": "legendary",
+      "acquisition": "purchase",
+      "priceShards": 3600
+    }
+  ]
+}
