@@ -417,6 +417,23 @@ S.list = {
     ns.UI:ShowSheet("account"); ns.UI.accountTab = "profile"; ns.UI:RefreshAccount(); M.frames_step(1)
     return M, ns
   end },
+  { "23c2-profile-stale", "Account - Profile tab, snapshot older than 7 days (OUT OF DATE, signature not checked)", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS("")
+    local T0 = 1793000000
+    M.serverTime = T0
+    local AC = ns.AccountCodes
+    local r = AC.parseLinkRequest(ns.Account.startLink(AC.makeWebCode("A7K9P2X")))
+    M.serverTime = T0 + 300
+    ns.Account.import(AC.profile({ linkId = r.linkId, player = r.player, accountId = "acc_7f3k2", name = "Alice Stack",
+      issued = T0 + 200, expires = T0 + 30 * 86400, level = 12, xp = 1240, xpNext = 2000, rank = "Gold II",
+      season = "Season 3", seasonPct = 45, wins = 12, losses = 8, draws = 1, achUnlocked = 14, achTotal = 60, cosOwned = 5, cosEquipped = "Neon Grid",
+      sig = "abcdefghijklmnopqrstuvwxyz012345",
+      history = { { mode = "b120", res = "w", my = 12300, their = 9800, at = T0 - 3600 }, { mode = "s180", res = "l", my = 8000, their = 15000, at = T0 - 86400 },
+        { mode = "daily", res = "w", my = 21000, their = 0, at = T0 - 2 * 86400 }, { mode = "spellbot", res = "d", my = 9000, their = 9000, at = T0 - 3 * 86400 } } }))
+    M.serverTime = T0 + 12 * 86400
+    ns.UI:ShowSheet("account"); ns.UI.accountTab = "profile"; ns.UI:RefreshAccount(); M.frames_step(1)
+    return M, ns
+  end },
   { "23d-sync", "Account - Sync: play a challenge code, copy result codes (manual copy / paste)", function()
     local M, ns = boot(); SlashCmdList.STACKRIVALS("")
     M.serverTime = 1793000000

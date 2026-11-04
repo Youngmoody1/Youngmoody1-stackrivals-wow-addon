@@ -327,4 +327,75 @@ describe("Account sheet (simulated client)", function()
   end)
 end)
 
+describe("profile view: one shape for every snapshot format, display only", function()
+  local function linked(seed)
+    local net = NS.new({ seed = seed })
+    local c = net.add({ name = "Alice", saved = { seenHelp = true } })
+    c.M.serverTime = T0
+    local req = assert(c.ns.Account.startLink(A.makeWebCode("VXEW001")))
+    local r = A.parseLinkRequest(req)
+    c.M.serverTime = T0 + 60
+    assert(c.ns.Account.import(snap({ linkId = r.linkId, issued = T0 + 30, expires = T0 + 30 + 14 * 86400 })))
+    return c, c.ns.Account, r
+  end
+  local function openProfile(c)
+    c.env.SlashCmdList.STACKRIVALS("")
+    c.ns.UI:ShowSheet("account")
+    c.ns.UI.accountSheet.tabs.profile:Click()
+    return c.ns.UI.accountSheet.prof
+  end
+
+  it("not linked: no view", function()
+    local net = NS.new({ seed = 40 })
+    local c = net.add({ name = "Alice" })
+    local v, st = c.ns.Account.profileView()
+    eq(v, nil); eq(st, "not_linked")
+  end)
+  it("SRP1 maps into the view: when the website made it, when it was pasted, by hand; no Shards", function()
+    local c, Acc = linked(41)
+    local v, st = Acc.profileView()
+    eq(st, "linked")
+    eq(v.format, "SRP1"); eq(v.source, "manual"); eq(v.asOf, T0 + 30); eq(v.importedAt, T0 + 60); eq(v.stale, false)
+    eq(v.name, "Alice Stack"); eq(v.level, 12); eq(v.xp, 1240); eq(v.rank, "Gold II"); eq(#v.history, 2)
+    eq(v.shards, nil, "SRP1 carries no Shards; the addon never makes up a balance")
+    eq(v.verified, false, "no signature check in this version")
+  end)
+  it("the Profile tab says when it was last updated and that it may be out of date; no Shards row", function()
+    local c = linked(42)
+    local p = openProfile(c)
+    local foot = p.foot:GetText()
+    ok(foot:find("Last updated on stackrivals.io: " .. c.env.date("%Y-%m-%d %H:%M", T0 + 30), 1, true), foot)
+    ok(foot:find("Imported by hand, may be out of date", 1, true), foot)
+    ok(foot:find("Display only", 1, true), foot)
+    ok(not foot:find("OUT OF DATE", 1, true), foot)
+    ok(not p.extra:GetText():find("Shards", 1, true), p.extra:GetText())
+  end)
+  it("after 7 days the view is stale and the tab says OUT OF DATE", function()
+    local c, Acc = linked(43)
+    c.M.serverTime = T0 + 30 + 8 * 86400
+    local v, st = Acc.profileView()
+    eq(st, "not_synced"); eq(v.stale, true)
+    local foot = openProfile(c).foot:GetText()
+    ok(foot:find("OUT OF DATE", 1, true), foot); ok(foot:find("8 days ago", 1, true), foot)
+  end)
+  it("a Shards row appears only when an approved format fills the view (shown as the website balance)", function()
+    local c, Acc = linked(44)
+    local real = Acc.profileView
+    Acc.profileView = function() local v, st = real(); v.shards = 1234; return v, st end
+    local text = openProfile(c).extra:GetText()
+    Acc.profileView = real
+    ok(text:find("Shards 1,234 (website balance)", 1, true), text)
+  end)
+  it("a newer format (SRP2) is refused with 'update' and leaves the current profile as it was", function()
+    local c, Acc, r = linked(45)
+    local before = Acc.profileView()
+    c.M.serverTime = T0 + 3600
+    local s2 = snap({ linkId = r.linkId, issued = T0 + 3000, expires = T0 + 86400 })
+    local okI, why = Acc.import("SRP2" .. s2:sub(5))
+    eq(okI, nil); eq(why, "version"); ok(Acc.ERRORS.version:find("update"), Acc.ERRORS.version)
+    local after = Acc.profileView()
+    eq(after.asOf, before.asOf); eq(after.importedAt, before.importedAt); eq(after.shards, nil)
+  end)
+end)
+
 return H

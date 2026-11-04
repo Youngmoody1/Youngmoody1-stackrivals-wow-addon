@@ -14,6 +14,22 @@ as far as their tests allow**. Nothing is uploaded or published without your exp
 | 3. Joint QA | 0.9.x → **1.0.0-beta** | Full journey on real clients: link → play in WoW → export → website imports and verifies → profile back in WoW. Plus multiplayer with real players (Loot Duel with 5, then a raid) | **Beta** on CurseForge, only after your GO, tagged only with the clients that passed | §3 Beta GO list |
 | 4. Launch | **1.0.0** | Stable release after full QA, docs and your approval | **Release** | §4 Release GO list |
 
+**Frozen test version (4 Nov 2026):** branch `alpha/0.8.1` at `2d1bd44` is the fixed reference
+for every phase 1 test. It gets no code changes.
+
+| Field | Value |
+|---|---|
+| Version | `## Version: 0.8.1` |
+| Interfaces | 16001, 11509, 120105, 20506, 50504, 38002 (= `tools/clients.json`) |
+| Addon code | `ae4c7f5` |
+| ZIP | `StackRivals-0.8.1.zip`, 82 files, equal to `git archive 2d1bd44 StackRivals` |
+| SHA-256 | `27fbb470f81c2a16ea106ba3a2a2aff43c86b777254596f0c4c611a611d7ea95` (the same on every rebuild) |
+| CI | green on `9176b8d`, `be664df`, `2d1bd44` (753 tests, Lua 5.1) |
+
+A bug found in a real client is fixed on `feature/web-integration` (0.9.x) with a regression test.
+Only a critical bug that blocks the test would get a `0.8.2` from `alpha/0.8.1`, and only with your
+approval.
+
 **Why no public version earlier:** a public stable build that later needs its account, XP, Shards
 or profile reworked would break players' saved data and trust. Internal builds may go out at any
 time.

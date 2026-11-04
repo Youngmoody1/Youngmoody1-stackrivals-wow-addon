@@ -267,8 +267,15 @@ function UI:RefreshAccount()
   end
 end
 
+--- "Last updated" line: when the website made the snapshot, and that it was pasted by hand.
+function UI.profileFootText(v)
+  return "Last updated on stackrivals.io: " .. when(v.asOf) .. " (" .. ago(v.asOf) .. "). "
+    .. (v.stale and "OUT OF DATE: export a new snapshot." or "Imported by hand, may be out of date.")
+    .. ((v.signed and not v.verified) and " Display only; signature not checked." or " Display only: the website decides.")
+end
+
 function UI:RefreshProfile(p, state, r)
-  local pr = r and r.profile
+  local pr = r and r.profile and ns.Account.profileView() -- the view, never the raw format
   local has = pr ~= nil
   p.empty:SetShown(not has)
   p.go:SetShown(not has and state ~= "pending")
@@ -292,7 +299,8 @@ function UI:RefreshProfile(p, state, r)
   p.stats:SetText(string.format("Wins %s  -  Losses %s  -  Draws %s%s", T.commas(pr.wins), T.commas(pr.losses), T.commas(pr.draws),
     games > 0 and string.format("  -  %d%% won", math.floor(100 * pr.wins / games + 0.5)) or ""))
   p.extra:SetText("Achievements " .. (pr.achUnlocked and (pr.achUnlocked .. " / " .. pr.achTotal) or "-")
-    .. "  -  Cosmetics " .. (pr.cosOwned and (pr.cosOwned .. " owned" .. (pr.cosEquipped and (", wearing " .. safe(pr.cosEquipped)) or "")) or "-"))
+    .. "  -  Cosmetics " .. (pr.cosOwned and (pr.cosOwned .. " owned" .. (pr.cosEquipped and (", wearing " .. safe(pr.cosEquipped)) or "")) or "-")
+    .. (pr.shards and ("  -  Shards " .. T.commas(pr.shards) .. " (website balance)") or ""))
   for i, row in ipairs(p.hist) do
     local h = pr.history[i]
     if h then
@@ -307,6 +315,7 @@ function UI:RefreshProfile(p, state, r)
     end
   end
   if #pr.history == 0 then p.hist[1].mode:SetShown(true); p.hist[1].mode:SetText("No matches yet.") end
-  p.foot:SetText("From stackrivals.io, snapshot " .. when(pr.issued) .. (state == "not_synced" and " (out of date)" or "")
-    .. ". Display only: the website is the authority." .. (pr.signed and " Signature not checked by this version." or ""))
+  p.foot:SetText(UI.profileFootText(pr))
+  local fc = pr.stale and C.gold or C.label
+  p.foot:SetTextColor(fc[1], fc[2], fc[3])
 end

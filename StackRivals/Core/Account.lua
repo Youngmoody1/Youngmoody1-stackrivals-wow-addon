@@ -162,6 +162,27 @@ function Acc.import(text)
   return true, result
 end
 
+--- What the Profile tab shows, independent of the snapshot format that delivered it.
+--- Every later format (once stackrivals.io approves one) maps into this same shape, so the UI
+--- never reads a format directly. Fields a format doesn't carry stay nil and aren't shown.
+--- shards: the website's balance, display only. SRP1 carries none, so it is always nil for now;
+--- the addon never computes, adds or spends Shards.
+function Acc.profileView()
+  local st, r = Acc.state()
+  local pr = r and r.profile
+  if not pr then return nil, st end
+  return {
+    format = "SRP1", source = "manual",           -- pasted by the player; no live connection exists
+    asOf = pr.issued, importedAt = r.lastSync, expires = pr.expires, stale = (st == "not_synced"),
+    signed = pr.signed, verified = false,          -- no signature check in this version
+    name = pr.name, rank = pr.rank, level = pr.level, xp = pr.xp, xpNext = pr.xpNext,
+    season = pr.season, seasonPct = pr.seasonPct, wins = pr.wins, losses = pr.losses, draws = pr.draws,
+    achUnlocked = pr.achUnlocked, achTotal = pr.achTotal, cosOwned = pr.cosOwned, cosEquipped = pr.cosEquipped,
+    history = pr.history,
+    shards = nil,
+  }, st
+end
+
 --- Forget the link on this PC (the website keeps its side until unlinked there).
 function Acc.unlink()
   local r = Acc.rec()

@@ -2,7 +2,7 @@
 ## Title: |cfff6f4f0Stack|r|cffe0242fRivals|r
 ## Notes: Competitive falling-block puzzle minigame. Classic, Time Trial, Daily Challenge, Spell Battle vs Bot, and Duels vs other StackRivals players (Quickplay, guild, friends). Pauses itself in combat.
 ## Author: StackRivals
-## Version: 0.8.1
+## Version: 0.9.0
 ## SavedVariables: StackRivalsDB
 ## IconTexture: Interface\AddOns\StackRivals\Media\icon
 ## AddonCompartmentFunc: StackRivals_OnAddonCompartmentClick

@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.9.0 (development) — Ready for the website integration (branch `feature/web-integration`, not released, not installed)
+
+0.8.1 is frozen on `alpha/0.8.1` as the test version. This branch prepares the integration with
+stackrivals.io **without new formats**: `SRP2` and any other new contract wait for web Claude's
+approval.
+
+- **Profile view** (`Account.profileView()`): the Profile tab reads one format-independent view
+  instead of the raw snapshot. A later approved format is mapped into the same shape, so the screen
+  doesn't change per format. It records where the data came from (`source = "manual"`), when the
+  website made it (`asOf`) and when it was pasted (`importedAt`).
+- **"Last updated"**: the Profile tab says "Last updated on stackrivals.io: <date> (<how long ago>).
+  Imported by hand, may be out of date." After 7 days it says, in gold, "OUT OF DATE: export a new
+  snapshot."
+- **Shards display prepared, not built**: the view has a `shards` field that `SRP1` never fills.
+  The Profile tab shows "Shards N (website balance)" only when an approved format provides it. The
+  addon never computes, adds or spends Shards.
+- Tests:
+  - the profile view and the "Last updated" line;
+  - no Shards row from `SRP1`;
+  - an `SRP2` paste is refused with "update" and leaves the profile untouched;
+  - **Loot Duel runs with no stackrivals.io account and never calls Account or Sync**, so it can't
+    feed XP or Shards.
+- Docs:
+  - `docs/TEST_LOG_FOREVER.md`: a point-by-point log for the first Forever test;
+  - a reception process for web Claude's next report in `docs/INTEGRATION_CHECKLIST.md`;
+  - the 0.8.1 freeze record in `docs/RELEASE_PLAN.md`.
+
 ## 0.8.1 — Diagnostics for every client, CurseForge preparation (branch `feature/multi-client`, development, not released, not installed)
 
 - **`/sr report`**: one copyable line (`SRDIAG1;…`) with the addon and engine version, the client type, project ID, interface and build, the Hardcore / Season of Discovery / trial flags, which APIs exist, WoW's addon chat lockdown right now and why, the instance type, group channel and size, loot method, message counters and send result codes, the last comm test, saved-data health, and errors StackRivals caught in its message handlers. No character, realm, guild, friend or chat data; nothing is sent anywhere. `tools/diag_report.py` turns it into a readable table and flags the usual causes. So players on clients we don't run can send us everything we need.

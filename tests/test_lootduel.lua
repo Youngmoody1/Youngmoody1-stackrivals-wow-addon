@@ -162,6 +162,35 @@ describe("Loot Duel between simulated clients", function()
     for _, c in pairs(cs) do eq(c.M.lootGiven, nil); eq(c.M.lootChanged, nil); eq(c.M.chat[1], nil, "nothing posted without a click") end
   end)
 
+  it("works without any stackrivals.io account and never touches Account / Sync (no XP or Shards from a Loot Duel)", function()
+    local net, cs = party(12, { "Lead", "Ann", "Ben" })
+    local calls = {}
+    for _, c in pairs(cs) do
+      eq((c.ns.Account.state()), "not_linked", "nobody is linked")
+      for _, modName in ipairs({ "Account", "Sync" }) do
+        local mod = c.ns[modName]
+        for k, f in pairs(mod) do
+          if type(f) == "function" then
+            mod[k] = function(...) calls[#calls + 1] = modName .. "." .. k; return f(...) end
+          end
+        end
+      end
+    end
+    ok(LD(cs.Lead).create(19019, "l060", { "Ann-Realm", "Ben-Realm" }))
+    net.step(60)
+    LD(cs.Ann).answer(true); LD(cs.Ben).answer(true)
+    net.step(120)
+    ok(LD(cs.Lead).start())
+    raceToEnd(net, cs)
+    eq(table.concat(calls, ","), "", "Loot Duel called Account / Sync")
+    for n, c in pairs(cs) do
+      local d = LD(c).current
+      eq(d.state, "done", n)
+      ok(d.winner or #d.tied > 1, n .. " has a result (winner or tie)")
+      eq((c.ns.Account.state()), "not_linked", n .. " is still not linked")
+    end
+  end)
+
   it("a forged result (score not matching the log) is rejected on every PC", function()
     local net, cs = party(11, { "Lead", "Ann", "Ben" })
     LD(cs.Lead).create(19019, "l060", { "Ann-Realm", "Ben-Realm" }); net.step(60)

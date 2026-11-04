@@ -35,9 +35,9 @@ WoW test.
 | # | Integration point | Addon today (0.8.1) | Website must deliver | Format to agree | Tests that must pass | Missing | Real WoW test |
 |---|---|---|---|---|---|---|---|
 | 1 | **Account ID and linking** | Built: web code → `SRL1` link request → `SRP1` confirmation; PENDING / LINKED / NOT SYNCED; Unlink | Link page with one-time code (Crockford + check symbol, ~10 min, single use); checks `SRL1`; binding `{accountId, player, platform, linkId}`; unlink | `SRL1` + web code (draft v1; 84 Lua = TypeScript vectors) | `docs/vectors/account_v1.json` byte for byte on the web; addon `test_account.lua` | Web side; agreement of draft v1 | Typing / pasting codes in each client's edit boxes |
-| 2 | **Player profile** (name, record, history) | Built: `SRP1` snapshot shown in the Profile tab (display only, expires 7 days) | "Export snapshot" producing `SRP1` | `SRP1` (draft v1) | vectors; addon profile tests | Web export | Paste a real `SRP1` |
+| 2 | **Player profile** (name, record, history) | Built: `SRP1` snapshot shown in the Profile tab (display only, expires 7 days). Since 0.9.0-dev the tab reads a format-independent view (`Account.profileView()`) and says "Last updated on stackrivals.io: <date> (<ago>). Imported by hand, may be out of date." (OUT OF DATE after 7 days) | "Export snapshot" producing `SRP1` | `SRP1` (draft v1) | vectors; addon profile tests | Web export | Paste a real `SRP1` |
 | 3 | **XP and level** | Shown from `SRP1` (`level`, `xp`, `xpNext`) | The values, computed by the website | in `SRP1` | as #2 | The web's XP rules (theirs alone) | – |
-| 4 | **Shards balance** | **Not shown yet** (`SRP1` has no field) | The balance in a profile snapshot, display only | **`SRP2` proposal** (below): `shards36` + `asOf` | new vectors for `SRP2`; the addon keeps reading `SRP1` | Web decision; then the addon parser + Profile row | Paste `SRP2` |
+| 4 | **Shards balance** | **Not shown yet** (`SRP1` has no field). Prepared in 0.9.0-dev: the view has a `shards` field (always empty for `SRP1`); the Profile tab shows "Shards N (website balance)" only when an approved format fills it. No parser, no arithmetic | The balance in a profile snapshot, display only | **`SRP2` proposal** (below): `shards36` + `asOf` | new vectors for `SRP2`; the addon keeps reading `SRP1` | Web decision; then the addon parser + Profile row | Paste `SRP2` |
 | 5 | **Rank and season** | Shown from `SRP1` (`rankHex`, `seasonHex`, `seasonPct`) | The values | in `SRP1` | as #2 | – | – |
 | 6 | **Cosmetics and inventory** | Shown as a count + "wearing X" from `SRP1` (`cos`). Nothing is **applied** in WoW | List of owned / equipped cosmetic ids that WoW can render | `SRP2`: `equipped` ids per slot (board skin, piece set). Applying needs a **signed** snapshot | `SRP2` vectors; signature test vectors | WoW-side skins (art, ids), signature scheme, then "apply" | Look of each skin in each client |
 | 7 | **Achievements** | Count from `SRP1` (`ach` = unlocked-total) | Unlocked list or count | `SRP1` count; a list would be `SRP2` | as #2 | List display (optional) | – |
@@ -65,20 +65,54 @@ WoW test.
 * **Nothing is built until web Claude agrees.** The fields, their order and the limits come from
   the website. This is only a proposal, so we don't each invent our own.
 
-## When web Claude's report arrives
+## When web Claude's report arrives (reception process)
 
-1. Compare each changed contract with the table: format, version, field order, limits, vectors.
-2. Agree or push back **before** building. Never adapt silently to a format that breaks the
-   principles above (rewards from unverified data, secrets in codes, a paid requirement).
-3. Build the addon side on the existing code (`Net/AccountCodes.lua`, `Core/Account.lua`,
-   `UI/AccountUI.lua`, `Net/Codes.lua`). Start from the existing code, not from scratch.
-4. Tests:
-   * the web's vectors must reproduce byte for byte in Lua (CI);
-   * old versions must still read;
-   * a newer version must be refused with "update";
-   * the client-profile tests must still pass.
-5. Joint QA (phase 3): link a real WoW character, play, export, import on the website, then check
-   the profile back in WoW. Do this on Forever and Classic Era.
+The report goes through these steps **in order**. Nothing is built in step 1–3; nothing in the
+website project is changed from the addon chat.
+
+**1. Receive and file (same day)**
+* Save the report as `docs/web-reports/YYYY-MM-DD.md`, exactly as received.
+* List every contract it touches (`SRL1`, `SRP1`, `SRP2`, `SR1C`, `SR1R`, `SR2`, signatures, reward
+  rules) and every vector file it ships.
+
+**2. Compare the contracts (table per format)**
+
+| Check | How |
+|---|---|
+| Format name and version | Same prefix and number as the table above; a changed meaning = a new version |
+| Field order, types, limits | Field by field against `Net/AccountCodes.lua` / `Net/Codes.lua` and `WEB_HANDOFF.md` §2 |
+| Vectors | The web's vector files reproduce byte for byte in Lua (added to CI before any code) |
+| Principles | No reward from `peer_checked` data (WoW duels, Loot Duels); no secret in any code; no paid requirement; the website stays the authority |
+| Old formats | `SRP1` and existing `SR1R` codes stay readable; existing SavedVariables stay valid |
+| Overlap | Does the report add something the addon already has (codes, daily seed, history)? Then reuse, never a second copy |
+
+Result of step 2: a short reply to web Claude, per format: **agreed** / **changes needed (why)** /
+**not now**. The user approves the reply before it is sent.
+
+**3. Plan (after agreement)**
+* Map each new field into the existing view (`Account.profileView()`), never directly into the UI.
+* List the files to change; new modules only when no existing one fits.
+* Note which real WoW tests the change needs (Forever and Classic Era at least).
+
+**4. Build (on `feature/web-integration`, never on `alpha/0.8.1`)**
+* Parser in `Net/AccountCodes.lua` next to the existing one; `Acc.import` keeps one code path.
+* UI only through the view (Shards row, cosmetics names, "Last updated").
+* A cosmetic is **named** only; it is applied only with a verified signature (row 11).
+
+**5. Tests that must pass before anything is called ready**
+* the web's vectors (byte for byte), in CI on Lua 5.1;
+* old formats: an `SRP1` snapshot and a 0.7.0 SavedVariables fixture still load and show;
+* the next unknown version (e.g. `SRP3`) is refused with "update", and the current profile is kept;
+* signatures: a good one passes, a changed byte fails, a missing one shows "not checked";
+* XP / Shards / results flow: export `SR1R` → (website replays) → next snapshot shows the
+  website's XP, level and Shards; the addon never computes or changes them;
+* Loot Duel still runs with no account and never calls Account / Sync
+  (`test_lootduel.lua`, "works without any stackrivals.io account");
+* every client profile in `test_clients.lua`.
+
+**6. Joint QA (RELEASE_PLAN phase 3)**: link a real character, play, export, import on the
+website, paste the new snapshot back, check the Profile tab. Forever and Classic Era. Results go in
+the test logs, never from simulations.
 
 ## Tasks waiting for the website
 

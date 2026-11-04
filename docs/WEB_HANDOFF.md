@@ -7,6 +7,12 @@
   account, profile, XP, Shards display, rank, cosmetics, achievements, dailies, results and reward
   eligibility. It also has the `SRP2` proposal and the tasks waiting for the website. The public
   launch waits for it (`docs/RELEASE_PLAN.md`).
+* **Branches (4 Nov 2026):** `alpha/0.8.1` is frozen as the test version (no changes). Integration
+  work happens on `feature/web-integration` (0.9.0-dev). It has a format-independent profile view
+  in the addon, a "Last updated on stackrivals.io … imported by hand, may be out of date" line, and
+  a Shards row that appears only when an approved format delivers a balance. **No new format is
+  built** (`SRP2` stays a proposal until web Claude answers). How the addon receives the next web
+  report: `docs/INTEGRATION_CHECKLIST.md`, "When web Claude's report arrives".
 * **Start here.** This file is the entry point and the source of truth. The four detail documents
   below are referenced, not repeated, and they agree with this file:
 

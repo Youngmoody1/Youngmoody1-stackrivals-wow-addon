@@ -1,7 +1,8 @@
 # Testplan: StackRivals 0.8.1 i WoW Forever og Classic Era
 
-Resultater skrives i testloggen: `TEST_LOG_CLASSIC_ERA.md`, og for Forever i en ny
-`TEST_LOG_FOREVER.md`, som oprettes ved første test. Mange punkter kræver flere spillere; de står for
+Resultater skrives i testloggen: `TEST_LOG_CLASSIC_ERA.md`, og for Forever i
+`TEST_LOG_FOREVER.md` (klar, punkt for punkt). Testversionen er den fastfrosne 0.8.1
+(`alpha/0.8.1`). Mange punkter kræver flere spillere; de står for
 sig, så en solo-test aldrig tæller som bevis for multiplayer.
 
 **Intet installeres uden dit udtrykkelige GO.**
