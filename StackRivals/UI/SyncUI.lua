@@ -44,7 +44,7 @@ function UI:CreateSync(sheet)
       local code, why = Sync.resultCode(b.r)
       if code then
         y.out:SetValue(code); y.out:Show(); y.out:SetFocus(); y.out:HighlightText()
-        UI.syncNote = "Ctrl+C, then paste it on stackrivals.io (" .. T.commas(#code) .. " characters). The website replays it before it counts."
+        UI.syncNote = "Ctrl+C, then paste it on " .. ns.Account.WEB.results .. " (" .. T.commas(#code) .. " characters). The website replays it before it counts."
         UI.syncNoteGood = true
       else
         UI.syncNote = Sync.ERRORS[why] or ("Can't make a code: " .. tostring(why)); UI.syncNoteGood = false

@@ -35,16 +35,16 @@ WoW test.
 | # | Integration point | Addon today (0.8.1) | Website must deliver | Format to agree | Tests that must pass | Missing | Real WoW test |
 |---|---|---|---|---|---|---|---|
 | 1 | **Account ID and linking** | Built: web code → `SRL1` link request → `SRP1` confirmation; PENDING / LINKED / NOT SYNCED; Unlink | Link page with one-time code (Crockford + check symbol, ~10 min, single use); checks `SRL1`; binding `{accountId, player, platform, linkId}`; unlink | `SRL1` + web code (draft v1; 84 Lua = TypeScript vectors) | `docs/vectors/account_v1.json` byte for byte on the web; addon `test_account.lua` | Web side; agreement of draft v1 | Typing / pasting codes in each client's edit boxes |
-| 2 | **Player profile** (name, record, history) | Built: `SRP1` snapshot shown in the Profile tab (display only, expires 7 days). Since 0.9.0-dev the tab reads a format-independent view (`Account.profileView()`) and says "Last updated on stackrivals.io: <date> (<ago>). Imported by hand, may be out of date." (OUT OF DATE after 7 days) | "Export snapshot" producing `SRP1` | `SRP1` (draft v1) | vectors; addon profile tests | Web export | Paste a real `SRP1` |
+| 2 | **Player profile** (name, record, history) | Built: `SRP1` snapshot shown in the Profile tab (display only, expires 7 days). Since 0.9.0-dev the tab reads a format-independent view (`Account.profileView()`). A strip at the bottom says "Last update 26 Oct 2026, 08:36 - 12 days ago" (calendar days), "Pasted by hand, so it may be out of date. Nothing unlocks in WoW.", and shows an UNVERIFIED tag. After 7 days it says OUT OF DATE in gold. Long names, ranks and cosmetics are cut with "..." | "Export snapshot" producing `SRP1` | `SRP1` (draft v1) | vectors; addon profile tests | Web export | Paste a real `SRP1` |
 | 3 | **XP and level** | Shown from `SRP1` (`level`, `xp`, `xpNext`) | The values, computed by the website | in `SRP1` | as #2 | The web's XP rules (theirs alone) | – |
-| 4 | **Shards balance** | **Not shown yet** (`SRP1` has no field). Prepared in 0.9.0-dev: the view has a `shards` field (always empty for `SRP1`); the Profile tab shows "Shards N (website balance)" only when an approved format fills it. No parser, no arithmetic | The balance in a profile snapshot, display only | **`SRP2` proposal** (below): `shards36` + `asOf` | new vectors for `SRP2`; the addon keeps reading `SRP1` | Web decision; then the addon parser + Profile row | Paste `SRP2` |
+| 4 | **Shards balance** | **Not shown yet** (`SRP1` has no field). Prepared in 0.9.0-dev: the view has a `shards` field (always empty for `SRP1`). The Profile tab shows "12,480 SHARDS" next to the record only when an approved format fills it (preview `23c3`, simulated). No parser, no arithmetic | The balance in a profile snapshot, display only | **`SRP2` proposal** (below): `shards36` + `asOf` | new vectors for `SRP2`; the addon keeps reading `SRP1` | Web decision; then the addon parser + Profile row | Paste `SRP2` |
 | 5 | **Rank and season** | Shown from `SRP1` (`rankHex`, `seasonHex`, `seasonPct`) | The values | in `SRP1` | as #2 | – | – |
 | 6 | **Cosmetics and inventory** | Shown as a count + "wearing X" from `SRP1` (`cos`). Nothing is **applied** in WoW | List of owned / equipped cosmetic ids that WoW can render | `SRP2`: `equipped` ids per slot (board skin, piece set). Applying needs a **signed** snapshot | `SRP2` vectors; signature test vectors | WoW-side skins (art, ids), signature scheme, then "apply" | Look of each skin in each client |
 | 7 | **Achievements** | Count from `SRP1` (`ach` = unlocked-total) | Unlocked list or count | `SRP1` count; a list would be `SRP2` | as #2 | List display (optional) | – |
 | 8 | **Daily Challenges** | Built: daily seed `srwow-daily-YYYY-MM-DD`, today's best exported as `SR1R` (`daily120`); `SR1C` challenge codes played exactly | Daily board; `createChallenge` → `SR1C`; `importResult(SR1R)` | `SR1C` / `SR1R` (**agreed**, 77/77 vectors with the web's real `verifyLog`) | `docs/vectors/sr1.json`; a real WoW `SR1R` imports as `server_verified` | Web board and import page | Copy a 2–3 KB code out of WoW |
 | 9 | **Match results / history** | Built: `SR1R` export (solo modes and challenges); history shown from `SRP1` | `importResult` + history in the next snapshot | `SR1R` (agreed); Spell Battle results: `SR2` (**draft**, `docs/SR2_DRAFT.md`) | as #8; `SR2` vectors once agreed | `SR2` agreement and both sides | as #8 |
-| 10 | **Reward eligibility** | Nothing in the addon (by design) | Rules on the website: only `server_verified`, with its own anti-bot limits | none in WoW | web tests | Web only | – |
-| 11 | **Signed snapshots** | `sig` field reserved, not checked | A signing scheme (e.g. Ed25519 public key in the addon) | `SRP1`/`SRP2` `sig` | sign/verify vectors | Web proposal, then an addon verifier in pure Lua | – |
+| 10 | **Reward eligibility** (XP / Shards from WoW play) | Nothing in the addon (by design). Proposal for the website: `docs/WOW_PROGRESSION_SPEC.md` (sources, eligibility, anti-farming, caps, import flow) | Rules on the website: only `server_verified`, with its own anti-bot limits and caps | none in WoW | web tests | Web decisions (spec §6) | – |
+| 11 | **Signed snapshots** | `sig` field reserved, not checked. The Profile tab says UNVERIFIED (VERIFIED in green once a scheme exists). Nothing is unlocked from an unsigned snapshot | A signing scheme (e.g. Ed25519 public key in the addon) | `SRP1`/`SRP2` `sig` | sign/verify vectors | Web proposal, then an addon verifier in pure Lua | – |
 | 12 | **Quickplay / shared matchmaking** | WoW Quickplay works between WoW players; the web adapter honestly shows "not connected" | Nothing possible without a transport | – | – | A verified transport (none exists) | – |
 
 ## Proposal for the website: `SRP2` (profile snapshot v2, DRAFT for web Claude to accept or change)
@@ -113,6 +113,20 @@ Result of step 2: a short reply to web Claude, per format: **agreed** / **change
 **6. Joint QA (RELEASE_PLAN phase 3)**: link a real character, play, export, import on the
 website, paste the new snapshot back, check the Profile tab. Forever and Classic Era. Results go in
 the test logs, never from simulations.
+
+## Missing web contracts (concrete list, 4 Nov 2026)
+
+| # | Contract | Status | Blocks |
+|---|---|---|---|
+| C1 | Web link code + `SRL1` + `SRP1` (draft v1) | proposed with 84 vectors; **not confirmed** by the website | linking in a real client |
+| C2 | Real menu names: Link WoW character, Export snapshot, Import result, Unlink | proposed; the addon keeps them in one table (`Account.WEB`) | exact instructions on screen |
+| C3 | `SRP2`: Shards balance + `asOf`, equipped cosmetics, achievement list | proposal above; **no answer yet** | the Shards line, cosmetics names |
+| C4 | Snapshot signature scheme (e.g. Ed25519 public key in the addon) | **not proposed by the website** | VERIFIED tag, applying cosmetics |
+| C5 | `SR1R` import page (`importResult`) and website-issued `SR1C` challenges | format **agreed** (77/77 vectors); page not built | XP from WoW play |
+| C6 | Reward rules for WoW results: sources, XP, Shards, caps, anti-farming | proposal: `docs/WOW_PROGRESSION_SPEC.md`; **website decides** | any progression from WoW |
+| C7 | `SR2` (Spell Battle vs Bot results) | draft; agree or postpone | Spell Battle XP |
+| C8 | Cosmetic ids + art references for WoW skins | not started | skins in WoW |
+| C9 | Confirmation: Loot Duel and WoW duels earn nothing | addon side enforced by a test | — |
 
 ## Tasks waiting for the website
 

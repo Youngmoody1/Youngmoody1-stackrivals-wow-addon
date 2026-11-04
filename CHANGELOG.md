@@ -16,12 +16,58 @@ approval.
 - **Shards display prepared, not built**: the view has a `shards` field that `SRP1` never fills.
   The Profile tab shows "Shards N (website balance)" only when an approved format provides it. The
   addon never computes, adds or spends Shards.
+- **Profile tab, second pass** (from the review of the first previews):
+  - **Bottom strip** under a divider, two fixed lines:
+    - "Last update 26 Oct 2026, 08:36 - 12 days ago";
+    - "Pasted by hand, so it may be out of date. Nothing unlocks in WoW." When stale, in gold:
+      "OUT OF DATE: paste a new snapshot from stackrivals.io."
+  - An **UNVERIFIED** tag: no snapshot signature can be checked yet. It turns green VERIFIED only
+    when a scheme exists.
+  - The panel is 10 units taller, so 5 recent matches and the strip never touch.
+  - **Long texts are cut with "..."** instead of colliding: name, rank (own width), level and season
+    values, record, achievements and cosmetics, mode and score.
+  - **One date format** on every account screen: "26 Oct 2026, 08:36".
+  - **"days ago" counts calendar days**: 26 Oct read on 7 Nov is "12 days ago", even when less than
+    12 × 24 h have passed. Same day: minutes or hours; the day before: "yesterday".
+  - The Shards slot is on the record line ("12,480 SHARDS", gold, website balance). Without Shards
+    the record gets the whole line.
+- **Account UX**:
+  - Steps "1 of 3 / 2 of 3 / 3 of 3" say exactly what to copy and where to paste it.
+  - Website menu names live in one table (`Account.WEB`; provisional until the website confirms
+    them), used by the Account and Sync tabs.
+  - A code pasted in the wrong box says where it belongs:
+    - a link request (`SRL1`) belongs on the website;
+    - a result (`SR1R`) belongs on Import result;
+    - a challenge (`SR1C`) belongs on the Sync tab.
+  - The status line stays on one line.
+  - The unlink note names the website's Unlink page.
+- **XP / Shards proposal for the website**: `docs/WOW_PROGRESSION_SPEC.md`. It covers:
+  - sources and what can be replay-verified;
+  - suggested eligibility (names only, no numbers);
+  - anti-bot and anti-farming;
+  - caps;
+  - the safe import flow;
+  - the decisions the website must make.
+
+  Loot Duel and WoW duels stay without rewards. `INTEGRATION_CHECKLIST.md` lists the missing web
+  contracts as C1–C9.
+- Previews:
+  - `23-account-start` (not linked);
+  - `23c2` (worst case: stale, 5 matches, longest texts);
+  - `23c3` (Shards, simulated future format).
+
+  The layout test checks every one for overlaps.
 - Tests:
   - the profile view and the "Last updated" line;
   - no Shards row from `SRP1`;
   - an `SRP2` paste is refused with "update" and leaves the profile untouched;
   - **Loot Duel runs with no stackrivals.io account and never calls Account or Sync**, so it can't
-    feed XP or Shards.
+    feed XP or Shards;
+  - calendar-day "days ago" across months and years;
+  - long texts cut, not wrapped;
+  - every Profile text at or above the type-scale floor;
+  - wrong-kind codes;
+  - the `Account.WEB` names used on screen.
 - Docs:
   - `docs/TEST_LOG_FOREVER.md`: a point-by-point log for the first Forever test;
   - a reception process for web Claude's next report in `docs/INTEGRATION_CHECKLIST.md`;

@@ -91,6 +91,8 @@ The website stays the authority; the addon builds no economy and no reward rules
 | 0.8.1 frozen as the test version (`alpha/0.8.1`); integration work on `feature/web-integration` | DONE (4 Nov) |
 | Prepared without new formats: profile view, "Last updated … imported by hand, may be out of date", Shards row only when an approved format fills it; Loot Duel proven independent of Account / Sync | DONE (simulated), 0.9.0 dev |
 | Reception process for web Claude's report | DONE: `INTEGRATION_CHECKLIST.md` |
+| Profile tab second pass: bottom strip, UNVERIFIED tag, long texts, calendar "days ago", one date format; account steps 1–3 with exact website places | DONE (simulated), 0.9.0 dev; needs a real-client look (wrapping, UI scales) |
+| XP / Shards from WoW: proposal for the website (`WOW_PROGRESSION_SPEC.md`); missing contracts C1–C9 | DONE (proposal); WAITING for the website's decisions |
 | Integration in the addon (0.9.x) | after the web report; built on the existing account / sync code |
 | Joint QA, then Beta / Release | RELEASE_PLAN.md phases 3–4 |
 

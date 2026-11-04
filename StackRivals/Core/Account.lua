@@ -27,7 +27,20 @@ Acc.STALE_AFTER = 7 * 86400        -- s after the snapshot was made: NOT SYNCED
 Acc.CLOCK_SKEW = 10 * 60           -- s of clock difference tolerated between the website and WoW
 Acc.MAX_CHARS = 50                 -- characters kept in SavedVariables
 
+--- Where things are on stackrivals.io, named in one place so every screen says the same. These are
+--- the names proposed to the website in docs/ACCOUNT_SYNC_HANDOFF.md; until web Claude confirms the
+--- real menu names they are provisional (docs/INTEGRATION_CHECKLIST.md, "Missing web contracts").
+Acc.WEB = {
+  link = "stackrivals.io > Account > Link WoW character",
+  export = "stackrivals.io > Account > WoW > Export snapshot",
+  results = "stackrivals.io > Account > WoW > Import result",
+  unlink = "stackrivals.io > Account > WoW > Unlink",
+}
+
 Acc.ERRORS = {
+  is_request = "That's your link request (SRL1): paste it on the website, not here.",
+  is_result = "That's a result code (SR1R): paste it on the website (Import result), not here.",
+  is_challenge = "That's a challenge code (SR1C): play it on the Sync tab.",
   empty = "Paste a code first.",
   chars = "The code has characters that don't belong in it (copy it again).",
   size = "That code is too long.",
@@ -126,6 +139,11 @@ end
 
 --- Step 3 / later syncs: import a profile snapshot. Returns true, "linked" | "updated" or nil, error.
 function Acc.import(text)
+  -- a code of another kind pasted here: say where it belongs instead of a generic error
+  local head = type(text) == "string" and text:match("^%s*(SR%w+)%.") or nil
+  if head == "SRL1" then return nil, "is_request" end
+  if head == "SR1R" then return nil, "is_result" end
+  if head == "SR1C" then return nil, "is_challenge" end
   local p, why = A().parseProfile(text)
   if not p then return nil, why end
   local me = Acc.me()

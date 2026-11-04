@@ -303,7 +303,7 @@ describe("Account sheet (simulated client)", function()
     ok(s.prof:IsShown())
     eq(s.prof.name:GetText(), "Alice Stack"); eq(s.prof.rank:GetText(), "GOLD II")
     eq(s.prof.hist[1].mode:GetText(), "Duel 2:00"); eq(s.prof.hist[1].res:GetText(), "W")
-    ok(s.prof.foot:GetText():find("Display only"), s.prof.foot:GetText())
+    ok(s.prof.foot:GetText():find("Nothing unlocks in WoW", 1, true), s.prof.foot:GetText())
     -- unlink needs two clicks
     s.tabs.account:Click()
     s.acc.unlink:Click()
@@ -360,31 +360,111 @@ describe("profile view: one shape for every snapshot format, display only", func
     eq(v.shards, nil, "SRP1 carries no Shards; the addon never makes up a balance")
     eq(v.verified, false, "no signature check in this version")
   end)
-  it("the Profile tab says when it was last updated and that it may be out of date; no Shards row", function()
+  it("the Profile tab says when it was last updated, that it was pasted by hand and is unverified; no Shards", function()
     local c = linked(42)
     local p = openProfile(c)
-    local foot = p.foot:GetText()
-    ok(foot:find("Last updated on stackrivals.io: " .. c.env.date("%Y-%m-%d %H:%M", T0 + 30), 1, true), foot)
-    ok(foot:find("Imported by hand, may be out of date", 1, true), foot)
-    ok(foot:find("Display only", 1, true), foot)
+    local up, foot = p.updated:GetText(), p.foot:GetText()
+    ok(up:find("Last update " .. c.env.date("%d %b %Y, %H:%M", T0 + 30), 1, true), up)
+    ok(foot:find("Pasted by hand, so it may be out of date", 1, true), foot)
+    ok(foot:find("Nothing unlocks in WoW", 1, true), foot)
     ok(not foot:find("OUT OF DATE", 1, true), foot)
+    eq(p.trust:GetText(), "UNVERIFIED", "no signature check exists yet")
+    eq(p.shards:GetText(), "", "no Shards from SRP1")
     ok(not p.extra:GetText():find("Shards", 1, true), p.extra:GetText())
   end)
-  it("after 7 days the view is stale and the tab says OUT OF DATE", function()
+  it("after 7 days the view is stale and the tab says OUT OF DATE (in gold) and how to fix it", function()
     local c, Acc = linked(43)
     c.M.serverTime = T0 + 30 + 8 * 86400
     local v, st = Acc.profileView()
     eq(st, "not_synced"); eq(v.stale, true)
-    local foot = openProfile(c).foot:GetText()
-    ok(foot:find("OUT OF DATE", 1, true), foot); ok(foot:find("8 days ago", 1, true), foot)
+    local p = openProfile(c)
+    ok(p.foot:GetText():find("OUT OF DATE: paste a new snapshot from stackrivals.io", 1, true), p.foot:GetText())
+    ok(p.updated:GetText():find("8 days ago", 1, true), p.updated:GetText())
+    local r, g, b = p.foot:GetTextColor()
+    local gold = c.ns.T.C.gold
+    ok(math.abs(r - gold[1]) < 0.01 and math.abs(g - gold[2]) < 0.01 and math.abs(b - gold[3]) < 0.01, "stale text is gold")
   end)
-  it("a Shards row appears only when an approved format fills the view (shown as the website balance)", function()
+  it("'days ago' counts calendar days, not 24-hour blocks", function()
+    local c, Acc = linked(46)
+    local UI = c.ns.UI
+    local function at(y, mo, d, h, mi) return os.time({ year = y, month = mo, day = d, hour = h, min = mi }) end
+    local cases = {
+      { at(2026, 10, 26, 8, 36), at(2026, 11, 7, 8, 30), "12 days ago" },   -- 11.99 x 24 h, but 12 dates later
+      { at(2026, 10, 26, 23, 50), at(2026, 10, 28, 0, 10), "2 days ago" },  -- 24 h 20 min
+      { at(2026, 10, 26, 22, 0), at(2026, 10, 27, 7, 0), "yesterday" },
+      { at(2026, 10, 27, 1, 0), at(2026, 10, 27, 7, 0), "6 h ago" },
+      { at(2026, 10, 27, 7, 0), at(2026, 10, 27, 7, 45), "45 min ago" },
+      { at(2026, 10, 27, 7, 0), at(2026, 10, 27, 7, 1), "just now" },
+      { at(2026, 2, 27, 12, 0), at(2026, 3, 2, 12, 0), "3 days ago" },     -- across February
+      { at(2026, 12, 31, 12, 0), at(2027, 1, 1, 9, 0), "yesterday" },      -- across the year
+    }
+    for _, k in ipairs(cases) do
+      c.M.serverTime = k[2]
+      eq(UI.accountAgo(k[1]), k[3], os.date("%Y-%m-%d %H:%M", k[1]) .. " -> " .. os.date("%Y-%m-%d %H:%M", k[2]))
+    end
+    eq(UI.accountDayNumber(os.time({ year = 1970, month = 1, day = 1, hour = 12 })), 0)
+  end)
+  it("a Shards line appears only when an approved format fills the view", function()
     local c, Acc = linked(44)
     local real = Acc.profileView
     Acc.profileView = function() local v, st = real(); v.shards = 1234; return v, st end
-    local text = openProfile(c).extra:GetText()
+    local p = openProfile(c)
     Acc.profileView = real
-    ok(text:find("Shards 1,234 (website balance)", 1, true), text)
+    eq(p.shards:GetText(), "1,234 SHARDS")
+    ok(p.shards:IsShown())
+  end)
+  it("long names, ranks, seasons and cosmetics are cut with '...' instead of running into each other", function()
+    local net = NS.new({ seed = 47 })
+    local c = net.add({ name = "Alice", saved = { seenHelp = true } })
+    c.M.serverTime = T0
+    local req = assert(c.ns.Account.startLink(A.makeWebCode("VXEW002")))
+    local r = A.parseLinkRequest(req)
+    c.M.serverTime = T0 + 60
+    ok(c.ns.Account.import(snap({ linkId = r.linkId, issued = T0 + 30, expires = T0 + 86400,
+      name = "Wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww", rank = "Grandmaster Champion III", season = "Season of the Long Night",
+      cosEquipped = "Wwwwwwwwwwwwwwwwwwwwwwww" })))
+    local p = openProfile(c)
+    for _, k in ipairs({ "name", "rank", "stats", "shards", "extra", "updated", "foot", "trust" }) do
+      ok(p[k]._nowrap, k .. " is one line")
+      ok((p[k]._w or 0) > 0, k .. " has a width")
+    end
+    ok(p.name._w + p.rank._w + 12 <= p._w - 28 + 0.5, "name and rank share the top line")
+  end)
+  it("a code of another kind pasted in the snapshot box says where it belongs", function()
+    local c, Acc, r = linked(49)
+    local before = Acc.profileView().asOf
+    local req = A.linkRequest({ code = A.makeWebCode("A7K9P2X"), platform = "wow-forever", player = "Alice-Realm", linkId = r.linkId, addon = "0.9.0", engine = 1, issued = T0 })
+    local _, why = Acc.import(req); eq(why, "is_request"); ok(Acc.ERRORS.is_request:find("not here", 1, true))
+    _, why = Acc.import("  SR1R.wow-forever.b120.e1.x"); eq(why, "is_result"); ok(Acc.ERRORS.is_result:find("Import result", 1, true))
+    _, why = Acc.import("SR1C.abc"); eq(why, "is_challenge"); ok(Acc.ERRORS.is_challenge:find("Sync tab", 1, true))
+    eq(Acc.profileView().asOf, before, "nothing changed")
+  end)
+  it("every account screen names the website pages the same way (one table, Account.WEB)", function()
+    local c = linked(50)
+    local W = c.ns.Account.WEB
+    for _, k in ipairs({ "link", "export", "results", "unlink" }) do ok(W[k]:find("^stackrivals%.io > Account > "), k) end
+    c.env.SlashCmdList.STACKRIVALS("")
+    c.ns.UI:ShowSheet("account")
+    local s = c.ns.UI.accountSheet
+    ok(s.acc.steps:GetText():find(W.export, 1, true), s.acc.steps:GetText())
+    s.acc.unlink:Click(); s.acc.unlink:Click()
+    ok(c.ns.UI.accountNote:find(W.unlink, 1, true), c.ns.UI.accountNote)
+    ok(s.acc.steps:GetText():find("Account > Link WoW character", 1, true), s.acc.steps:GetText())
+  end)
+  it("every Profile text is on the type scale (>= the label size), so it stays readable at every resolution and UI scale", function()
+    local c = linked(48)
+    local p = openProfile(c)
+    local floor = c.ns.T.SIZE.label
+    local n = 0
+    for _, o in ipairs(c.M.regions) do
+      local cur, inside = o, false
+      while cur do if cur == p then inside = true break end; cur = cur._parent end
+      if inside and o._kind == "FontString" and o._font then
+        n = n + 1
+        ok(o._font[2] >= floor, "text size " .. tostring(o._font[2]) .. ": " .. tostring(o._text))
+      end
+    end
+    ok(n >= 20, "checked " .. n .. " texts")
   end)
   it("a newer format (SRP2) is refused with 'update' and leaves the current profile as it was", function()
     local c, Acc, r = linked(45)

@@ -382,6 +382,12 @@ S.list = {
     a.ns.UI:RefreshPhase()
     return a.M, a.ns, a.ns.UI.chat
   end },
+  { "23-account-start", "Account - not linked: step 1 of 3 (type the one-time code from the website)", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS("")
+    M.serverTime = 1793000000
+    ns.UI:ShowSheet("account"); M.frames_step(1)
+    return M, ns
+  end },
   { "23-account-pending", "Account - linking: code typed, request to copy (PENDING, not linked yet)", function()
     local M, ns = boot(); SlashCmdList.STACKRIVALS("")
     M.serverTime = 1793000000
@@ -417,7 +423,25 @@ S.list = {
     ns.UI:ShowSheet("account"); ns.UI.accountTab = "profile"; ns.UI:RefreshAccount(); M.frames_step(1)
     return M, ns
   end },
-  { "23c2-profile-stale", "Account - Profile tab, snapshot older than 7 days (OUT OF DATE, signature not checked)", function()
+  { "23c2-profile-stale", "Account - Profile tab, worst case: snapshot older than 7 days, 5 matches, longest name / rank / season / cosmetic", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS("")
+    local T0 = 1793000000
+    M.serverTime = T0
+    local AC = ns.AccountCodes
+    local r = AC.parseLinkRequest(ns.Account.startLink(AC.makeWebCode("A7K9P2X")))
+    M.serverTime = T0 + 300
+    ns.Account.import(AC.profile({ linkId = r.linkId, player = r.player, accountId = "acc_7f3k2", name = "Wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+      issued = T0 + 200, expires = T0 + 30 * 86400, level = 9999, xp = 123456789, xpNext = 987654321, rank = "Grandmaster Champion III",
+      season = "Season of the Long Night", seasonPct = 100, wins = 123456, losses = 98765, draws = 4321, achUnlocked = 9999, achTotal = 9999,
+      cosOwned = 99999, cosEquipped = "Wwwwwwwwwwwwwwwwwwwwwwww", sig = "abcdefghijklmnopqrstuvwxyz012345",
+      history = { { mode = "b120", res = "w", my = 123456789, their = 98765432, at = T0 - 3600 }, { mode = "s180", res = "l", my = 8000, their = 15000, at = T0 - 86400 },
+        { mode = "daily", res = "w", my = 21000, their = 0, at = T0 - 2 * 86400 }, { mode = "spellbot", res = "d", my = 9000, their = 9000, at = T0 - 3 * 86400 },
+        { mode = "zzzzzzzzzzzz", res = "w", my = 1, their = 0, at = T0 - 4 * 86400 } } }))
+    M.serverTime = T0 + 12 * 86400
+    ns.UI:ShowSheet("account"); ns.UI.accountTab = "profile"; ns.UI:RefreshAccount(); M.frames_step(1)
+    return M, ns
+  end },
+  { "23c3-profile-shards", "Account - Profile tab with a Shards balance (SIMULATED future format: SRP1 has no Shards; shown only once the website approves one)", function()
     local M, ns = boot(); SlashCmdList.STACKRIVALS("")
     local T0 = 1793000000
     M.serverTime = T0
@@ -425,12 +449,14 @@ S.list = {
     local r = AC.parseLinkRequest(ns.Account.startLink(AC.makeWebCode("A7K9P2X")))
     M.serverTime = T0 + 300
     ns.Account.import(AC.profile({ linkId = r.linkId, player = r.player, accountId = "acc_7f3k2", name = "Alice Stack",
-      issued = T0 + 200, expires = T0 + 30 * 86400, level = 12, xp = 1240, xpNext = 2000, rank = "Gold II",
+      issued = T0 + 200, expires = T0 + 8 * 86400, level = 12, xp = 1240, xpNext = 2000, rank = "Gold II",
       season = "Season 3", seasonPct = 45, wins = 12, losses = 8, draws = 1, achUnlocked = 14, achTotal = 60, cosOwned = 5, cosEquipped = "Neon Grid",
-      sig = "abcdefghijklmnopqrstuvwxyz012345",
       history = { { mode = "b120", res = "w", my = 12300, their = 9800, at = T0 - 3600 }, { mode = "s180", res = "l", my = 8000, their = 15000, at = T0 - 86400 },
-        { mode = "daily", res = "w", my = 21000, their = 0, at = T0 - 2 * 86400 }, { mode = "spellbot", res = "d", my = 9000, their = 9000, at = T0 - 3 * 86400 } } }))
-    M.serverTime = T0 + 12 * 86400
+        { mode = "daily", res = "w", my = 21000, their = 0, at = T0 - 2 * 86400 }, { mode = "spellbot", res = "d", my = 9000, their = 9000, at = T0 - 3 * 86400 },
+        { mode = "blitz", res = "w", my = 31000, their = 0, at = T0 - 4 * 86400 } } }))
+    local real = ns.Account.profileView
+    ns.Account.profileView = function() local v, st = real(); if v then v.shards = 12480 end; return v, st end
+    M.serverTime = T0 + 2 * 3600
     ns.UI:ShowSheet("account"); ns.UI.accountTab = "profile"; ns.UI:RefreshAccount(); M.frames_step(1)
     return M, ns
   end },

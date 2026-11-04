@@ -21,16 +21,35 @@ local MODE_NAME = {
 }
 UI.ACCOUNT_MODE_NAME = MODE_NAME
 
+--- One date format everywhere on the account screens: "26 Oct 2026, 08:36" (the PC's local time).
 local function when(t)
   if not t then return "never" end
-  return date("%Y-%m-%d %H:%M", t)
+  return date("%d %b %Y, %H:%M", t)
 end
+--- Days since 1970-01-01 of the local calendar date of t (no time() needed; exact across months).
+local function dayNumber(t)
+  local d = date("*t", t)
+  local y, m = d.year, d.month
+  if m <= 2 then y = y - 1 end
+  local era = math.floor(y / 400)
+  local yoe = y - era * 400
+  local mp = (m + 9) % 12
+  local doy = math.floor((153 * mp + 2) / 5) + d.day - 1
+  local doe = yoe * 365 + math.floor(yoe / 4) - math.floor(yoe / 100) + doy
+  return era * 146097 + doe - 719468
+end
+UI.accountDayNumber = dayNumber
+--- "just now" / "5 min ago" / "3 h ago" (same day) / "yesterday" / "12 days ago" (calendar days,
+--- so a snapshot from 26 Oct read on 7 Nov is "12 days ago" whatever the hour).
 local function ago(t)
-  local d = ns.Account.now() - t
+  local now = ns.Account.now()
+  local d = now - t
   if d < 120 then return "just now" end
-  if d < 7200 then return math.floor(d / 60) .. " min ago" end
-  if d < 172800 then return math.floor(d / 3600) .. " h ago" end
-  return math.floor(d / 86400) .. " days ago"
+  if d < 3600 then return math.floor(d / 60) .. " min ago" end
+  local days = dayNumber(now) - dayNumber(t)
+  if days <= 0 then return math.floor(d / 3600) .. " h ago" end
+  if days == 1 then return "yesterday" end
+  return days .. " days ago"
 end
 UI.accountAgo = ago
 --- Text from the website, shown safely ("|" can't start a WoW escape code).
@@ -108,7 +127,7 @@ function UI:CreateAccount()
   st:SetSize(cw, 62); st:SetPoint("TOPLEFT", L, -92)
   st.chip = T.display(st, SZ.heading, C.label); st.chip:SetPoint("TOPLEFT", 12, -10)
   st.who = T.text(st, SZ.small, C.body); st.who:SetPoint("TOPRIGHT", -12, -12); st.who:SetJustifyH("RIGHT")
-  st.line = T.text(st, SZ.label, C.label); st.line:SetPoint("TOPLEFT", 12, -38); st.line:SetWidth(cw - 24); st.line:SetJustifyH("LEFT")
+  st.line = T.text(st, SZ.label, C.label); st.line:SetPoint("TOPLEFT", 12, -38); st.line:SetWidth(cw - 24); st.line:SetJustifyH("LEFT"); st.line:SetWordWrap(false)
   a.status = st
 
   a.steps = T.text(a, SZ.small, C.body); a.steps:SetPoint("TOPLEFT", L, -166); a.steps:SetWidth(cw); a.steps:SetJustifyH("LEFT")
@@ -151,7 +170,7 @@ function UI:CreateAccount()
     if not b.armed then b.armed = true; b:SetLabel("Click to confirm"); return end
     b.armed = false
     Acc.unlink()
-    UI.accountNote = "Unlinked on this PC. Unlink on stackrivals.io too to remove it from your account."
+    UI.accountNote = "Unlinked on this PC. To remove it from your account too: " .. Acc.WEB.unlink .. "."
     UI.accountNoteGood = true
     UI:RefreshAccount()
   end)
@@ -160,35 +179,49 @@ function UI:CreateAccount()
   a.note = T.text(a, SZ.small, C.gold); a.note:SetPoint("TOPLEFT", L, -320); a.note:SetWidth(cw - 150); a.note:SetJustifyH("LEFT")
 
   ------------------------------------------------------------------ Profile tab
+  -- Top: name (left, cut with "..." when long) and rank (right, bounded). Then level and season
+  -- bars, record + Shards (only when the website delivers a balance), achievements and cosmetics,
+  -- up to 5 recent matches. Bottom strip, under a divider: when the website made this snapshot,
+  -- that it was pasted by hand, and whether it is verified (no signature check exists yet).
   local p = T.panel(s, C.steel)
-  p:SetSize(cw, 268); p:SetPoint("TOPLEFT", L, -92)
+  local PH = 278
+  p:SetSize(cw, PH); p:SetPoint("TOPLEFT", L, -92)
+  p.fullHeight = PH
   s.prof = p
-  p.empty = T.text(p, SZ.body, C.body); p.empty:SetPoint("TOPLEFT", 14, -16); p.empty:SetWidth(cw - 28); p.empty:SetJustifyH("LEFT")
+  local inner = cw - 28
+  local RANKW = 150
+  local function line(fs, w) fs:SetWidth(w); fs:SetWordWrap(false); fs:SetJustifyH("LEFT"); return fs end
+  p.empty = T.text(p, SZ.body, C.body); p.empty:SetPoint("TOPLEFT", 14, -16); p.empty:SetWidth(inner); p.empty:SetJustifyH("LEFT")
   p.empty:SetSpacing(3)
-  p.name = T.display(p, SZ.title, C.paper); p.name:SetPoint("TOPLEFT", 14, -12)
-  p.rank = T.display(p, SZ.small, C.gold); p.rank:SetPoint("TOPRIGHT", -14, -16); p.rank:SetJustifyH("RIGHT")
+  p.name = line(T.display(p, SZ.title, C.paper), inner - RANKW - 12); p.name:SetPoint("TOPLEFT", 14, -12)
+  p.rank = line(T.display(p, SZ.small, C.gold), RANKW); p.rank:SetPoint("TOPRIGHT", -14, -16); p.rank:SetJustifyH("RIGHT")
   local function bar(y, label)
     local l = T.text(p, SZ.label, C.label); l:SetPoint("TOPLEFT", 14, y); l:SetText(label)
-    local v = T.text(p, SZ.label, C.body); v:SetPoint("TOPRIGHT", -14, y); v:SetJustifyH("RIGHT")
-    local track = T.tex(p, "ARTWORK", C.line, 1); track:SetPoint("TOPLEFT", 14, y - 16); track:SetSize(cw - 28, 4)
+    local v = line(T.text(p, SZ.label, C.body), inner - 70); v:SetPoint("TOPRIGHT", -14, y); v:SetJustifyH("RIGHT")
+    local track = T.tex(p, "ARTWORK", C.line, 1); track:SetPoint("TOPLEFT", 14, y - 16); track:SetSize(inner, 4)
     local fill = T.tex(p, "OVERLAY", C.red, 1); fill:SetPoint("TOPLEFT", track, "TOPLEFT"); fill:SetSize(1, 4)
     return { l = l, v = v, track = track, fill = fill }
   end
   p.xp = bar(-42, "LEVEL")
   p.season = bar(-70, "SEASON")
-  p.stats = T.text(p, SZ.small, C.body); p.stats:SetPoint("TOPLEFT", 14, -98); p.stats:SetWidth(cw - 28); p.stats:SetJustifyH("LEFT")
-  p.extra = T.text(p, SZ.label, C.label); p.extra:SetPoint("TOPLEFT", 14, -116); p.extra:SetWidth(cw - 28); p.extra:SetJustifyH("LEFT")
+  p.stats = line(T.text(p, SZ.small, C.body), inner); p.stats:SetPoint("TOPLEFT", 14, -98)
+  p.statsWidth = inner
+  p.shards = line(T.display(p, SZ.small, C.gold), 124); p.shards:SetPoint("TOPRIGHT", -14, -98); p.shards:SetJustifyH("RIGHT")
+  p.extra = line(T.text(p, SZ.label, C.label), inner); p.extra:SetPoint("TOPLEFT", 14, -116)
   p.histHead = T.label(p, "RECENT MATCHES (STACKRIVALS.IO)"); p.histHead:SetPoint("TOPLEFT", 14, -138)
   p.hist = {}
   for i = 1, 5 do
     local row = {}
-    row.mode = T.text(p, SZ.small, C.body); row.mode:SetPoint("TOPLEFT", 14, -154 - (i - 1) * 16)
+    row.mode = line(T.text(p, SZ.small, C.body), 120); row.mode:SetPoint("TOPLEFT", 14, -154 - (i - 1) * 16)
     row.res = T.display(p, SZ.small, C.paper); row.res:SetPoint("TOPLEFT", 140, -154 - (i - 1) * 16)
-    row.score = T.text(p, SZ.small, C.body); row.score:SetPoint("TOPLEFT", 168, -154 - (i - 1) * 16)
+    row.score = line(T.text(p, SZ.small, C.body), inner - 154 - 60); row.score:SetPoint("TOPLEFT", 168, -154 - (i - 1) * 16)
     row.at = T.text(p, SZ.label, C.label); row.at:SetPoint("TOPRIGHT", -14, -155 - (i - 1) * 16); row.at:SetJustifyH("RIGHT")
     p.hist[i] = row
   end
-  p.foot = T.text(p, SZ.label, C.label); p.foot:SetPoint("BOTTOMLEFT", 14, 10); p.foot:SetWidth(cw - 28); p.foot:SetJustifyH("LEFT")
+  p.divider = T.tex(p, "ARTWORK", C.line, 1); p.divider:SetPoint("BOTTOMLEFT", 14, 40); p.divider:SetSize(inner, 1)
+  p.trust = line(T.display(p, SZ.label, C.gold), 90); p.trust:SetPoint("BOTTOMRIGHT", -14, 22); p.trust:SetJustifyH("RIGHT")
+  p.updated = line(T.text(p, SZ.label, C.body), inner - 100); p.updated:SetPoint("BOTTOMLEFT", 14, 22)
+  p.foot = line(T.text(p, SZ.label, C.label), inner); p.foot:SetPoint("BOTTOMLEFT", 14, 8)
   -- no profile yet: a compact panel with one clear next step (no big empty area)
   p.go = T.button(p, "Link account", 130, 26, "primary", function() UI.accountTab = "account"; UI:RefreshAccount() end)
   p.go:SetPoint("BOTTOMLEFT", 14, 12)
@@ -223,9 +256,9 @@ function UI:RefreshAccount()
     a.status.who:SetText("This character: " .. (ns.Duel and ns.Duel.short(Acc.me() or "?") or (Acc.me() or "?")))
     local pr = r and r.profile
     if state == "linked" then
-      a.status.line:SetText("Account " .. safe(pr.name) .. "  -  last synced " .. when(r.lastSync) .. " (snapshot " .. ago(pr.issued) .. ")")
+      a.status.line:SetText("Account " .. safe(pr.name) .. "  -  last update " .. when(pr.issued) .. " (" .. ago(pr.issued) .. ")")
     elseif state == "not_synced" then
-      a.status.line:SetText("Account " .. safe(pr.name) .. "  -  snapshot from " .. when(pr.issued) .. " is out of date. Import a fresh one.")
+      a.status.line:SetText("Out of date: last update " .. when(pr.issued) .. ". Paste a new snapshot below.")
     elseif state == "pending" then
       a.status.line:SetText("Waiting for confirmation from stackrivals.io. Not linked yet.")
     else
@@ -239,20 +272,20 @@ function UI:RefreshAccount()
     a.expiry:SetShown(showReq)
     a.cancel:ClearAllPoints(); a.unlink:ClearAllPoints(); a.paste:ClearAllPoints(); a.expiry:ClearAllPoints()
     if state == "not_linked" then
-      a.steps:SetText("1. Log in on stackrivals.io with your e-mail (on the website, never in WoW).\n"
-        .. "2. Account > Link WoW character: you get a one-time code.\n3. Type the code here:")
+      a.steps:SetText("Step 1 of 3. Log in on stackrivals.io (on the website, never in WoW).\n"
+        .. "Open " .. Acc.WEB.link:gsub("^stackrivals%.io > ", "") .. ": it shows a one-time code.\nType that code here and click Link:")
     elseif state == "pending" then
-      a.steps:SetText("Copy this link request (click, Ctrl+C), paste it on stackrivals.io:")
+      a.steps:SetText("Step 2 of 3. Click the box, Ctrl+C, paste it on that website page:")
       a.request:SetValue(Acc.requestCode())
-      a.step2:SetText("Then paste the confirmation snapshot (SRP1...) the website shows you:")
+      a.step2:SetText("Step 3 of 3. Paste the snapshot the website then shows (SRP1...):")
       a.paste:SetPoint("TOPLEFT", 24, -240)
       a.cancel:SetPoint("TOPLEFT", 24, -276)
       a.expiry:SetPoint("LEFT", a.cancel, "RIGHT", 12, 0)
       local left = math.max(0, Acc.PENDING_TTL - (Acc.now() - r.pending.at))
       a.expiry:SetText(string.format("Code %s  -  this request expires in %d:%02d", ns.AccountCodes.prettyWebCode(r.pending.code), math.floor(left / 60), left % 60))
     else
-      a.steps:SetText("To sync: stackrivals.io > Account > WoW > Export snapshot.\n"
-        .. "Paste it here. It only shows your profile; the website decides.")
+      a.steps:SetText("Update: open " .. Acc.WEB.export .. ",\n"
+        .. "copy the snapshot (SRP1...), paste it here and click Import.")
       a.paste:SetPoint("TOPLEFT", 24, -212)
       a.unlink:SetPoint("TOPLEFT", 24, -250)
       a.unlink:SetLabel(a.unlink.armed and "Click to confirm" or "Unlink")
@@ -267,11 +300,19 @@ function UI:RefreshAccount()
   end
 end
 
---- "Last updated" line: when the website made the snapshot, and that it was pasted by hand.
+--- The bottom strip of the Profile tab: { updated = line 1, foot = line 2, trust = tag, stale }.
+--- Line 1 says when stackrivals.io made the snapshot; line 2 that it was pasted by hand (or that it
+--- is out of date); the tag says whether a signature was checked (none can be yet).
+function UI.profileSyncText(v)
+  local updated = "Last update " .. when(v.asOf) .. "  -  " .. ago(v.asOf)
+  local foot = v.stale and "OUT OF DATE: paste a new snapshot from stackrivals.io."
+    or "Pasted by hand, so it may be out of date. Nothing unlocks in WoW."
+  return { updated = updated, foot = foot, trust = v.verified and "VERIFIED" or "UNVERIFIED", stale = v.stale }
+end
+--- Kept for callers and tests that want the whole strip as one text.
 function UI.profileFootText(v)
-  return "Last updated on stackrivals.io: " .. when(v.asOf) .. " (" .. ago(v.asOf) .. "). "
-    .. (v.stale and "OUT OF DATE: export a new snapshot." or "Imported by hand, may be out of date.")
-    .. ((v.signed and not v.verified) and " Display only; signature not checked." or " Display only: the website decides.")
+  local t = UI.profileSyncText(v)
+  return t.updated .. ". " .. t.foot .. " " .. t.trust .. "."
 end
 
 function UI:RefreshProfile(p, state, r)
@@ -279,8 +320,8 @@ function UI:RefreshProfile(p, state, r)
   local has = pr ~= nil
   p.empty:SetShown(not has)
   p.go:SetShown(not has and state ~= "pending")
-  p:SetHeight(has and 268 or 104)
-  for _, k in ipairs({ "name", "rank", "stats", "extra", "histHead", "foot" }) do p[k]:SetShown(has) end
+  p:SetHeight(has and p.fullHeight or 104)
+  for _, k in ipairs({ "name", "rank", "stats", "shards", "extra", "histHead", "foot", "updated", "trust", "divider" }) do p[k]:SetShown(has) end
   for _, b in ipairs({ p.xp, p.season }) do for _, x in pairs(b) do x:SetShown(has) end end
   for _, row in ipairs(p.hist) do for _, x in pairs(row) do x:SetShown(has) end end
   if not has then
@@ -290,6 +331,8 @@ function UI:RefreshProfile(p, state, r)
   end
   p.name:SetText(safe(pr.name))
   p.rank:SetText(pr.rank and string.upper(safe(pr.rank)) or "UNRANKED")
+  local rc = pr.rank and C.gold or C.label
+  p.rank:SetTextColor(rc[1], rc[2], rc[3])
   p.xp.v:SetText("Level " .. pr.level .. "  -  " .. (pr.xpNext > 0 and (T.commas(pr.xp) .. " / " .. T.commas(pr.xpNext) .. " XP") or (T.commas(pr.xp) .. " XP")))
   local w = p.xp.track:GetWidth()
   p.xp.fill:SetWidth(math.max(1, pr.xpNext > 0 and w * math.min(1, pr.xp / pr.xpNext) or 1))
@@ -298,9 +341,11 @@ function UI:RefreshProfile(p, state, r)
   local games = pr.wins + pr.losses + pr.draws
   p.stats:SetText(string.format("Wins %s  -  Losses %s  -  Draws %s%s", T.commas(pr.wins), T.commas(pr.losses), T.commas(pr.draws),
     games > 0 and string.format("  -  %d%% won", math.floor(100 * pr.wins / games + 0.5)) or ""))
+  -- the website's balance, only when an approved format delivers one (SRP1 never does)
+  p.shards:SetText(pr.shards and (T.commas(pr.shards) .. " SHARDS") or "")
+  p.stats:SetWidth(pr.shards and (p.statsWidth - 130) or p.statsWidth) -- the record gets the whole line without Shards
   p.extra:SetText("Achievements " .. (pr.achUnlocked and (pr.achUnlocked .. " / " .. pr.achTotal) or "-")
-    .. "  -  Cosmetics " .. (pr.cosOwned and (pr.cosOwned .. " owned" .. (pr.cosEquipped and (", wearing " .. safe(pr.cosEquipped)) or "")) or "-")
-    .. (pr.shards and ("  -  Shards " .. T.commas(pr.shards) .. " (website balance)") or ""))
+    .. "  -  Cosmetics " .. (pr.cosOwned and (pr.cosOwned .. " owned" .. (pr.cosEquipped and (", wearing " .. safe(pr.cosEquipped)) or "")) or "-"))
   for i, row in ipairs(p.hist) do
     local h = pr.history[i]
     if h then
@@ -315,7 +360,14 @@ function UI:RefreshProfile(p, state, r)
     end
   end
   if #pr.history == 0 then p.hist[1].mode:SetShown(true); p.hist[1].mode:SetText("No matches yet.") end
-  p.foot:SetText(UI.profileFootText(pr))
-  local fc = pr.stale and C.gold or C.label
+  local t = UI.profileSyncText(pr)
+  p.updated:SetText(t.updated)
+  p.foot:SetText(t.foot)
+  p.trust:SetText(t.trust)
+  local uc = t.stale and C.gold or C.body
+  p.updated:SetTextColor(uc[1], uc[2], uc[3])
+  local fc = t.stale and C.gold or C.label
   p.foot:SetTextColor(fc[1], fc[2], fc[3])
+  local tc = pr.verified and C.green or C.gold
+  p.trust:SetTextColor(tc[1], tc[2], tc[3])
 end
