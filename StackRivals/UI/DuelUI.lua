@@ -528,6 +528,7 @@ function UI:RefreshDuel(phase)
   end
   local showRival = (inDuel or (s and s.loot and not ns.App.inMenu)) and true or false
   self.rivalPanel:SetShown(showRival)
+  if self.RefreshLootBoard then self:RefreshLootBoard() end -- the 10-player list beside the window
   self.nextPanel:SetHeight(self.field:GetHeight() - (showRival and 82 or 0))
   self.nextPreviews[5]:SetShown(not showRival)
   self:RenderRival()

@@ -38,7 +38,12 @@ function H.eq(a, b, msg)
 end
 function H.ok(v, msg) if not v then error(msg or "expected truthy", 2) end end
 
+--- A measurement printed with the report (simulated numbers, for the docs).
+H.notes = {}
+function H.note(text) H.notes[#H.notes + 1] = text end
+
 function H.report(label)
+  for _, t in ipairs(H.notes) do print("  note: " .. t) end
   print(string.format("%s: %d passed, %d failed", label, H.passed, H.failed))
   for _, f in ipairs(H.failures) do print("  FAIL " .. f) end
   return H.failed == 0

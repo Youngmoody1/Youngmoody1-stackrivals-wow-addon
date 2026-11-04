@@ -165,10 +165,21 @@ function Comm.send(text, channel, target, onFail, opts)
     if onFail then onFail("queue_full") end
     return false
   end
-  Comm.queue[#Comm.queue + 1] = { text = text, channel = channel, target = target, onFail = onFail, tries = 0, notBefore = 0, key = opts and opts.key }
+  local item = { text = text, channel = channel, target = target, onFail = onFail, tries = 0, notBefore = 0, key = opts and opts.key }
+  -- opts.front: time-critical (a race start everyone waits for) goes ahead of queued repeats
+  if opts and opts.front then table.insert(Comm.queue, 1, item) else Comm.queue[#Comm.queue + 1] = item end
   if #Comm.queue > Comm.stats.maxQueue then Comm.stats.maxQueue = #Comm.queue end
   Comm.flush()
   return true
+end
+
+--- Remove queued (not yet sent) messages for which pred(q) is true; returns how many.
+function Comm.unqueue(pred)
+  local n, i = 0, 1
+  while i <= #Comm.queue do
+    if pred(Comm.queue[i]) then table.remove(Comm.queue, i); n = n + 1 else i = i + 1 end
+  end
+  return n
 end
 
 local function refill(b, t)

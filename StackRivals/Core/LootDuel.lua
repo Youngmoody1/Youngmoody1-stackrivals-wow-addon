@@ -3,14 +3,15 @@
   instead of /roll. Separate from Quickplay and duels; never ranked; never touches loot.
 
   Flow (docs/LOOT_DUEL.md):
-    1. The raid leader, an assistant or the master looter opens Loot Duel, picks an item (link or
-       item ID), a time (1:00 or 2:00) and 2-8 group members, and invites them (LDO + LDI).
+    1. The party leader, raid leader, an assistant or the master looter opens Loot Duel, picks an
+       item (link or item ID), a time (1:00 or 2:00) and 2-10 group members, and invites them
+       (LDF + LDI). All of them play at once: one race, no 1v1 rounds.
     2. Each invitee accepts or declines in a popup (LDA). Accepting sends only a COMMITMENT to a
        secret seed nonce. Nobody is entered automatically; no answer = not in.
     3. The leader starts with the players who accepted (at least 2): the final list of names and
-       commitments goes out (LDP + LDS). Every PC checks it against the answers it saw itself
+       commitments goes out in one message (LDQ, players by their place in the invite list). Every PC checks it against the answers it saw itself
        (a player who joined and was left out is told so). Then every player reveals their nonce
-       (LDN); the leader relays them all (LDV) and reveals its own committed nonce (LDG). All
+       (LDN); the leader relays them all and reveals its own committed nonce in one go (LDW). All
        commitments are fixed before anyone reveals, so nobody - the leader included - can know or
        steer the pieces; a missing reveal cancels the whole race (no re-roll by leaving someone out).
     4. Everyone plays the same pieces at once, no spells. Live scores (LDC) feed a leaderboard.
@@ -47,6 +48,7 @@ local function emit(ev, ...) local fn = LD.listeners[ev]; if fn then fn(...) end
 function LD.on(ev, fn) LD.listeners[ev] = fn end
 local function me() return ns.Comm and ns.Comm.me() or nil end
 local function same(a, b) return ns.Comm and ns.Comm.same(a, b) end
+local function key(name) return (ns.Comm and ns.Comm.fullName and ns.Comm.fullName(name) or name):lower() end
 local function rnd(a, b) return math.random(a, b) end
 
 --- PARTY / RAID / INSTANCE_CHAT or nil (not in a group).
@@ -64,7 +66,8 @@ local function bcast(text, opts)
   return ns.Comm.send(text, ch, nil, nil, opts)
 end
 
---- The group: { name, class, leader, assist, ml } (you included). Every API optional.
+--- The group: { name, class, level, faction, subgroup, leader, assist, ml, online } (you
+--- included). Read only; every API optional.
 function LD.roster()
   local out = {}
   local full = function(n, r) return ns.Social and ns.Social.full(n, r) or n end
@@ -82,9 +85,11 @@ function LD.roster()
   end
   if IsInRaid and IsInRaid() and GetRaidRosterInfo then
     for i = 1, math.min(GetNumGroupMembers and GetNumGroupMembers() or 0, 40) do
-      local name, rank, _, _, _, classFile, _, online, _, _, isML = GetRaidRosterInfo(i)
+      local name, rank, subgroup, level, _, classFile, _, online, _, _, isML = GetRaidRosterInfo(i)
       if name then
-        out[#out + 1] = { name = full(name), class = classFile, leader = rank == 2, assist = rank == 1, ml = isML and true or false, online = online ~= false }
+        local fac = UnitFactionGroup and select(1, UnitFactionGroup("raid" .. i)) or nil
+        out[#out + 1] = { name = full(name), class = classFile, level = tonumber(level), faction = fac, subgroup = subgroup,
+          leader = rank == 2, assist = rank == 1, ml = isML and true or false, online = online ~= false }
       end
     end
   elseif IsInGroup and IsInGroup() and UnitName then
@@ -96,7 +101,11 @@ function LD.roster()
         local cls = UnitClass and select(2, UnitClass(u)) -- (a and f() keeps only the first value)
         local name = (u == "player") and me() or full(n, r)
         if name and not (u ~= "player" and same(name, me())) then
-          out[#out + 1] = { name = name, class = cls, leader = UnitIsGroupLeader and UnitIsGroupLeader(u) or false, assist = false, online = true }
+          local lvl = UnitLevel and UnitLevel(u) or nil
+          local fac = UnitFactionGroup and select(1, UnitFactionGroup(u)) or nil
+          local on = (u == "player") or not UnitIsConnected or UnitIsConnected(u) ~= false
+          out[#out + 1] = { name = name, class = cls, level = tonumber(lvl), faction = fac, leader = UnitIsGroupLeader and UnitIsGroupLeader(u) or false,
+            assist = false, online = on and true or false }
         end
       end
     end
@@ -107,6 +116,88 @@ end
 
 local function rosterEntry(name)
   for _, e in ipairs(LD.roster()) do if same(e.name, name) then return e end end
+end
+
+--- Ask the group (one PARTY / RAID broadcast) which members have StackRivals: their addons answer
+--- with a hidden whisper (HI, read through ns.Duel.presence). Not more than once per 20 s.
+LD.CHECK_GAP = 20
+function LD.checkAddons()
+  if not (ns.Comm and ns.Comm.enabled) or (ns.Comm.trial) then return false, "unavailable" end
+  local ch = LD.channel()
+  if not ch then return false, "not_in_group" end
+  local t = now()
+  if LD.checkedAt and t - LD.checkedAt < LD.CHECK_GAP then return false, "cooldown" end
+  LD.checkedAt = t
+  ns.Comm.send(P().encode("HEL", ns.VERSION, ns.Engine.ENGINE_VERSION), ch, nil, nil, { key = "LDHEL", low = true })
+  return true
+end
+
+--- Can this member take part? "yes" (StackRivals 0.7.1+ answered), "old" (an older StackRivals
+--- answered: it can't join a Loot Duel for 10), "you", or nil (no answer yet).
+function LD.addonStatus(name)
+  if same(name, me()) then return "you" end
+  local p = ns.Duel and ns.Duel.presence(name)
+  if not p then return nil end
+  if p.addon and P().versionAtLeast and not P().versionAtLeast(p.addon, LD.MIN_VERSION) then return "old" end
+  return "yes"
+end
+LD.MIN_VERSION = "0.7.1"
+
+--- Items in the open loot window (read only: GetNumLootItems / GetLootSlotLink / GetLootSlotInfo),
+--- uncommon or better, so the leader can pick one with a click. Empty when no loot window is open.
+function LD.lootWindowItems()
+  local out = {}
+  if not (GetNumLootItems and GetLootSlotLink) then return out end
+  local okN, n = pcall(GetNumLootItems)
+  if not okN or type(n) ~= "number" then return out end
+  for slot = 1, math.min(n, 16) do
+    local okL, link = pcall(GetLootSlotLink, slot)
+    local id = okL and LD.itemIdFrom(link)
+    if id then
+      local q
+      if GetLootSlotInfo then local okI, _, _, _, _, quality = pcall(GetLootSlotInfo, slot); if okI then q = quality end end
+      if not q then q = select(3, LD.itemInfo(id)) end
+      if (q or 2) >= 2 then out[#out + 1] = { itemId = id, link = link, quality = q } end
+    end
+  end
+  return out
+end
+
+--- The live leaderboard: every player by score (live scores are provisional until replayed).
+--- rows: { name, class, score, rank, status = playing | topped_out | time_up | no_signal |
+---   disconnected | checking | checked | failed | out, checked = true when replay-checked }
+function LD.liveBoard(d, t)
+  t = t or now()
+  local rs = P().LOOT_RULESETS[d.rs]
+  local roster = {}
+  for _, e in ipairs(LD.roster()) do roster[key(e.name)] = e end
+  local rows = {}
+  for _, p in ipairs(d.participants or {}) do
+    local k = key(p.name)
+    local r, lv = d.results[k], d.live[k]
+    local row = { name = p.name, class = (roster[k] and roster[k].class) or (r and r.class), score = 0 }
+    local s = ns.App and ns.App.session
+    if same(p.name, me()) and s and s.loot == d and not r then
+      row.score = s.state.score
+      row.status = s.state.gameOver and "topped_out" or "playing"
+    elseif r and r.score then
+      row.score = r.score
+      if r.status == "verified" then row.status, row.checked = "checked", true
+      elseif r.status == "rejected" then row.status = "failed"
+      elseif r.status == "missing" then row.status = "out"
+      else row.status = (r.ticks and rs and r.ticks < rs.limitTicks) and "topped_out" or "time_up" end
+    else
+      row.score = lv and lv.score or 0
+      local e = roster[k]
+      if e and e.online == false then row.status = "disconnected"
+      elseif d.state == "playing" and t - (lv and lv.at or d.startAt or t) > 3 * LD.LIVE_EVERY + 4 then row.status = "no_signal"
+      else row.status = "playing" end
+    end
+    rows[#rows + 1] = row
+  end
+  table.sort(rows, function(a, b) if a.score ~= b.score then return a.score > b.score end return a.name:lower() < b.name:lower() end)
+  for i, x in ipairs(rows) do x.rank = i end
+  return rows
 end
 
 --- WoW class token of a group member (for class colours), nil if unknown.
@@ -129,8 +220,9 @@ LD.WHY = {
   not_leader = "Only the leader, an assistant or the master looter can start a Loot Duel.",
   no_item = "Pick an item first (shift-click it or paste its link / item ID).",
   few = "Pick at least 2 players.",
-  many = "At most 8 players.",
-  many_heats = "At most 8 per Loot Duel. More want it? Run heats of up to 8, then a final between the heat winners.",
+  many = "At most 10 players.",
+  many_heats = "At most 10 play in one Loot Duel. More want it? Agree who plays first (for example /roll), or run a second Loot Duel.",
+  all_many = "More than 10 online: pick up to 10 with the boxes, then Invite Selected.",
   busy = "A Loot Duel is already running.",
   duel = "Finish your duel first.",
   expired = "This invite has expired: start a new Loot Duel.",
@@ -185,7 +277,7 @@ function LD.listHash(lid, rs, itemId, entries)
   for _, e in ipairs(sorted(entries)) do parts[#parts + 1] = e.name:lower() .. "=" .. e.commit end
   return string.format("%08x", ns.Prng.hashString(table.concat(parts, "|")))
 end
---- Hash of the revealed nonces (LDG): every PC must have the same set.
+--- Hash of the revealed nonces (LDW): every PC must have the same set.
 function LD.revealHash(lid, entries)
   local parts = { lid }
   for _, e in ipairs(sorted(entries)) do parts[#parts + 1] = e.name:lower() .. "=" .. e.nonce end
@@ -231,7 +323,7 @@ LD.current = nil    -- the loot duel I lead, was invited to, or play in
 LD.history = {}     -- finished ones (this session): the results screen
 
 local function newLd(o)
-  local d = { answers = {}, invitees = {}, inviteChunks = {}, partChunks = {}, revealChunks = {}, reveals = {}, results = {}, live = {} }
+  local d = { answers = {}, invitees = {}, inviteChunks = {}, reveals = {}, results = {}, live = {} }
   for k, v in pairs(o) do d[k] = v end
   return d
 end
@@ -243,7 +335,20 @@ end
 local function isPart(d, name)
   for _, p in ipairs(d.participants or {}) do if same(p.name, name) then return p end end
 end
-local function key(name) return (ns.Comm and ns.Comm.fullName and ns.Comm.fullName(name) or name):lower() end
+--- 1-based place of a name in the invite list (the start messages refer to players by it).
+local function placeOf(d, name)
+  for i, n in ipairs(d.inviteOrder or {}) do if same(n, name) then return i end end
+end
+--- Everyone still to answer? (the offer is repeated only for them)
+local function unanswered(d)
+  for _, n in ipairs(d.inviteOrder or {}) do if not d.answers[key(n)] then return true end end
+  return false
+end
+--- Drop this Loot Duel's queued repeats that the start makes useless (offer, invitees, answers).
+local function dropRepeats(d)
+  if not (ns.Comm and ns.Comm.unqueue) then return end
+  ns.Comm.unqueue(function(q) return q.key and (q.key:find("^LDF:" .. d.lid) or q.key:find("^LDI:" .. d.lid) or q.key:find("^LDA:" .. d.lid)) ~= nil end)
+end
 
 --- Am I tied up in a Loot Duel (joined, locking in, or racing)? Duels, Quickplay and solo starts wait.
 function LD.busy()
@@ -298,7 +403,7 @@ end
 --- Offer + invitee list chunks (names hex; as many per message as fit).
 function LD.sendOffer(d)
   d.offerAt = now()
-  bcast(P().encode("LDO", d.lid, d.rs, d.engine, d.itemId, d.commit, #d.inviteOrder), { key = "LDO:" .. d.lid })
+  bcast(P().encode("LDF", d.lid, d.rs, d.engine, d.itemId, d.commit, #d.inviteOrder), { key = "LDF:" .. d.lid })
   local hx = {}
   for _, n in ipairs(d.inviteOrder) do hx[#hx + 1] = P().hexName(n) end
   for k, c in ipairs(chunked(hx)) do bcast(P().encode("LDI", d.lid, k, table.concat(c, ",")), { key = "LDI:" .. d.lid .. ":" .. k }) end
@@ -344,18 +449,18 @@ function LD.start()
   if #list < 2 then return false, "few" end
   d.participants = sorted(list)
   d.listHash = LD.listHash(d.lid, d.rs, d.itemId, d.participants)
-  LD.enterReveal(d)
+  dropRepeats(d)
   LD.sendList(d)
+  LD.enterReveal(d)
   return true
 end
 
+--- The fixed list in ONE message: <place>-<commit> for every player (10 fit in 255 bytes).
 function LD.sendList(d)
   d.listSends, d.listAt = (d.listSends or 0) + 1, now()
   local items = {}
-  for _, e in ipairs(d.participants) do items[#items + 1] = P().hexName(e.name) .. "-" .. e.commit end
-  local chunks = chunked(items)
-  for k, c in ipairs(chunks) do bcast(P().encode("LDP", d.lid, k, #chunks, table.concat(c, ",")), { key = "LDP:" .. d.lid .. ":" .. k }) end
-  bcast(P().encode("LDS", d.lid, d.listHash, #d.participants), { key = "LDS:" .. d.lid })
+  for _, e in ipairs(d.participants) do items[#items + 1] = placeOf(d, e.name) .. "-" .. e.commit end
+  bcast(P().encode("LDQ", d.lid, d.listHash, #d.participants, table.concat(items, ",")), { key = "LDQ:" .. d.lid, front = true })
 end
 
 --- Everyone: the list is fixed; players reveal their nonce.
@@ -368,7 +473,7 @@ function LD.enterReveal(d)
   end
   if isPart(d, me()) then
     d.reveals[key(me())] = d.myNonce
-    LD.sendReveal(d)
+    if d.role ~= "leader" then LD.sendReveal(d) end -- the leader's own share goes out with the go (LDW)
   end
   LD.tryGo(d)
   emit("changed", d)
@@ -377,7 +482,7 @@ end
 function LD.sendReveal(d)
   if not d.myNonce then return end
   d.nSends, d.nAt = (d.nSends or 0) + 1, now()
-  bcast(P().encode("LDN", d.lid, d.myNonce), { key = "LDN:" .. d.lid })
+  bcast(P().encode("LDN", d.lid, d.myNonce), { key = "LDN:" .. d.lid, front = true })
 end
 
 --- Leader: when every player's nonce is in, relay them all and reveal its own (go).
@@ -395,13 +500,12 @@ function LD.tryGo(d)
   LD.begin(d)
 end
 
+--- Go in ONE message: the leader's own nonce, the reveal hash and every player's nonce by place.
 function LD.sendGo(d)
   d.goSends, d.goAt = (d.goSends or 0) + 1, now()
   local items = {}
-  for _, e in ipairs(d.revealed) do items[#items + 1] = P().hexName(e.name) .. "-" .. e.nonce end
-  local chunks = chunked(items)
-  for k, c in ipairs(chunks) do bcast(P().encode("LDV", d.lid, k, #chunks, table.concat(c, ",")), { key = "LDV:" .. d.lid .. ":" .. k }) end
-  bcast(P().encode("LDG", d.lid, d.nonceL, d.revealHashV), { key = "LDG:" .. d.lid })
+  for _, e in ipairs(d.revealed) do items[#items + 1] = placeOf(d, e.name) .. "-" .. e.nonce end
+  bcast(P().encode("LDW", d.lid, d.nonceL, d.revealHashV, table.concat(items, ",")), { key = "LDW:" .. d.lid, front = true })
 end
 
 --- Everyone: the race begins (seed from all nonces). Players start their run; others watch.
@@ -426,7 +530,8 @@ function LD.cancel(reason)
   if d.role == "leader" and (d.state == "inviting" or d.state == "revealing" or d.state == "playing") then
     d.cancelMsg = P().encode("LDX", d.lid, (reason == "left" or reason == "noreveal") and reason or "cancel")
     d.cancelSends, d.cancelAt = 1, now()
-    bcast(d.cancelMsg, { key = "LDX:" .. d.lid })
+    dropRepeats(d)
+    bcast(d.cancelMsg, { key = "LDX:" .. d.lid, front = true })
   end
   if d.state == "inviting" or d.state == "revealing" or (d.role == "leader" and d.state ~= "done") then
     d.state = "cancelled"; d.endReason = (reason == "noreveal") and "noreveal" or "cancelled"
@@ -553,7 +658,7 @@ end
 local function fromLeader(d, sender) return d and same(d.leader, sender) end
 
 local H = {}
-function H.LDO(m, sender)
+function H.LDF(m, sender)
   -- only the group's leader / assistant / master looter may offer; nothing from outside the group
   if not LD.mayLead(sender) then return end
   local d = LD.current
@@ -602,14 +707,7 @@ function H.LDA(m, sender)
   d.answers[key(sender)] = { accept = m.accept, commit = m.commit, name = sender }
   emit("changed", d)
 end
-function H.LDP(m, sender)
-  local d = LD.current
-  if not (d and d.lid == m.lid and fromLeader(d, sender)) or d.role == "leader" then return end
-  d.partChunks[m.k] = m.entries
-  d.partTotal = m.total
-  LD.tryList(d)
-end
-function H.LDS(m, sender)
+function H.LDQ(m, sender)
   local d = LD.current
   if not (d and d.lid == m.lid and fromLeader(d, sender)) or d.role == "leader" then return end
   d.listMsg = m
@@ -618,15 +716,16 @@ end
 
 --- Member: accept the fixed list once it is complete and matches everything this PC saw.
 function LD.tryList(d)
-  if d.state ~= "inviting" or not d.listMsg or not d.partTotal then return end
-  local entries = {}
-  for k = 1, d.partTotal do
-    if not d.partChunks[k] then return end
-    for _, e in ipairs(d.partChunks[k]) do entries[#entries + 1] = e end
-  end
+  if d.state ~= "inviting" or not d.listMsg then return end
+  -- the list names players by their place in the invite list: wait until I have all of it
+  if not d.count or #d.inviteOrder < d.count then return end
   local m = d.listMsg
-  local bad
-  if #entries ~= m.count or #entries < 2 then bad = "list" end
+  local entries, bad = {}, nil
+  for _, e in ipairs(m.entries) do
+    local n = d.inviteOrder[e.i]
+    if not n then bad = "not_invited" else entries[#entries + 1] = { name = n, commit = e.commit } end
+  end
+  if not bad and (#entries ~= m.count or #entries < 2) then bad = "list" end
   if not bad and LD.listHash(d.lid, d.rs, d.itemId, entries) ~= m.listHash then bad = "list" end
   local mine
   if not bad then
@@ -660,14 +759,7 @@ function H.LDN(m, sender)
   d.reveals[key(p.name)] = m.nonce
   LD.tryGo(d)
 end
-function H.LDV(m, sender)
-  local d = LD.current
-  if not (d and d.lid == m.lid and fromLeader(d, sender)) or d.role == "leader" then return end
-  d.revealChunks[m.k] = m.entries
-  d.revealTotal = m.total
-  LD.tryGoMember(d)
-end
-function H.LDG(m, sender)
+function H.LDW(m, sender)
   local d = LD.current
   if not (d and d.lid == m.lid and fromLeader(d, sender)) or d.role == "leader" then return end
   d.goMsg = m
@@ -676,15 +768,14 @@ end
 
 --- Member: start once every nonce (checked against its commitment) and the leader's are in.
 function LD.tryGoMember(d)
-  if d.state ~= "revealing" or not d.goMsg or not d.revealTotal then return end
-  local entries = {}
-  for k = 1, d.revealTotal do
-    if not d.revealChunks[k] then return end
-    for _, e in ipairs(d.revealChunks[k]) do entries[#entries + 1] = e end
-  end
+  if d.state ~= "revealing" or not d.goMsg then return end
   local m = d.goMsg
-  local bad
-  if #entries ~= #d.participants then bad = "reveal" end
+  local entries, bad = {}, nil
+  for _, e in ipairs(m.entries) do
+    local n = d.inviteOrder[e.i]
+    if not n then bad = "reveal" else entries[#entries + 1] = { name = n, nonce = e.nonce } end
+  end
+  if not bad and #entries ~= #d.participants then bad = "reveal" end
   if not bad and P().commit16(d.lid, m.nonce) ~= d.commit then bad = "commit" end -- the leader's nonce was fixed at the offer
   if not bad and LD.revealHash(d.lid, entries) ~= m.revealHash then bad = "reveal" end
   if not bad then
@@ -704,7 +795,7 @@ function H.LDC(m, sender)
   local d = LD.current
   if not (d and d.lid == m.lid and d.state == "playing") then return end
   local p = isPart(d, sender)
-  if p then d.live[key(p.name)] = { tick = m.tick, score = m.score }; emit("live", d) end
+  if p then d.live[key(p.name)] = { tick = m.tick, score = m.score, at = now() }; emit("live", d) end
 end
 local function resultState(d) return d.state == "playing" or d.state == "revealing" end -- results can overtake my start
 function H.LDE(m, sender)
@@ -757,26 +848,28 @@ function LD.update(t)
     bcast(d.cancelMsg, { key = "LDX:" .. d.lid })
   end
   if d.state == "inviting" then
-    if d.role == "leader" and t - (d.offerAt or 0) >= LD.REPEAT and t - d.createdAt < LD.INVITE_TIME then LD.sendOffer(d) end
+    -- repeat the offer only while someone hasn't answered (a 10-player invite is 5 messages)
+    if d.role == "leader" and t - (d.offerAt or 0) >= LD.REPEAT and t - d.createdAt < LD.INVITE_TIME and unanswered(d) then LD.sendOffer(d) end
     if d.myAnswer and (d.answerSends or 0) < 3 and t - (d.answerAt or 0) >= LD.REPEAT then
       d.answerSends, d.answerAt = d.answerSends + 1, t
-      bcast(P().encode("LDA", d.lid, d.myAnswer, d.myAnswer == "a" and d.myCommit or "-"), { key = "LDA:" .. d.lid })
+      bcast(P().encode("LDA", d.lid, d.myAnswer, d.myAnswer == "a" and d.myCommit or "-"), { key = "LDA:" .. d.lid, low = true })
     end
     if t - d.createdAt > LD.START_WAIT and d.role ~= "leader" then d.state, d.endReason = "cancelled", "not_started"; emit("changed", d) end
   elseif d.state == "revealing" then
-    if d.role == "leader" and (d.listSends or 0) < 3 and t - (d.listAt or 0) >= 4 then LD.sendList(d) end
-    if d.myNonce and isPart(d, me()) and (d.nSends or 0) < 4 and t - (d.nAt or 0) >= 4 then LD.sendReveal(d) end
+    -- repeats only help someone who missed a message; each costs the sender's message budget
+    if d.role == "leader" and (d.listSends or 0) < 3 and t - (d.listAt or 0) >= 5 then LD.sendList(d) end
+    if d.role ~= "leader" and d.myNonce and isPart(d, me()) and (d.nSends or 0) < 4 and t - (d.nAt or 0) >= 5 then LD.sendReveal(d) end
     if t - d.revealAt > LD.REVEAL_TIME then
       if d.role == "leader" then LD.cancel("noreveal")
       elseif t - d.revealAt > LD.REVEAL_TIME + 15 then d.state, d.endReason = "cancelled", "not_started"; emit("changed", d) end
     end
   elseif d.state == "playing" then
-    if d.role == "leader" and (d.goSends or 0) < 3 and t - (d.goAt or 0) >= 4 then LD.sendGo(d) end
+    if d.role == "leader" and (d.goSends or 0) < 3 and t - (d.goAt or 0) >= 5 then LD.sendGo(d) end
     local s = ns.App and ns.App.session
     if d.iPlay and s and s.loot == d and not s.recorded then
       if s.phase == "playing" and t - (d.liveAt or 0) >= LD.LIVE_EVERY then
         d.liveAt = t
-        d.live[key(me())] = { tick = s.state.tick, score = s.state.score }
+        d.live[key(me())] = { tick = s.state.tick, score = s.state.score, at = t }
         bcast(P().encode("LDC", d.lid, P().b36(s.state.tick), P().b36(s.state.score)), { key = "LDC:" .. d.lid, low = true })
         emit("live", d)
       end
@@ -806,7 +899,7 @@ function LD.init()
     LD.frame:SetScript("OnEvent", function()
       local d = LD.current
       if d and d.role == "leader" and (d.state == "inviting" or d.state == "revealing") then
-        pcall(ns.Comm.send, P().encode("LDX", d.lid, "left"), LD.channel() or "PARTY")
+        pcall(ns.Comm.send, P().encode("LDX", d.lid, "left"), LD.channel() or "PARTY", nil, nil, { front = true })
         if ns.Comm.flush then pcall(ns.Comm.flush) end
       end
     end)

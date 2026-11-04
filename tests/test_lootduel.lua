@@ -24,6 +24,17 @@ local function party(seed, names, opts, netOpts)
   return net, cs
 end
 local function LD(c) return c.ns.LootDuel end
+--- A start list as a (possibly modified) leader would send it: players by their place in d's
+--- invite list; place = a number puts an entry at that place (e.g. one nobody was invited to).
+local function ldq(d, hash, entries)
+  local items = {}
+  for _, e in ipairs(entries) do
+    local place = e.place
+    if not place then for i, n in ipairs(d.inviteOrder) do if n:lower() == e.name:lower() then place = i end end end
+    items[#items + 1] = place .. "-" .. e.commit
+  end
+  return P.encode("LDQ", d.lid, hash, #entries, table.concat(items, ","))
+end
 --- Play every running loot race to its end (hard drops), then let results travel.
 local function raceToEnd(net, cs, skip)
   -- the race starts once every seed share is in (a few seconds on the group channel)
@@ -53,21 +64,23 @@ describe("Loot Duel protocol", function()
     local h = P.hexName("Ann-Realm")
     local c16 = "0a1b2c3d4e5f6071"
     local msgs = {
-      P.encode("LDO", "lid123", "l060", 1, 19019, c16, 3), P.encode("LDI", "lid123", 1, h .. "," .. P.hexName("Ben-Realm")),
+      P.encode("LDF", "lid123", "l060", 1, 19019, c16, 3), P.encode("LDI", "lid123", 1, h .. "," .. P.hexName("Ben-Realm")),
       P.encode("LDA", "lid123", "a", c16), P.encode("LDA", "lid123", "d", "-"),
-      P.encode("LDP", "lid123", 1, 1, h .. "-" .. c16), P.encode("LDS", "lid123", "0a1b2c3d", 2),
-      P.encode("LDN", "lid123", "n0nce123"), P.encode("LDV", "lid123", 1, 1, h .. "-n0nce123"), P.encode("LDG", "lid123", "n0nce999", "0a1b2c3d"),
+      P.encode("LDQ", "lid123", "0a1b2c3d", 2, "1-" .. c16 .. ",2-" .. c16),
+      P.encode("LDN", "lid123", "n0nce123"), P.encode("LDW", "lid123", "n0nce999", "0a1b2c3d", "1-n0nce123,2-n0nce456"),
       P.encode("LDC", "lid123", P.b36(600), P.b36(12345)), P.encode("LDE", "lid123", P.b36(3600), P.b36(9000), P.b36(12), P.b36(2), "0a1b2c3d", 2),
       P.encode("LDL", "lid123", 1, 2, "3A0B5F"), P.encode("LDX", "lid123", "cancel"), P.encode("LDR", "lid123", h, 0),
     }
     for _, s in ipairs(msgs) do ok(#s <= 255, s); ok(P.decode(s), "decode " .. s) end
     eq(P.decode(msgs[2]).names[2], "Ben-Realm")
     local bad = {
-      "1:LDO:lid123:x999:1:19019:0a1b2c3d4e5f6071:3", "1:LDO:lid123:l060:1:19019:0a1b2c3d4e5f6071:9", "1:LDO:lid123:l060:1:0:0a1b2c3d4e5f6071:3",
-      "1:LDO:lid123:l060:1:19019:0a1b2c3d:3", "1:LDA:lid123:a:n0nce123", "1:LDP:lid123:1:1:" .. h .. "-n0nce123",
+      "1:LDF:lid123:x999:1:19019:0a1b2c3d4e5f6071:3", "1:LDF:lid123:l060:1:19019:0a1b2c3d4e5f6071:11", "1:LDF:lid123:l060:1:0:0a1b2c3d4e5f6071:3",
+      "1:LDF:lid123:l060:1:19019:0a1b2c3d:3", "1:LDA:lid123:a:n0nce123", "1:LDQ:lid123:0a1b2c3d:2:1-n0nce123,2-n0nce456",
       "1:LDI:lid123:1:zz", "1:LDI:lid123:1:" .. P.hexName("Bad|cName-Realm"), "1:LDA:lid123:a:-", "1:LDA:lid123:x:0a1b2c3d4e5f6071",
-      "1:LDP:lid123:2:1:" .. h .. "-0a1b2c3d4e5f6071", "1:LDS:lid123:nothex!:2", "1:LDE:lid123:1:1:1:1:xyz:1", "1:LDL:lid123:1:1:3AH",
-      "1:LDN:lid123:-", "1:LDG:lid123:n0nce:xyz", "1:LDV:lid123:1:1:" .. h .. "-BAD!",
+      "1:LDQ:lid123:0a1b2c3d:3:1-0a1b2c3d4e5f6071,2-0a1b2c3d4e5f6071", "1:LDQ:lid123:0a1b2c3d:2:1-0a1b2c3d4e5f6071,11-0a1b2c3d4e5f6071",
+      "1:LDQ:lid123:nothex!:2:1-0a1b2c3d4e5f6071,2-0a1b2c3d4e5f6071", "1:LDE:lid123:1:1:1:1:xyz:1", "1:LDL:lid123:1:1:3AH",
+      "1:LDN:lid123:-", "1:LDW:lid123:n0nce:xyz:1-n0nce123", "1:LDW:lid123:n0nce999:0a1b2c3d:1-BAD!", "1:LDW:lid123:n0nce999:0a1b2c3d:0-n0nce123",
+      "1:LDO:lid123:l060:1:19019:0a1b2c3d4e5f6071:3", "1:LDP:lid123:1:1:" .. h .. "-0a1b2c3d4e5f6071",
       "1:LDX:lid123:whatever", "1:LDR:lid123:" .. h .. ":2",
     }
     for _, s in ipairs(bad) do ok(P.decode(s) == nil, "accepted: " .. s) end
@@ -176,7 +189,7 @@ describe("Loot Duel between simulated clients", function()
     local net, cs = party(13, { "Lead", "Ann", "Ben" })
     local okA, why = LD(cs.Ann).create(19019, "l060", { "Ann-Realm", "Ben-Realm" })
     ok(not okA); eq(why, "not_leader")
-    net.inject(cs.Ben, "Ann-Realm", P.encode("LDO", "fake01", "l060", 1, 19019, "0a1b2c3d", 2), "PARTY")
+    net.inject(cs.Ben, "Ann-Realm", P.encode("LDF", "fake01", "l060", 1, 19019, "0a1b2c3d4e5f6071", 2), "PARTY")
     net.step(30)
     eq(LD(cs.Ben).current, nil)
     local solo = NS.new({ seed = 14 }).add({ name = "Zed" })
@@ -210,9 +223,9 @@ describe("Loot Duel between simulated clients", function()
     cs.Lead.ns.UI:ShowSheet("loot")
     local found
     for _, row in ipairs(cs.Lead.ns.UI.lootSheet.rows) do
-      if row:IsShown() and (row.status:GetText() or ""):find("no StackRivals", 1, true) then found = true end
+      if row:IsShown() and (row.status:GetText() or ""):find("no answer", 1, true) then found = true end
     end
-    ok(found, "Ben: no answer -> /roll instead")
+    ok(found, "Ben: no answer -> normal loot instead")
     ok(LD(cs.Lead).start(), "Lead + Ann can race")
   end)
 
@@ -221,12 +234,11 @@ describe("Loot Duel between simulated clients", function()
     LD(cs.Lead).create(19019, "l060", { "Ann-Realm", "Ben-Realm" }); net.step(60)
     LD(cs.Ann).answer(true); net.step(60)
     local d = LD(cs.Ann).current
-    -- a start naming Ann plus an uninvited player, with a hash that matches that list
+    -- a start naming Ann plus a place nobody was invited to (an uninvited player)
     local mal = "0123456789abcdef"
-    local entries = { { name = "Ann-Realm", commit = d.myCommit }, { name = "Mal-Realm", commit = mal } }
+    local entries = { { name = "Ann-Realm", commit = d.myCommit }, { name = "Mal-Realm", commit = mal, place = 3 } }
     local hash = LD(cs.Ann).listHash(d.lid, d.rs, d.itemId, entries)
-    net.inject(cs.Ann, "Lead-Realm", P.encode("LDP", d.lid, 1, 1, P.hexName("Ann-Realm") .. "-" .. d.myCommit .. "," .. P.hexName("Mal-Realm") .. "-" .. mal), "PARTY")
-    net.inject(cs.Ann, "Lead-Realm", P.encode("LDS", d.lid, hash, 2), "PARTY")
+    net.inject(cs.Ann, "Lead-Realm", ldq(d, hash, entries), "PARTY")
     net.step(10)
     eq(LD(cs.Ann).current.state, "cancelled")
     ok(LD(cs.Ann).current.endReason:find("bad_start"), LD(cs.Ann).current.endReason)
@@ -268,10 +280,7 @@ describe("Loot Duel between simulated clients", function()
     for _, p in ipairs(LD(cs2.Lead).accepted(LD(cs2.Lead).current)) do
       entries[#entries + 1] = { name = p.name, commit = (p.name == "Ben-Realm") and "ffffffffffffffff" or p.commit }
     end
-    local items = {}
-    for _, e in ipairs(entries) do items[#items + 1] = P.hexName(e.name) .. "-" .. e.commit end
-    net2.inject(cs2.Ann, "Lead-Realm", P.encode("LDP", d.lid, 1, 1, table.concat(items, ",")), "PARTY")
-    net2.inject(cs2.Ann, "Lead-Realm", P.encode("LDS", d.lid, LD(cs2.Ann).listHash(d.lid, d.rs, d.itemId, entries), 2), "PARTY")
+    net2.inject(cs2.Ann, "Lead-Realm", ldq(d, LD(cs2.Ann).listHash(d.lid, d.rs, d.itemId, entries), entries), "PARTY")
     net2.step(5)
     eq(LD(cs2.Ann).current.state, "cancelled"); eq(LD(cs2.Ann).current.endReason, "bad_start_commit_swap")
   end)
@@ -281,10 +290,7 @@ describe("Loot Duel between simulated clients", function()
     local d = LD(cs.Cid).current
     local list = {}
     for _, p in ipairs(LD(cs.Lead).accepted(LD(cs.Lead).current)) do if p.name ~= "Cid-Realm" then list[#list + 1] = p end end
-    local items = {}
-    for _, e in ipairs(list) do items[#items + 1] = P.hexName(e.name) .. "-" .. e.commit end
-    net.inject(cs.Cid, "Lead-Realm", P.encode("LDP", d.lid, 1, 1, table.concat(items, ",")), "PARTY")
-    net.inject(cs.Cid, "Lead-Realm", P.encode("LDS", d.lid, LD(cs.Cid).listHash(d.lid, d.rs, d.itemId, list), #list), "PARTY")
+    net.inject(cs.Cid, "Lead-Realm", ldq(d, LD(cs.Cid).listHash(d.lid, d.rs, d.itemId, list), list), "PARTY")
     net.step(5)
     ok(LD(cs.Cid).current.leftOut, "Cid sees that he was left out")
     eq(LD(cs.Cid).busy(), false, "and is free again")
@@ -419,10 +425,10 @@ describe("Loot Duel between simulated clients", function()
     -- statuses read Joined / declined
     local seen = {}
     for _, row in ipairs(s.rows) do if row:IsShown() then seen[row.status:GetText()] = true end end
-    ok(seen.joined and seen.declined, "joined + declined shown")
+    ok(seen.joined and seen.passed, "joined + passed shown")
   end)
 
-  it("P2 a 20-player raid: the list pages, nobody is entered without a click, at most 8 per Loot Duel", function()
+  it("P2 a 20-player raid: the list pages, nobody is entered without a click, at most 10 per Loot Duel; Invite All needs <= 10", function()
     local net = NS.new({ seed = 51 })
     local cs, names = {}, {}
     local cls = { "WARRIOR", "SHAMAN", "MAGE", "ROGUE", "PRIEST", "DRUID", "HUNTER", "WARLOCK", "PALADIN" }
@@ -438,25 +444,30 @@ describe("Loot Duel between simulated clients", function()
     lead.ns.UI:ShowSheet("loot")
     local UI = lead.ns.UI
     local s = UI.lootSheet
-    ok(s.next:IsShown(), "more than one page"); eq(s.page:GetText(), "1 / 3")
-    -- pick 8 over two pages, the 9th is refused with the heats advice
+    ok(s.next:IsShown(), "more than one page"); eq(s.page:GetText(), "1 / 2")
+    -- the list shows level, class and raid group
+    ok((s.rows[1].detail:GetText() or ""):find("60", 1, true), tostring(s.rows[1].detail:GetText()))
+    -- pick 10 over two pages, the 11th is refused
     local picked = 0
-    for _ = 1, 3 do
+    for _ = 1, 2 do
       for _, row in ipairs(s.rows) do
-        if row:IsShown() and picked < 9 and not UI.lootPick[row.key] then row:Click(); picked = picked + 1 end
+        if row:IsShown() and picked < 11 and not UI.lootPick[row.key] then row:Click(); picked = picked + 1 end
       end
       s.next:Click()
     end
     local n = 0
     for _ in pairs(UI.lootPick) do n = n + 1 end
-    eq(n, 8, "at most 8")
-    ok(UI.lootNote and UI.lootNote:find("heats", 1, true), tostring(UI.lootNote))
-    -- inviting enters nobody: everyone must Join
+    eq(n, 10, "at most 10")
+    ok(UI.lootNote and UI.lootNote:find("At most 10", 1, true), tostring(UI.lootNote))
+    -- Invite All is for groups of up to 10 online
     s.input:SetText("19019"); s.setItem:Click()
+    ok(not s.all:IsEnabled(), "20 online: Invite All is off")
+    -- inviting enters nobody: everyone must Join
     s.go:Click(); net.step(120)
     local acc = LD(lead).accepted(LD(lead).current)
-    ok(#acc == 0 or (#acc == 1 and acc[1].name == names[1] .. "-Realm"), "only the leader's own pick of himself counts as joined")
+    ok(#acc <= 1, "only the leader's own pick of himself can count as joined")
     for _, nm in ipairs(names) do eq(cs[nm].ns.App.session, nil) end
+    eq(#LD(lead).current.inviteOrder, 10)
   end)
 
   it("the sheet: pick players, invite, join from the popup, start, result banner, announce only on click", function()
@@ -471,7 +482,7 @@ describe("Loot Duel between simulated clients", function()
     for _, row in ipairs(s.rows) do
       if row:IsShown() and ((row.name:GetText() or ""):find("Ann", 1, true) or (row.name:GetText() or ""):find("Ben", 1, true)) then row:Click() end
     end
-    eq(s.go.fs:GetText(), "Invite 2")
+    eq(s.go.fs:GetText(), "Invite Selected (2)")
     s.go:Click(); net.step(60)
     cs.Ann.ns.UI.lootPopup.acc:Click(); cs.Ben.ns.UI.lootPopup.acc:Click(); net.step(120)
     UI:RefreshLootDuel()
