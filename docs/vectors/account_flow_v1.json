@@ -1,7 +1,7 @@
 {
   "addonImport": [
     {
-      "code": "SRP1.i6bjy6p8h43e.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni7oe.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.9a7a989c",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni7oe.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.494cf9ad",
       "expect": {
         "ok": true,
         "result": "linked",
@@ -14,7 +14,7 @@
       "why": "pending + snapshot with the same linkId, made after the request"
     },
     {
-      "code": "SRP1.0pbestwumzsy.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni9yw.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.54b9f96f",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni9yw.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.0f0121d7",
       "expect": {
         "ok": true,
         "result": "updated",
@@ -27,7 +27,7 @@
       "why": "linked + a newer snapshot"
     },
     {
-      "code": "SRP1.j7b9mh4hquii.426f622d5265616c6d.acc_7f3k2.416c69636520537461636b.tni7oe.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.6596c58c",
+      "code": "SRP1.k3v9q2m7x1aa.426f622d5265616c6d.acc_7f3k2.416c69636520537461636b.tni7oe.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.00e2938e",
       "expect": {
         "error": "player",
         "ok": false
@@ -63,7 +63,7 @@
       "why": "a snapshot from another link (another account) is refused"
     },
     {
-      "code": "SRP1.2sbt5grc4gm7.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni4vk.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.8e2dc735",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni4vk.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.f6dfa423",
       "expect": {
         "error": "too_old_for_link",
         "ok": false
@@ -75,7 +75,7 @@
       "why": "an old snapshot can't confirm a new link request (replay of an old confirmation)"
     },
     {
-      "code": "SRP1.laboz3zy8bcr.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tniafk.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.512d1732",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tniafk.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.b9c41cba",
       "expect": {
         "error": "future",
         "ok": false
@@ -87,7 +87,7 @@
       "why": "issued more than the clock skew in the future"
     },
     {
-      "code": "SRP1.3tcjur6ld71c.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni7qc.tni7t4.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.3aaeef36",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni7qc.tni7t4.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.9d79ab49",
       "expect": {
         "error": "expired",
         "ok": false
@@ -99,7 +99,7 @@
       "why": "now is past expires + clock skew"
     },
     {
-      "code": "SRP1.mcceoee7h2rw.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni7nu.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.063731ce",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni7nu.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.8fca7012",
       "expect": {
         "error": "older",
         "ok": false
@@ -111,7 +111,7 @@
       "why": "an older snapshot never replaces a newer one"
     },
     {
-      "code": "SRP1.4uc9i2mumxgg.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni7oe.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.dc734845",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni7oe.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.494cf9ad",
       "expect": {
         "error": "duplicate",
         "ok": false
@@ -135,7 +135,7 @@
       "why": "a snapshot without a link request on this character"
     },
     {
-      "code": "SRP1.5wcz7d13vowl.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni8ck.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.dcabb5c7",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni8ck.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.7a708734",
       "expect": {
         "error": "pending_expired",
         "ok": false
@@ -147,7 +147,7 @@
       "why": "the link request is older than 15 minutes"
     },
     {
-      "code": "SRP2.ofcu119pzjl5.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni9yw.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.80c5b04b",
+      "code": "SRP2.k3v9q2m7x1aa.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni9yw.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.0f0121d7",
       "expect": {
         "error": "version",
         "ok": false
@@ -159,7 +159,7 @@
       "why": "an unknown newer version is refused, never guessed"
     },
     {
-      "code": "SRL1.A7K9P2XJ.wow-forever.416c6963652d5265616c6d.6xcpvogc4ebq.0-9-0.1.tni7nk.d9dc9102",
+      "code": "SRL1.A7K9P2XJ.wow-forever.416c6963652d5265616c6d.k3v9q2m7x1aa.0-9-0.1.tni7nk.9669fb6b",
       "expect": {
         "error": "is_request",
         "ok": false
@@ -171,7 +171,7 @@
       "why": "the player's own SRL1 pasted in the snapshot box"
     },
     {
-      "code": "SRP1.pgdkpcoy890a.416c6963652a5265616c6d.acc_7f3k2.416c69636520537461636b.tni7oe.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.706214c5",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652a5265616c6d.acc_7f3k2.416c69636520537461636b.tni7oe.tnv6ce.c.yg.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.494cf9ad",
       "expect": {
         "error": "check",
         "ok": false
@@ -183,7 +183,7 @@
       "why": "one character changed: the check catches it"
     },
     {
-      "code": "SRP1.7zdfkzwld5qu.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni9yw.tnv6ce.c.zzzzzz.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.a314887e",
+      "code": "SRP1.k3v9q2m7x1aa.416c6963652d5265616c6d.acc_7f3k2.416c69636520537461636b.tni9yw.tnv6ce.c.zzzzzz.1jk.476f6c64204949.536561736f6e2033.45.c.8.1.-.e-1o.5-4e656f6e2047726964.-.8139c0ef",
       "expect": {
         "ok": true,
         "result": "updated",

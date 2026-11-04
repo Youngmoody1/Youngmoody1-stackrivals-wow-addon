@@ -31,8 +31,11 @@ local function client(seed, setup)
   local A = c.ns.AccountCodes
   local linkId
   if setup ~= "none" then
-    local req = assert(c.ns.Account.startLink(A.makeWebCode(WEB_CODE)))
-    linkId = A.parseLinkRequest(req).linkId
+    assert(c.ns.Account.startLink(A.makeWebCode(WEB_CODE)))
+    -- a fixed linkId: the random one differs between Lua 5.1 (CI, WoW) and 5.3 number arithmetic
+    c.ns.Account.rec().pending.linkId = "k3v9q2m7x1aa"
+    linkId = A.parseLinkRequest(c.ns.Account.requestCode()).linkId
+    assert(linkId == "k3v9q2m7x1aa")
   end
   local base = {
     linkId = linkId or "abcdefghij12", player = "Alice-Realm", accountId = "acc_7f3k2", name = "Alice Stack",
