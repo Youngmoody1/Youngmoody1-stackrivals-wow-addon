@@ -137,6 +137,7 @@ Totals:
 * 0.7.2: 671 (GitHub CI, Lua 5.1)
 * 0.7.3: 674 (CI run 41840520106, commit `cbca566`)
 * 0.8.0: 739 (CI run 41843944738, commit `463b77b`), incl. 65 client-profile tests (mocks, not clients)
+* 0.8.1: 751 (CI run 41850220837, commit `ae4c7f5`), incl. 77 client-profile tests
 
 ## Open blockers
 

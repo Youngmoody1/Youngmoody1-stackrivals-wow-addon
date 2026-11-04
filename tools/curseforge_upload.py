@@ -56,10 +56,10 @@ def toc_of(z):
 
 def changelog_for(version):
     text = open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8").read()
-    m = re.search(r"^## " + re.escape(version) + r"\b.*?$(.*?)(?=^## |\Z)", text, re.M | re.S)
+    m = re.search(r"^(## " + re.escape(version) + r"\b[^\n]*)\n(.*?)(?=^## |\Z)", text, re.M | re.S)
     if not m:
         raise SystemExit(f"CHANGELOG.md has no entry for {version}")
-    return ("## " + version + "\n" + m.group(1)).strip() + "\n"
+    return m.group(1) + "\n\n" + m.group(2).strip() + "\n"
 
 
 def verify_against_commit(zip_path):
