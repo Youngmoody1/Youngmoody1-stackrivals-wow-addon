@@ -33,7 +33,7 @@ local function ldq(d, hash, entries)
     if not place then for i, n in ipairs(d.inviteOrder) do if n:lower() == e.name:lower() then place = i end end end
     items[#items + 1] = place .. "-" .. e.commit
   end
-  return P.encode("LDQ", d.lid, hash, #entries, table.concat(items, ","))
+  return P.encode("LDQ", d.lid, hash, #entries, 1, 1, table.concat(items, ","))
 end
 --- Play every running loot race to its end (hard drops), then let results travel.
 local function raceToEnd(net, cs, skip)
@@ -64,22 +64,24 @@ describe("Loot Duel protocol", function()
     local h = P.hexName("Ann-Realm")
     local c16 = "0a1b2c3d4e5f6071"
     local msgs = {
-      P.encode("LDF", "lid123", "l060", 1, 19019, c16, 3), P.encode("LDI", "lid123", 1, h .. "," .. P.hexName("Ben-Realm")),
+      P.encode("LDH", "lid123", "l060", 1, 19019, c16, 3), P.encode("LDI", "lid123", 1, h .. "," .. P.hexName("Ben-Realm")),
+      P.encode("LDI", "lid123", 20, P.hexName("Ann") .. "," .. P.hexName("Ben")), P.encode("LDH", "lid123", "l060", 1, 19019, c16, 40),
       P.encode("LDA", "lid123", "a", c16), P.encode("LDA", "lid123", "d", "-"),
-      P.encode("LDQ", "lid123", "0a1b2c3d", 2, "1-" .. c16 .. ",2-" .. c16),
-      P.encode("LDN", "lid123", "n0nce123"), P.encode("LDW", "lid123", "n0nce999", "0a1b2c3d", "1-n0nce123,2-n0nce456"),
+      P.encode("LDQ", "lid123", "0a1b2c3d", 2, 1, 1, "1-" .. c16 .. ",2-" .. c16), P.encode("LDQ", "lid123", "0a1b2c3d", 40, 4, 4, "40-" .. c16),
+      P.encode("LDN", "lid123", "n0nce123"), P.encode("LDW", "lid123", "n0nce999", "0a1b2c3d", 1, 1, "1-n0nce123,2-n0nce456"),
       P.encode("LDC", "lid123", P.b36(600), P.b36(12345)), P.encode("LDE", "lid123", P.b36(3600), P.b36(9000), P.b36(12), P.b36(2), "0a1b2c3d", 2),
       P.encode("LDL", "lid123", 1, 2, "3A0B5F"), P.encode("LDX", "lid123", "cancel"), P.encode("LDR", "lid123", h, 0),
     }
     for _, s in ipairs(msgs) do ok(#s <= 255, s); ok(P.decode(s), "decode " .. s) end
     eq(P.decode(msgs[2]).names[2], "Ben-Realm")
     local bad = {
-      "1:LDF:lid123:x999:1:19019:0a1b2c3d4e5f6071:3", "1:LDF:lid123:l060:1:19019:0a1b2c3d4e5f6071:11", "1:LDF:lid123:l060:1:0:0a1b2c3d4e5f6071:3",
-      "1:LDF:lid123:l060:1:19019:0a1b2c3d:3", "1:LDA:lid123:a:n0nce123", "1:LDQ:lid123:0a1b2c3d:2:1-n0nce123,2-n0nce456",
+      "1:LDH:lid123:x999:1:19019:0a1b2c3d4e5f6071:3", "1:LDH:lid123:l060:1:19019:0a1b2c3d4e5f6071:41", "1:LDH:lid123:l060:1:0:0a1b2c3d4e5f6071:3",
+      "1:LDH:lid123:l060:1:19019:0a1b2c3d:3", "1:LDA:lid123:a:n0nce123", "1:LDQ:lid123:0a1b2c3d:2:1:1:1-n0nce123,2-n0nce456",
+      "1:LDF:lid123:l060:1:19019:0a1b2c3d4e5f6071:3", "1:LDI:lid123:21:" .. h, "1:LDQ:lid123:0a1b2c3d:2:2:1:1-0a1b2c3d4e5f6071",
       "1:LDI:lid123:1:zz", "1:LDI:lid123:1:" .. P.hexName("Bad|cName-Realm"), "1:LDA:lid123:a:-", "1:LDA:lid123:x:0a1b2c3d4e5f6071",
-      "1:LDQ:lid123:0a1b2c3d:3:1-0a1b2c3d4e5f6071,2-0a1b2c3d4e5f6071", "1:LDQ:lid123:0a1b2c3d:2:1-0a1b2c3d4e5f6071,11-0a1b2c3d4e5f6071",
-      "1:LDQ:lid123:nothex!:2:1-0a1b2c3d4e5f6071,2-0a1b2c3d4e5f6071", "1:LDE:lid123:1:1:1:1:xyz:1", "1:LDL:lid123:1:1:3AH",
-      "1:LDN:lid123:-", "1:LDW:lid123:n0nce:xyz:1-n0nce123", "1:LDW:lid123:n0nce999:0a1b2c3d:1-BAD!", "1:LDW:lid123:n0nce999:0a1b2c3d:0-n0nce123",
+      "1:LDQ:lid123:0a1b2c3d:41:1:1:1-0a1b2c3d4e5f6071", "1:LDQ:lid123:0a1b2c3d:2:1:1:1-0a1b2c3d4e5f6071,41-0a1b2c3d4e5f6071",
+      "1:LDQ:lid123:nothex!:2:1:1:1-0a1b2c3d4e5f6071,2-0a1b2c3d4e5f6071", "1:LDE:lid123:1:1:1:1:xyz:1", "1:LDL:lid123:1:1:3AH",
+      "1:LDN:lid123:-", "1:LDW:lid123:n0nce:xyz:1:1:1-n0nce123", "1:LDW:lid123:n0nce999:0a1b2c3d:1:1:1-BAD!", "1:LDW:lid123:n0nce999:0a1b2c3d:1:1:0-n0nce123",
       "1:LDO:lid123:l060:1:19019:0a1b2c3d4e5f6071:3", "1:LDP:lid123:1:1:" .. h .. "-0a1b2c3d4e5f6071",
       "1:LDX:lid123:whatever", "1:LDR:lid123:" .. h .. ":2",
     }
@@ -189,7 +191,7 @@ describe("Loot Duel between simulated clients", function()
     local net, cs = party(13, { "Lead", "Ann", "Ben" })
     local okA, why = LD(cs.Ann).create(19019, "l060", { "Ann-Realm", "Ben-Realm" })
     ok(not okA); eq(why, "not_leader")
-    net.inject(cs.Ben, "Ann-Realm", P.encode("LDF", "fake01", "l060", 1, 19019, "0a1b2c3d4e5f6071", 2), "PARTY")
+    net.inject(cs.Ben, "Ann-Realm", P.encode("LDH", "fake01", "l060", 1, 19019, "0a1b2c3d4e5f6071", 2), "PARTY")
     net.step(30)
     eq(LD(cs.Ben).current, nil)
     local solo = NS.new({ seed = 14 }).add({ name = "Zed" })

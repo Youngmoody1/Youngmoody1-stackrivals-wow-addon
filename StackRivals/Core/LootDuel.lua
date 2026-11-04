@@ -5,7 +5,7 @@
   Flow (docs/LOOT_DUEL.md):
     1. The party leader, raid leader, an assistant or the master looter opens Loot Duel, picks an
        item (link or item ID), a time (1:00 or 2:00) and 2-10 group members, and invites them
-       (LDF + LDI). All of them play at once: one race, no 1v1 rounds.
+       (LDH + LDI). All of them play at once: one race, no 1v1 rounds.
     2. Each invitee accepts or declines in a popup (LDA). Accepting sends only a COMMITMENT to a
        secret seed nonce. Nobody is entered automatically; no answer = not in.
     3. The leader starts with the players who accepted (at least 2): the final list of names and
@@ -36,7 +36,14 @@ LD.START_LIMIT = 80      -- s after the offer the leader may still start (member
 LD.START_WAIT = 100      -- s a member waits for the start before giving up
 LD.REVEAL_TIME = 20      -- s for every player's nonce to arrive; otherwise the race is cancelled
 LD.REPEAT = 10           -- s between repeats of the offer / answers while inviting
-LD.LIVE_EVERY = 4        -- s between live score broadcasts
+LD.LIVE_EVERY = 4        -- s between live score broadcasts (up to 10 players; more: see LD.liveEvery)
+LD.CONTENDERS = 10       -- only the best 10 claims (and anyone tied with them) send and replay full logs
+LD.PROMOTE_GRACE = 40    -- s more for the next best claims when a contender's log never arrived (max 2x)
+LD.OFFER_SENDS = 4       -- the offer goes out at most this often (a 40-player invite list is 5 messages)
+--- Live score interval: 40 players all broadcasting every 4 s would be 10 messages a second.
+function LD.liveEvery(d) local n = #(d.participants or {}); return (n > 20 and 6) or (n > 10 and 5) or LD.LIVE_EVERY end
+--- Time for every share to arrive: longer for big groups (the start list is up to 4 messages).
+function LD.revealTime(d) return LD.REVEAL_TIME + math.floor(#(d.participants or {}) / 2) end
 LD.GRACE = 90            -- s after the time limit (1:00) before a missing result is out (logs travel slowly
 LD.GRACE_LONG = 120      --   on the group channel: about 100 bytes/s); 2:00 races get GRACE_LONG
 LD.PAUSE_BUDGET = 15     -- s of pause (combat, chat) per race; past it your run ends where it is
@@ -141,7 +148,7 @@ function LD.addonStatus(name)
   if p.addon and P().versionAtLeast and not P().versionAtLeast(p.addon, LD.MIN_VERSION) then return "old" end
   return "yes"
 end
-LD.MIN_VERSION = "0.7.1"
+LD.MIN_VERSION = "0.7.2"
 
 --- Items in the open loot window (read only: GetNumLootItems / GetLootSlotLink / GetLootSlotInfo),
 --- uncommon or better, so the leader can pick one with a click. Empty when no loot window is open.
@@ -190,7 +197,7 @@ function LD.liveBoard(d, t)
       row.score = lv and lv.score or 0
       local e = roster[k]
       if e and e.online == false then row.status = "disconnected"
-      elseif d.state == "playing" and t - (lv and lv.at or d.startAt or t) > 3 * LD.LIVE_EVERY + 4 then row.status = "no_signal"
+      elseif d.state == "playing" and t - (lv and lv.at or d.startAt or t) > 3 * LD.liveEvery(d) + 4 then row.status = "no_signal"
       else row.status = "playing" end
     end
     rows[#rows + 1] = row
@@ -296,11 +303,14 @@ function LD.standings(participants, results)
   local list = {}
   for _, p in ipairs(participants) do
     local r = results[p.name:lower()] or {}
-    list[#list + 1] = { name = p.name, status = r.status or "missing", score = r.score or 0, lines = r.lines or 0, class = r.class }
+    list[#list + 1] = { name = p.name, status = r.status or "missing", score = r.score or 0, lines = r.lines or 0, class = r.class, why = r.why }
   end
+  -- replay-checked first, then claims that weren't needed for the result ("unchecked": below the
+  -- best 10, they couldn't win), then everything that is out
+  local GROUP = { verified = 1, unchecked = 2 }
   table.sort(list, function(a, b)
-    local va, vb = a.status == "verified", b.status == "verified"
-    if va ~= vb then return va end
+    local ga, gb = GROUP[a.status] or 3, GROUP[b.status] or 3
+    if ga ~= gb then return ga < gb end
     if a.score ~= b.score then return a.score > b.score end
     if a.lines ~= b.lines then return a.lines > b.lines end
     return a.name:lower() < b.name:lower()
@@ -347,7 +357,7 @@ end
 --- Drop this Loot Duel's queued repeats that the start makes useless (offer, invitees, answers).
 local function dropRepeats(d)
   if not (ns.Comm and ns.Comm.unqueue) then return end
-  ns.Comm.unqueue(function(q) return q.key and (q.key:find("^LDF:" .. d.lid) or q.key:find("^LDI:" .. d.lid) or q.key:find("^LDA:" .. d.lid)) ~= nil end)
+  ns.Comm.unqueue(function(q) return q.key and (q.key:find("^LDH:" .. d.lid) or q.key:find("^LDI:" .. d.lid) or q.key:find("^LDA:" .. d.lid)) ~= nil end)
 end
 
 --- Am I tied up in a Loot Duel (joined, locking in, or racing)? Duels, Quickplay and solo starts wait.
@@ -404,14 +414,20 @@ end
 --- their place in this list, so it is sent again with the start when a reveal is missing.
 function LD.sendInvitees(d, opts)
   local hx = {}
-  for _, n in ipairs(d.inviteOrder) do hx[#hx + 1] = P().hexName(n) end
+  local myRealm = (me() or ""):match("%-(.+)$")
+  for _, n in ipairs(d.inviteOrder) do
+    -- on my realm: "Name" only (the receivers add my realm back), so 40 names fit in ~4 messages
+    local nm, realm = n:match("^(.-)%-(.+)$")
+    hx[#hx + 1] = P().hexName((realm and myRealm and realm:lower() == myRealm:lower()) and nm or n)
+  end
   for k, c in ipairs(chunked(hx)) do bcast(P().encode("LDI", d.lid, k, table.concat(c, ",")), { key = "LDI:" .. d.lid .. ":" .. k, front = opts and opts.front }) end
 end
 
 --- Offer + invitee list.
 function LD.sendOffer(d)
   d.offerAt = now()
-  bcast(P().encode("LDF", d.lid, d.rs, d.engine, d.itemId, d.commit, #d.inviteOrder), { key = "LDF:" .. d.lid })
+  d.offerSends = (d.offerSends or 0) + 1
+  bcast(P().encode("LDH", d.lid, d.rs, d.engine, d.itemId, d.commit, #d.inviteOrder), { key = "LDH:" .. d.lid })
   LD.sendInvitees(d)
 end
 
@@ -466,7 +482,11 @@ function LD.sendList(d)
   d.listSends, d.listAt = (d.listSends or 0) + 1, now()
   local items = {}
   for _, e in ipairs(d.participants) do items[#items + 1] = placeOf(d, e.name) .. "-" .. e.commit end
-  bcast(P().encode("LDQ", d.lid, d.listHash, #d.participants, table.concat(items, ",")), { key = "LDQ:" .. d.lid, front = true })
+  local chunks = chunked(items) -- 10 players: 1 message; 40: 4
+  -- front of the queue, in order: insert the last chunk first
+  for k = #chunks, 1, -1 do
+    bcast(P().encode("LDQ", d.lid, d.listHash, #d.participants, k, #chunks, table.concat(chunks[k], ",")), { key = "LDQ:" .. d.lid .. ":" .. k, front = true })
+  end
 end
 
 --- Everyone: the list is fixed; players reveal their nonce.
@@ -511,7 +531,10 @@ function LD.sendGo(d)
   d.goSends, d.goAt = (d.goSends or 0) + 1, now()
   local items = {}
   for _, e in ipairs(d.revealed) do items[#items + 1] = placeOf(d, e.name) .. "-" .. e.nonce end
-  bcast(P().encode("LDW", d.lid, d.nonceL, d.revealHashV, table.concat(items, ",")), { key = "LDW:" .. d.lid, front = true })
+  local chunks = chunked(items) -- 10 players: 1 message; 40: 3
+  for k = #chunks, 1, -1 do
+    bcast(P().encode("LDW", d.lid, d.nonceL, d.revealHashV, k, #chunks, table.concat(chunks[k], ",")), { key = "LDW:" .. d.lid .. ":" .. k, front = true })
+  end
 end
 
 --- Everyone: the race begins (seed from all nonces). Players start their run; others watch.
@@ -566,24 +589,53 @@ function LD.onLocalEnd(s)
   if #chunks == 0 then chunks = { "" } end
   d.myFinal = {
     msg = P().encode("LDE", d.lid, P().b36(st.tick), P().b36(st.score), P().b36(st.lines), P().b36(st.level), ns.Engine.hashState(st), #chunks),
-    chunks = chunks, sends = 0,
+    chunks = chunks, sends = 0, logSends = 0,
   }
-  LD.sendFinal(d)
-  -- my own result counts like anyone's: replayed from my own log
+  -- my own result counts like anyone's: replayed from my own log (stored first, so I know
+  -- whether I'm a contender before sending)
   LD.storeResult(d, me(), { ticks = st.tick, score = st.score, lines = st.lines, level = st.level, hash = ns.Engine.hashState(st), chunks = #chunks })
   local r = d.results[key(me())]
   for i, c in ipairs(chunks) do r.parts[i] = c end
+  LD.sendFinal(d)
   LD.verify(d, me())
   if LD.allIn(d) then LD.finish(d) end -- I may be the last one
   emit("changed", d)
 end
 
+--- My claim (LDE) goes to everyone; my log (LDL) only while my claim is among the best
+--- LD.CONTENDERS (ties included): only those can win, so only those are replayed. Up to 10 players
+--- everyone is a contender (every PC replays every run, as before).
 function LD.sendFinal(d)
   local f = d.myFinal
   if not f then return end
   f.sends, f.at = f.sends + 1, now()
   bcast(f.msg, { key = "LDE:" .. d.lid })
+  if LD.isContender(d, me()) then LD.sendLog(d) end
+end
+function LD.sendLog(d)
+  local f = d.myFinal
+  if not f then return end
+  f.logSends, f.logAt = (f.logSends or 0) + 1, now()
   for i, c in ipairs(f.chunks) do bcast(P().encode("LDL", d.lid, i, #f.chunks, c), { key = "LDL:" .. d.lid .. ":" .. i }) end
+end
+
+local function better(a, b)
+  if a.score ~= b.score then return a.score > b.score end
+  return (a.lines or 0) > (b.lines or 0)
+end
+--- Is `name`'s claim among the best LD.CONTENDERS still in the running (ties included)?
+function LD.isContender(d, name)
+  local r = d.results[key(name)]
+  if not (r and r.score) or r.status == "rejected" or r.status == "missing" then return false end
+  local ahead = 0
+  for _, p in ipairs(d.participants or {}) do
+    local x = d.results[key(p.name)]
+    if x and x ~= r and x.score and x.status ~= "rejected" and x.status ~= "missing" and better(x, r) then
+      ahead = ahead + 1
+      if ahead >= LD.CONTENDERS then return false end
+    end
+  end
+  return true
 end
 
 function LD.storeResult(d, name, m)
@@ -598,10 +650,37 @@ end
 
 --- Replay a player's log on the shared seed with the same checks as duels and the web
 --- (Engine/Verify.lua: time cap, input rate, inputs after top-out, claimed score / lines / hash).
+--- A complete log waits in a queue: replays (7-20 ms each) run one per frame, and not while my own
+--- run is live, so checking 10 logs never costs FPS mid-race (LD.update -> LD.runChecks).
 function LD.verify(d, name)
   local r = d.results[key(name)]
-  if not d.seed or not r or r.status ~= "pending" or not r.chunks then return end
+  if not d.seed or not r or r.status ~= "pending" or not r.chunks or not r.parts then return end
   for i = 1, r.chunks do if not r.parts[i] then return end end
+  if not r.queued then r.queued = true; d.checkQueue = d.checkQueue or {}; d.checkQueue[#d.checkQueue + 1] = name end
+  if not LD.myRunLive(d) and not LD.deferChecks then LD.runChecks(d, 1) end
+end
+
+function LD.myRunLive(d)
+  local s = ns.App and ns.App.session
+  return d.iPlay and s ~= nil and s.loot == d and not s.recorded and s.phase ~= "over"
+end
+
+--- Replay up to `max` queued logs now. Returns how many were checked.
+function LD.runChecks(d, max)
+  local q, n = d.checkQueue, 0
+  while q and #q > 0 and n < (max or 1) do
+    local name = table.remove(q, 1)
+    LD.check(d, name)
+    n = n + 1
+  end
+  if n > 0 and d.state == "playing" and LD.allIn(d) then LD.finish(d) end
+  return n
+end
+
+function LD.check(d, name)
+  local r = d.results[key(name)]
+  if not r or r.status ~= "pending" or not r.parts then return end
+  local c0 = os and os.clock and os.clock()
   local log = P().unpackLog(table.concat(r.parts, "", 1, r.chunks))
   local rs = P().LOOT_RULESETS[d.rs]
   local why
@@ -616,25 +695,68 @@ function LD.verify(d, name)
   r.status = why and "rejected" or "verified"
   r.why = why
   r.class = rosterEntry(name) and rosterEntry(name).class or r.class
+  r.parts = nil -- the log has done its job: free it (40 players, 10 kept races)
+  if c0 then
+    local ms = (os.clock() - c0) * 1000
+    LD.stats.checks, LD.stats.checkMs = LD.stats.checks + 1, LD.stats.checkMs + ms
+    if ms > LD.stats.maxCheckMs then LD.stats.maxCheckMs = ms end
+  end
+  emit("changed", d)
 end
+LD.stats = { checks = 0, checkMs = 0, maxCheckMs = 0 } -- measured replay cost (tests, /sr duel debug)
 
+--- Done when every player has a claim and every contender's log is checked (or out). Claims that
+--- can't reach the best 10 don't need their log.
 function LD.allIn(d)
   if not d.participants or d.state ~= "playing" then return false end
   for _, p in ipairs(d.participants) do
     local r = d.results[key(p.name)]
-    if not r or r.status == nil or r.status == "pending" then return false end -- log chunks alone aren't a result
+    if not r or r.status == nil or not r.score then return false end -- log chunks alone aren't a result
+    if r.status == "pending" and LD.isContender(d, p.name) then return false end
   end
   return true
+end
+
+--- At the deadline: contenders whose log never came are out. If that lets the next claims in,
+--- they get LD.PROMOTE_GRACE more (twice at most). Returns true when it extended the deadline.
+function LD.expireContenders(d, t)
+  local late = {}
+  for _, p in ipairs(d.participants) do
+    local r = d.results[key(p.name)]
+    if r and r.status == "pending" and r.score and LD.isContender(d, p.name) then late[#late + 1] = r end
+  end
+  for _, r in ipairs(late) do r.status, r.why = "missing", "log_incomplete"; r.parts = nil end
+  local promoted = false
+  for _, p in ipairs(d.participants) do
+    local r = d.results[key(p.name)]
+    if r and r.status == "pending" and LD.isContender(d, p.name) and not (r.parts and r.chunks and #r.parts >= r.chunks) then promoted = true end
+  end
+  if promoted and (d.extensions or 0) < 2 then
+    d.extensions = (d.extensions or 0) + 1
+    d.deadline = t + LD.PROMOTE_GRACE
+    return true
+  end
+  return false
 end
 
 function LD.finish(d)
   if d.state == "done" then return end
   d.state = "done"
   d.doneAt = now()
+  LD.runChecks(d, 99) -- anything still queued is checked now
+  local late = {}
   for _, p in ipairs(d.participants) do
     local r = d.results[key(p.name)]
-    if r and r.status == "pending" then r.status, r.why = "missing", "log_incomplete"
-    elseif r and r.status == nil then r.status, r.why = "missing", "no_result" end
+    if not r then d.results[key(p.name)] = { name = p.name, status = "missing", why = "no_result" }
+    elseif r.status == nil or not r.score then r.status, r.why = "missing", "no_result"
+    elseif r.status == "pending" and LD.isContender(d, p.name) then late[#late + 1] = r end
+  end
+  for _, r in ipairs(late) do r.status, r.why = "missing", "log_incomplete" end
+  -- claims below the best 10 were never needed: shown, not checked, can't win
+  for _, p in ipairs(d.participants) do
+    local r = d.results[key(p.name)]
+    if r.status == "pending" then r.status, r.why = "unchecked", "below_top" end
+    r.parts = nil
   end
   d.standings, d.winner, d.tied = LD.standings(d.participants, d.results)
   if d.role == "leader" then
@@ -664,7 +786,7 @@ end
 local function fromLeader(d, sender) return d and same(d.leader, sender) end
 
 local H = {}
-function H.LDF(m, sender)
+function H.LDH(m, sender)
   -- only the group's leader / assistant / master looter may offer; nothing from outside the group
   if not LD.mayLead(sender) then return end
   local d = LD.current
@@ -696,9 +818,12 @@ function H.LDI(m, sender)
   end
   if not (fromLeader(d, sender) and d.state == "inviting") then return end
   if d.inviteChunks[m.k] then return end
-  d.inviteChunks[m.k] = m.names
+  local realm = (d.leader or ""):match("%-(.+)$")
+  local names = {}
+  for _, n in ipairs(m.names) do names[#names + 1] = (n:find("-", 1, true) or not realm) and n or (n .. "-" .. realm) end
+  d.inviteChunks[m.k] = names
   local order = {}
-  for k = 1, 9 do for _, n in ipairs(d.inviteChunks[k] or {}) do if #order < P().LOOT_MAX then order[#order + 1] = n end end end
+  for k = 1, 20 do for _, n in ipairs(d.inviteChunks[k] or {}) do if #order < P().LOOT_MAX then order[#order + 1] = n end end end
   d.inviteOrder = order
   -- a start list that arrived before the whole invite list can be checked now
   if d.listMsg and d.count and #order >= d.count then LD.tryList(d) end
@@ -715,10 +840,25 @@ function H.LDA(m, sender)
   d.answers[key(sender)] = { accept = m.accept, commit = m.commit, name = sender }
   emit("changed", d)
 end
+--- Chunked start messages: keep chunk k of n; the whole message once every chunk is in (all chunks
+--- must agree on the header, or a modified leader could mix two lists).
+local function collect(d, field, m, header)
+  local c = d[field]
+  if not c or c.header ~= header or c.n ~= m.n then c = { header = header, n = m.n, parts = {} }; d[field] = c end
+  if c.parts[m.k] then return nil end
+  c.parts[m.k] = m.entries
+  for k = 1, m.n do if not c.parts[k] then return nil end end
+  local all = {}
+  for k = 1, m.n do for _, e in ipairs(c.parts[k]) do all[#all + 1] = e end end
+  return all
+end
+
 function H.LDQ(m, sender)
   local d = LD.current
   if not (d and d.lid == m.lid and fromLeader(d, sender)) or d.role == "leader" then return end
-  d.listMsg = m
+  local all = collect(d, "listParts", m, m.listHash .. ":" .. m.count)
+  if not all then return end
+  d.listMsg = { listHash = m.listHash, count = m.count, entries = all }
   LD.tryList(d)
 end
 
@@ -770,7 +910,9 @@ end
 function H.LDW(m, sender)
   local d = LD.current
   if not (d and d.lid == m.lid and fromLeader(d, sender)) or d.role == "leader" then return end
-  d.goMsg = m
+  local all = collect(d, "goParts", m, m.nonce .. ":" .. m.revealHash)
+  if not all then return end
+  d.goMsg = { nonce = m.nonce, revealHash = m.revealHash, entries = all }
   LD.tryGoMember(d)
 end
 
@@ -857,7 +999,8 @@ function LD.update(t)
   end
   if d.state == "inviting" then
     -- repeat the offer only while someone hasn't answered (a 10-player invite is 5 messages)
-    if d.role == "leader" and t - (d.offerAt or 0) >= LD.REPEAT and t - d.createdAt < LD.INVITE_TIME and unanswered(d) then LD.sendOffer(d) end
+    if d.role == "leader" and t - (d.offerAt or 0) >= LD.REPEAT and t - d.createdAt < LD.INVITE_TIME and unanswered(d)
+      and (d.offerSends or 0) < LD.OFFER_SENDS then LD.sendOffer(d) end
     if d.myAnswer and (d.answerSends or 0) < 3 and t - (d.answerAt or 0) >= LD.REPEAT then
       d.answerSends, d.answerAt = d.answerSends + 1, t
       bcast(P().encode("LDA", d.lid, d.myAnswer, d.myAnswer == "a" and d.myCommit or "-"), { key = "LDA:" .. d.lid, low = true })
@@ -872,15 +1015,15 @@ function LD.update(t)
       LD.sendList(d)
     end
     if d.role ~= "leader" and d.myNonce and isPart(d, me()) and (d.nSends or 0) < 4 and t - (d.nAt or 0) >= 5 then LD.sendReveal(d) end
-    if t - d.revealAt > LD.REVEAL_TIME then
+    if t - d.revealAt > LD.revealTime(d) then
       if d.role == "leader" then LD.cancel("noreveal")
-      elseif t - d.revealAt > LD.REVEAL_TIME + 15 then d.state, d.endReason = "cancelled", "not_started"; emit("changed", d) end
+      elseif t - d.revealAt > LD.revealTime(d) + 15 then d.state, d.endReason = "cancelled", "not_started"; emit("changed", d) end
     end
   elseif d.state == "playing" then
     if d.role == "leader" and (d.goSends or 0) < 3 and t - (d.goAt or 0) >= 5 then LD.sendGo(d) end
     local s = ns.App and ns.App.session
     if d.iPlay and s and s.loot == d and not s.recorded then
-      if s.phase == "playing" and t - (d.liveAt or 0) >= LD.LIVE_EVERY then
+      if s.phase == "playing" and t - (d.liveAt or 0) >= LD.liveEvery(d) then
         d.liveAt = t
         d.live[key(me())] = { tick = s.state.tick, score = s.state.score, at = t }
         bcast(P().encode("LDC", d.lid, P().b36(s.state.tick), P().b36(s.state.score)), { key = "LDC:" .. d.lid, low = true })
@@ -893,9 +1036,18 @@ function LD.update(t)
       end
       d.pauseT = t
     end
-    if t > d.deadline then LD.finish(d) end
+    -- replays: one per frame, never while my own run is live
+    if d.checkQueue and #d.checkQueue > 0 and not LD.myRunLive(d) then LD.runChecks(d, 1) end
+    if d.state == "playing" and t > d.deadline and not LD.expireContenders(d, t) then LD.finish(d) end
   end
-  if (d.state == "playing" or d.state == "done") and d.myFinal and d.myFinal.sends < 3 and t - d.myFinal.at >= 5 then LD.sendFinal(d) end
+  -- a contender (or promoted into the best 10 because someone above was out) sends the log,
+  -- repeated; also after my own PC has finished, because the others may still need it
+  local f = d.myFinal
+  if f and (d.state == "playing" or d.state == "done") and LD.isContender(d, me()) and (f.logSends or 0) < 3 and t - (f.logAt or -99) >= 5 then LD.sendLog(d) end
+  if (d.state == "playing" or d.state == "done") and d.myFinal and d.myFinal.sends < 3 and t - d.myFinal.at >= 5 then
+    d.myFinal.sends, d.myFinal.at = d.myFinal.sends + 1, t
+    bcast(d.myFinal.msg, { key = "LDE:" .. d.lid })
+  end
   if d.state == "done" and d.ldrMsg and d.ldrSends < 3 and t - d.ldrAt >= 5 then
     d.ldrSends, d.ldrAt = d.ldrSends + 1, t
     bcast(d.ldrMsg, { key = "LDR:" .. d.lid })
