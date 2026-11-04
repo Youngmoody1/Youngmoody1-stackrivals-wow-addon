@@ -1,7 +1,9 @@
-# Handoff to the stackrivals.io project: the WoW addon 0.6.1 integration
+# Handoff to the stackrivals.io project: the WoW addon 0.6.1+ integration
+
+> **Entry point:** `docs/WEB_HANDOFF.md` (0.7.0) is the one handoff file for the website. This document holds the details it links to.
 
 For web Claude. Repository `Youngmoody1/Youngmoody1-stackrivals-wow-addon`, branch
-`feature/connected`, addon **0.6.1 (development, not released, not tested in a real WoW
+`feature/loot-duel`, addon **0.7.0, which contains 0.6.1 (development, not released, not tested in a real WoW
 client)**. The contract with every field is `docs/STACKRIVALS_WEB_INTEGRATION.md`. This file is
 the short version plus the prompt.
 
@@ -137,7 +139,7 @@ Contract §10.
 ## 12. Prompt for web Claude (ready to paste)
 
 > You are working in the stackrivals.io project. The WoW addon project (GitHub
-> `Youngmoody1/Youngmoody1-stackrivals-wow-addon`, branch `feature/connected`) is ready for the
+> `Youngmoody1/Youngmoody1-stackrivals-wow-addon`, branch `feature/loot-duel`) is ready for the
 > website side. Please read these files there:
 > `docs/WEB_ADDON_INTEGRATION_HANDOFF.md`, `docs/STACKRIVALS_WEB_INTEGRATION.md`,
 > `docs/ACCOUNT_SYNC_HANDOFF.md`, `docs/CROSS_PLATFORM_MULTIPLAYER.md` §6,

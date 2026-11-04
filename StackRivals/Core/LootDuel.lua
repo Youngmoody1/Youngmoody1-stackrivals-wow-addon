@@ -59,9 +59,12 @@ function LD.roster()
   local out = {}
   local full = function(n, r) return ns.Social and ns.Social.full(n, r) or n end
   local mlName
-  if GetLootMethod then
-    local ok, method, partyIdx, raidIdx = pcall(GetLootMethod)
-    if ok and method == "master" then
+  -- read only (never changed): C_PartyInfo.GetLootMethod (Enum.LootMethod, 2 = master looter;
+  -- Classic Era 1.15.8+, Retail 11.2+), else the old GetLootMethod ("master")
+  local getLM = (C_PartyInfo and C_PartyInfo.GetLootMethod) or GetLootMethod
+  if getLM then
+    local ok, method, partyIdx, raidIdx = pcall(getLM)
+    if ok and (method == "master" or method == 2) then
       if raidIdx and UnitName then mlName = full(UnitName("raid" .. raidIdx))
       elseif partyIdx == 0 then mlName = me()
       elseif partyIdx and UnitName then mlName = full(UnitName("party" .. partyIdx)) end

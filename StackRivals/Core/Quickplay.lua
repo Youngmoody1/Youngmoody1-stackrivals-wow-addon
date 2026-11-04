@@ -108,9 +108,8 @@ local function advertise(t)
 end
 
 --- A Quickplay invite from `sender`: accepted automatically only while I'm searching for exactly
---- that mode (my search is my consent) and the sender isn't ignored or skipped after a failed
---- match. Anything else gets no popup and no answer. (Their QS may arrive after their INV: the
---- whispered QS is low priority, so it doesn't have to have been heard first.)
+--- that mode (my search is my consent), I heard their own search (QS) recently, and they aren't
+--- ignored or skipped after a failed match. Anything else gets no popup and no answer.
 function QP.wants(ruleset, sender)
   if QP.state ~= "searching" or ruleset ~= QP.mode or type(sender) ~= "string" then return false end
   if ignored(sender) then return false end

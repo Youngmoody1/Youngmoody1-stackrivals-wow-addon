@@ -1,6 +1,8 @@
 # One StackRivals account for the website and WoW: account sync handoff (DRAFT v1)
 
-Addon 0.6.1, branch `feature/connected`. **Status: SIMULATED.** The addon side is built and tested
+> **Entry point:** `docs/WEB_HANDOFF.md` (0.7.0) is the one handoff file for the website. This document holds the details it links to.
+
+Addon 0.6.1+ (built on `feature/connected`; current: 0.7.0 on `feature/loot-duel`). **Status: SIMULATED.** The addon side is built and tested
 in the test suite (`tests/test_account.lua`). Nothing has been tested in a real WoW client, and
 nothing has been tested against stackrivals.io: the website side doesn't exist yet. The formats
 are a **draft until the web project agrees**. Nothing here is final.
@@ -119,7 +121,7 @@ SRP1.<linkId>.<playerHex>.<accountId>.<nameHex>.<issued36>.<expires36>.<level36>
 | history | `-` or ≤ 10 entries joined by `~`: `<mode>-<w\|l\|d>-<my36>-<their36>-<at36>`, mode `[a-z0-9]{1,12}` (b120, r180, s180, classic, blitz, daily, spellbot or web modes) |
 | ach | `-` or `<unlocked36>-<total36>`, unlocked ≤ total ≤ 9999 |
 | cos | `-` or `<owned36>-<equippedHex\|->` |
-| sig | `-` or 16–128 `[A-Za-z0-9_-]`. Reserved for a web signature (for example Ed25519). **0.6.1 does not check it** |
+| sig | `-` or 16–128 `[A-Za-z0-9_-]`. Reserved for a web signature (for example Ed25519). **0.6.1 / 0.7.0 don't check it** |
 
 The maximum code length is 4096 characters. Anything outside these rules is rejected with a clear
 error.
@@ -247,7 +249,7 @@ The goal is fewer copy and paste steps. This is a look at the options, not a pla
 ## 9. Prompt for web Claude
 
 > You are working in the stackrivals.io project. The WoW addon (repository
-> Youngmoody1-stackrivals-wow-addon, branch `feature/connected`, file
+> Youngmoody1-stackrivals-wow-addon, branch `feature/loot-duel`, file
 > `docs/ACCOUNT_SYNC_HANDOFF.md`) now has an Account section. A WoW character can link to an
 > existing StackRivals account by copy and paste of text codes, because WoW addons have no
 > internet access. Please implement the website side of DRAFT v1, without changing the formats

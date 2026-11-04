@@ -171,6 +171,24 @@ describe("Loot Duel between simulated clients", function()
     ok(not okS); eq(whyS, "not_in_group")
   end)
 
+  it("the master looter (not the leader) may run it; read through C_PartyInfo.GetLootMethod, never changed", function()
+    local ml = function(env)
+      -- Enum.LootMethod 2 = master looter; Ann is it: 0 on her PC, her party index elsewhere
+      env.C_PartyInfo = { GetLootMethod = function()
+        if env.UnitName("player") == "Ann" then return 2, 0, nil end
+        for i = 1, 4 do if env.UnitName("party" .. i) == "Ann" then return 2, i, nil end end
+        return 2, nil, nil
+      end }
+    end
+    local net, cs = party(19, { "Lead", "Ann", "Ben" }, { Lead = { beforeLogin = ml }, Ann = { beforeLogin = ml }, Ben = { beforeLogin = ml } })
+    ok(LD(cs.Ann).create(19019, "l060", { "Lead-Realm", "Ben-Realm" }), "Ann (master looter) may offer")
+    net.step(60)
+    ok(LD(cs.Ben).current and LD(cs.Ben).current.state == "inviting", "Ben accepts the master looter's offer")
+    local okB, why = LD(cs.Ben).create(19019, "l060", { "Lead-Realm", "Ann-Realm" })
+    ok(not okB); ok(why == "not_leader" or why == "busy", why)
+    for _, c in pairs(cs) do eq(c.M.lootChanged, nil) end
+  end)
+
   it("no answer (no StackRivals) is shown as such; the leader can start with those who joined", function()
     local net, cs = party(15, { "Lead", "Ann", "Ben" }, { Ben = { beforeLogin = function(_, _, ns) ns.LootDuel.init = function() end end } })
     LD(cs.Lead).create(19019, "l060", { "Ann-Realm", "Ben-Realm", "Lead-Realm" }); net.step(60)

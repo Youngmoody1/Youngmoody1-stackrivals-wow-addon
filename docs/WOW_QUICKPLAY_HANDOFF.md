@@ -1,4 +1,6 @@
-# WoW Quickplay, character cards and match chat: handoff (0.6.1, branch `feature/connected`)
+# WoW Quickplay, character cards and match chat: handoff (0.6.1; current 0.7.0 on `feature/loot-duel`)
+
+> **Entry point:** `docs/WEB_HANDOFF.md` (0.7.0) is the one handoff file for the website. This document holds the details it links to.
 
 **Status: SIMULATED.** Everything below runs between simulated WoW clients in the test suite
 (`tests/test_quickplay.lua`). Nothing has been tested in a real WoW client yet. Previews in
@@ -42,8 +44,9 @@ Result → Rematch.
   Classic gives addons no global channel, so there is **no global queue and no fake queue**.
 * **Matching.** When two searchers hear each other (`QS`), the lower `name-realm` sends a duel
   invite with the Quickplay flag (`INV …:q`).
-  * The other side accepts automatically only while it is searching for exactly that mode.
-    Searching counts as consent.
+  * The other side accepts automatically only while it is searching for exactly that mode **and**
+    has heard that player's own search announcement (`QS`, sent right before the invite).
+    Searching counts as consent; an invite from someone who never announced a search is dropped.
   * Anything else is dropped without a popup and without an answer: an unsolicited Quickplay
     invite, a different mode, an ignored player, or a player skipped after a failed match.
 * **Ready check.** This is the normal duel lobby. Both press Ready, then the normal duel runs with

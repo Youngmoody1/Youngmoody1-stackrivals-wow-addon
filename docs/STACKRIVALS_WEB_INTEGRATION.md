@@ -1,6 +1,8 @@
 # StackRivals web ↔ WoW integration contract (v1, DRAFT)
 
-Addon 0.6.1, branch `feature/connected`. This is the master contract both projects build against.
+> **Entry point:** `docs/WEB_HANDOFF.md` (0.7.0) is the one handoff file for the website. This document holds the details it links to.
+
+Addon 0.6.1+ (current: 0.7.0 on `feature/loot-duel`, which contains 0.6.1). This is the master contract both projects build against.
 **Nothing here is final until stackrivals.io agrees.** SR1 is the exception: it is built and
 vector-checked against the web. Status words: **BUILT** (in the addon, tested between simulated
 clients), **SIMULATED** (no real WoW client yet), **PROPOSED** (needs the web), **BLOCKED**
@@ -60,7 +62,8 @@ Details: `docs/WOW_QUICKPLAY_HANDOFF.md` section 3. Types: `ProfileSnapshot`, `P
   rivals.
   * `QS` advertises a search.
   * The lower name invites with `INV …:q`.
-  * The other side accepts automatically only while it is searching for the same mode.
+  * The other side accepts automatically only while it is searching for the same mode and has
+    heard that player's own `QS` (0.7.0 review fix).
 * **Web adapter.** `Quickplay.adapters.web` has the interface `status()/search()/cancel()` and
   always reports `not_connected`. There is no fake queue.
 * **Events** (`MatchmakingEvent`), in order: `search_started` → `matched` → `ready` (both) →
