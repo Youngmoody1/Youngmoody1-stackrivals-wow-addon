@@ -45,7 +45,7 @@ else
       echo "::error title=tests failed::${SUMMARY}"
     fi
     echo "tests failed"; exit 1; }
-  echo "$TEST_OUT" | grep -E "passed|ALL TESTS|SOME TESTS"
+  echo "$TEST_OUT" | grep -E "passed|note:|ALL TESTS|SOME TESTS"
 fi
 
 echo "== 3/5 package"
