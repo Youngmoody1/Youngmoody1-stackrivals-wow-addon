@@ -383,17 +383,32 @@ S.list = {
     M.frames_step(1)
     return M, ns
   end },
-  { "24-loot-setup", "Loot Duel - leader picks the item and players, invites sent", function()
+  { "24-loot-setup", "Loot Duel - dungeon party of 5: item picked, Invite Party / Invite Selected", function()
     local _, _, _, NS = duelPair()
     local net = NS.new({ seed = 40 })
     local cs = {}
-    local cls = { "WARRIOR", "SHAMAN", "MAGE", "PRIEST" }
-    for i, n in ipairs({ "Lead", "Ann", "Ben", "Cid" }) do cs[n] = net.add({ name = n, group = "P", lead = (i == 1), class = cls[i], saved = { seenHelp = true } }) end
+    local cls = { "WARRIOR", "MAGE", "PRIEST", "ROGUE", "HUNTER" }
+    for i, n in ipairs({ "Lead", "Ann", "Ben", "Cid", "Dee" }) do cs[n] = net.add({ name = n, group = "P", lead = (i == 1), class = cls[i], saved = { seenHelp = true } }) end
     net.step(30)
     local a = cs.Lead
     a.env.SlashCmdList.STACKRIVALS("")
-    a.ns.LootDuel.create(19019, "l060", { "Ann-Realm", "Ben-Realm", "Cid-Realm" }); net.step(60)
-    cs.Ann.ns.LootDuel.answer(true); cs.Cid.ns.LootDuel.answer(false); net.step(120)
+    a.ns.UI.lootItemId = 19019
+    a.ns.UI:ShowSheet("loot"); net.step(60 * 3)
+    local s = a.ns.UI.lootSheet
+    for i = 1, 3 do s.rows[i]:Click() end
+    return a.M, a.ns, a.env.StackRivalsFrame
+  end },
+  { "24a-loot-party-joined", "Loot Duel - party of 5 invited: 3 joined, 1 passed, 1 still invited", function()
+    local _, _, _, NS = duelPair()
+    local net = NS.new({ seed = 44 })
+    local cs = {}
+    local cls = { "WARRIOR", "MAGE", "PRIEST", "ROGUE", "HUNTER" }
+    for i, n in ipairs({ "Lead", "Ann", "Ben", "Cid", "Dee" }) do cs[n] = net.add({ name = n, group = "P", lead = (i == 1), class = cls[i], saved = { seenHelp = true } }) end
+    net.step(30)
+    local a = cs.Lead
+    a.env.SlashCmdList.STACKRIVALS("")
+    a.ns.LootDuel.create(19019, "l060", { "Lead-Realm", "Ann-Realm", "Ben-Realm", "Cid-Realm", "Dee-Realm" }); net.step(60)
+    cs.Ann.ns.LootDuel.answer(true); cs.Ben.ns.LootDuel.answer(true); cs.Cid.ns.LootDuel.answer(false); net.step(120)
     a.ns.UI:ShowSheet("loot")
     return a.M, a.ns, a.env.StackRivalsFrame
   end },
@@ -432,7 +447,7 @@ S.list = {
     cs.Lead.ns.UI:ShowSheet("loot")
     return cs.Lead.M, cs.Lead.ns, cs.Lead.env.StackRivalsFrame
   end },
-  { "24d-loot-raid-pick", "Loot Duel - 20-player raid: the leader picks up to 8 (paged list)", function()
+  { "24d-loot-raid-pick", "Loot Duel - 20-player raid: the leader picks up to 10 (level, class, group, StackRivals)", function()
     local _, _, _, NS = duelPair()
     local net = NS.new({ seed = 43 })
     local cls = { "WARRIOR", "SHAMAN", "MAGE", "ROGUE", "PRIEST", "DRUID", "HUNTER", "WARLOCK", "PALADIN" }
@@ -445,11 +460,48 @@ S.list = {
     net.step(30)
     lead.env.SlashCmdList.STACKRIVALS("")
     lead.ns.UI.lootItemId = 19019
-    lead.ns.UI:ShowSheet("loot")
+    lead.ns.UI:ShowSheet("loot"); net.step(60 * 3)
     local s = lead.ns.UI.lootSheet
-    for i = 2, 4 do s.rows[i]:Click() end
+    for i = 2, 7 do s.rows[i]:Click() end
     return lead.M, lead.ns, lead.env.StackRivalsFrame
   end },
+  { "24e-loot-live-board", "Loot Duel - 10 players racing: the live list beside the window (provisional until replayed)", function()
+    local _, _, _, NS = duelPair()
+    local net = NS.new({ seed = 45 })
+    local cls = { "WARRIOR", "SHAMAN", "MAGE", "ROGUE", "PRIEST", "DRUID", "HUNTER", "WARLOCK", "PALADIN", "MAGE" }
+    local nm = { "Lead", "Ann", "Ben", "Cid", "Dee", "Eve", "Fay", "Gus", "Hal", "Ivy" }
+    local cs = {}
+    for i, n in ipairs(nm) do cs[n] = net.add({ name = n, group = "R", raid = true, lead = (i == 1), class = cls[i], saved = { seenHelp = true } }) end
+    net.step(30)
+    local names = {}
+    for _, n in ipairs(nm) do names[#names + 1] = n .. "-Realm" end
+    cs.Lead.ns.LootDuel.create(19019, "l060", names); net.step(60)
+    for i = 2, 10 do cs[nm[i]].ns.LootDuel.answer(true) end
+    net.step(120)
+    cs.Lead.ns.LootDuel.start(); net.step(60 * 6)
+    local pace = { 7, 5, 9, 11, 6, 13, 8, 10, 4, 12 }
+    for f = 1, 60 * 14 do
+      for i, n in ipairs(nm) do
+        local s = cs[n].ns.App.session
+        if s and s.loot and s.phase == "playing" and f % (pace[i] * 22) == 0 then s:press("hardDrop"); s:release("hardDrop") end
+      end
+      net.step(1)
+    end
+    cs.Gus.online = false
+    net.step(60 * 18)
+    local a = cs.Ann
+    if not a.ns.UI.frame:IsShown() then a.env.SlashCmdList.STACKRIVALS("") end
+    a.ns.UI:RefreshPhase(); a.ns.UI:RefreshLootBoard()
+    return a.M, a.ns, a.ns.UI.lootBoard
+  end },
+  { "24f-loot-quick-button", "Loot Duel quick-access button near the group frames (own button; Shift-drag, right-click hides)", function()
+    local _, _, _, NS = duelPair()
+    local net = NS.new({ seed = 46 })
+    local a = net.add({ name = "Lead", group = "P", lead = true, saved = { seenHelp = true } })
+    net.add({ name = "Ann", group = "P", class = "MAGE", saved = { seenHelp = true } })
+    net.step(30)
+    return a.M, a.ns, a.ns.LootButton.button
+  end, { minText = 1 } },
   { "8-records", "Records", function()
     local M, ns = boot(); seedRecords(ns); SlashCmdList.STACKRIVALS(""); ns.UI:ShowSheet("records"); M.frames_step(1); return M, ns
   end },

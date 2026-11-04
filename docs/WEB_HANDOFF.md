@@ -16,8 +16,10 @@
 
 **Nothing has been tested in a real WoW client yet.** All addon tests run in simulated clients.
 
-The 0.7.0 final polish (4 Nov 2026) changed only the addon's own screens. **No format, code or
-contract changed**: SR1, SRL1 / SRP1 and the vectors are the same as before.
+The 0.7.0 final polish (4 Nov 2026) and 0.7.1 (Loot Duel for 2–10 players, branch
+`feature/loot-duel-raid`) changed only the addon's own screens and its WoW-only Loot Duel
+messages. **No format, code or contract for the website changed**: SR1, SRL1 / SRP1 and the
+vectors are the same as before. Loot Duel stays in WoW (peer-checked, never on the website).
 
 ## 1. Status by category
 

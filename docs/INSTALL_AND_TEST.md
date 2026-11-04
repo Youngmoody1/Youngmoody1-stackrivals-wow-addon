@@ -4,7 +4,7 @@ Dette er den samlede guide. Detaljerede tjeklister ligger i:
 
 * `docs/TESTING_IN_WOW.md` (solo, engelsk);
 * `docs/SPELL_BATTLE_TEST.md` (procedure A–F, dansk);
-* `docs/LOOT_DUEL.md` (L1–L12);
+* `docs/LOOT_DUEL.md` (T1–T14: test med 10 rigtige spillere);
 * `docs/FIRST_TEST_CLASSIC_ERA.md` (den korte plan til første test i Classic Era, og hvad der
   kræver to rigtige spillere).
 
@@ -18,7 +18,8 @@ en rigtig test. Automatiske tests må aldrig skrives som klienttests.
 |---|---|---|---|---|
 | **0.3.1** (stabil solo) | `StackRivals-0.3.1.zip` | `release/0.3.1` | Classic, Blitz, Daily | **først** |
 | **0.5.1 vs Bot** | `StackRivals-0.5.1-vsbot.zip` | `spellbattle` | + Spell Battle mod bot (dueller slået fra) | når 0.3.1 er godkendt |
-| **0.7.0 dev** (nyeste) | `StackRivals-0.7.0-lootduel-dev.zip` | `feature/loot-duel` | 0.6.1 (Quickplay, chat, konto, sync, Battle.net) + rettelser + WoW-farver + Loot Duel | efter din godkendelse |
+| **0.7.0 dev** (installeret i Classic Era) | `StackRivals-0.7.0-lootduel-dev.zip` | `feature/loot-duel` | 0.6.1 (Quickplay, chat, konto, sync, Battle.net) + rettelser + WoW-farver + Loot Duel | testes nu |
+| **0.7.1 dev** (nyeste, ikke installeret) | `StackRivals-0.7.1-lootraid-dev.zip` | `feature/loot-duel-raid` | 0.7.0 + Loot Duel for 2–10 på én gang, Invite Party / All / Selected, live-liste, Loot Duel-kort i menuen, genvejsknap | efter din 0.7.0-test og din godkendelse |
 
 0.6.0 og 0.6.1 findes stadig uændret. 0.7.0 indeholder alt fra dem, så du behøver ikke teste dem
 hver for sig.
@@ -63,7 +64,7 @@ Skriv resultatet for hvert punkt: **OK**, **FEJL** (med screenshot) eller **IKKE
 | 6 | Match-chat | 0.7.0 | 2 | D5, D6 (skriv **under** kampen: brikkerne må ikke flytte sig), D10 |
 | 7 | Konto-link og kode-import | 0.7.0 | 1 | procedure E (E1–E6). Hjemmesiden mangler Link-siden, så kun PENDING kan testes |
 | 8 | SavedVariables | alle | 1 | Log ud og ind: rekorder, indstillinger, konto-status og Sync-resultater er der stadig. Tjek backup og gendannelse fra afsnit 3 |
-| 9 | Loot Duel med en gruppe | 0.7.0 | 3–5, derefter raid | `LOOT_DUEL.md` L1–L12 |
+| 9 | Loot Duel med en gruppe | 0.7.1 | 5, derefter 10 i raid | `LOOT_DUEL.md` T1–T14 |
 
 **Ekstra ting at holde øje med under alle tests:**
 

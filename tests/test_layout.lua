@@ -29,7 +29,7 @@ describe("layout of every screen", function()
           texts[#texts + 1] = o
         end
       end
-      ok(#texts > 3, "screen has text")
+      ok(#texts >= ((sc[4] and sc[4].minText) or 4), "screen has text")
       local problems = {}
       -- 1) inside the window
       for _, o in ipairs(texts) do

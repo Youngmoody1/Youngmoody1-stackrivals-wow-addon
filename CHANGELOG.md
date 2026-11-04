@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.1 — Loot Duel for dungeons and raids (branch `feature/loot-duel-raid`, development, not released, not installed)
+
+- **2–10 players in one Loot Duel, all at once** (was 2–8): one race on the same pieces, no 1v1 rounds. Works in a party of 5 and in raids of up to 40 (the leader picks up to 10).
+- **Start in 2 messages**: players are named by their place in the invite list, so the fixed list (`LDQ`) and the go with every seed share (`LDW`) are one message each (0.7.0 dev: up to 10 messages, up to 31 s for 10 players in the simulation; now under 1 s simulated). Start messages go ahead of queued repeats; the offer is repeated only while someone hasn't answered. The offer kind is now `LDF`, so a 0.7.0 dev client never gets stuck half-way. Commit–reveal, replay checks and every fairness rule are unchanged.
+- **Inviting**: Invite Party (one click), Invite All (raids up to 10 online, confirmed with a second click), Invite Selected (tick 2–10). The list shows level, class, raid group and StackRivals status (one hidden group check when the leader opens the lobby); the tooltip adds the faction. Nobody is entered automatically; eligibility is never guessed from the class. **From loot** picks an item from the open loot window (read only).
+- **Live list beside the window** for up to 10 players: class colours, your row marked, playing / topped out / finished / no signal / disconnected / checked, provisional until replayed. Results that don't count are listed apart under NOT COUNTED.
+- **Main menu**: Classic, Time Trial, **LOOT DUEL** (gold card with an original gem icon, "Compete for raid loot", "Create Loot Duel"), Quickplay, Spell Battle, Guild Duels. **Daily Challenge** moved to the button row (same mode, seed and records; details in its tooltip).
+- **Loot Duel quick button** near the group frames: StackRivals' own button (never touches Blizzard's frames), shown in a party or raid, hidden in combat, opens the lobby and sends nothing; Shift-drag moves it, right-click hides it, Settings / `/sr lootbutton [reset]` bring it back. `/sr loot` opens the lobby.
+- Tests: `tests/test_lootraid.lua` (21: 2–10 players in groups of 5–40, Invite Party / All, leaders and assistants, disconnect, bad network, low FPS, ties, forged and lost results, live board, loot window, menu, quick button). See `docs/LOOT_DUEL.md`.
+
 ## 0.7.0 — WoW colours, Loot Duel, 0.6.1 review (branch `feature/loot-duel`, development, not released)
 
 - **WoW's own class colours** everywhere a class is known: lobby cards, Quick Duel "your card", Guild Duels lists (class from the guild roster, friends and Battle.net lists), match chat (the rival's name), the live rival panel and the result. Taken from the client (`C_ClassColor.GetClassColor`, else `RAID_CLASS_COLORS`), with warcraft.wiki.gg's values as fallback (the 9 Classic classes plus Death Knight, Monk, Demon Hunter and Evoker, used only when a client reports them). Item quality colours the same way.

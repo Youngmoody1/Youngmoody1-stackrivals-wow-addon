@@ -135,7 +135,7 @@ Claude kan også gøre det for dig, når du beder om det.
 7. **Karakterkort**: modstanderens klasse, race, level og faction kommer frem og vises rigtigt.
 8. **Loot Duel** med 3–5 spillere og derefter en raid på 20–40: tid fra invite til resultat,
    kanalbelastning, disconnect / `/reload` midt i, en spiller uden addon, master looter som ikke
-   er leder, paging i listen (L1–L12 i `LOOT_DUEL.md`).
+   er leder, paging i listen (T1–T14 i `LOOT_DUEL.md`; 0.7.0-udgaven har L1–L12).
 9. **Rematch, pause-budget og frakobling** midt i en kamp.
 10. **Forskellige addon-versioner** mod hinanden (0.6.x mod 0.7.0): ældre klienter skal stadig kunne
     duellere og ignorere Loot Duel-beskeder.

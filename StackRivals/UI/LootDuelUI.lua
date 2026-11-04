@@ -323,9 +323,9 @@ function UI:CreateLootPopup()
     local frac = math.max(0, 1 - (GetTime() - d.createdAt) / ns.LootDuel.INVITE_TIME)
     self.bar:SetWidth(math.max(1, 312 * frac))
     local n = #(d.inviteOrder or {})
-    self.sub:SetText(short(d.leader) .. "  -  " .. ns.Protocol.LOOT_RULESETS[d.rs].name .. "  -  " .. (n > 0 and (n .. " invited, ") or "") .. "all at once, same pieces, no spells\n"
-      .. "Join = you accept that this race decides it. The loot master hands out the item by hand.\n"
-      .. "Answer within " .. math.ceil(ns.LootDuel.INVITE_TIME * frac) .. " s. Pass = not in (normal loot rules instead).")
+    self.sub:SetText(short(d.leader) .. "  -  " .. (d.rs == "l120" and "2:00" or "1:00") .. "  -  " .. (n > 0 and (n .. " invited, ") or "") .. "all at once\n"
+      .. "Join = you accept the result. The loot master hands out the item.\n"
+      .. math.ceil(ns.LootDuel.INVITE_TIME * frac) .. " s to answer. Pass = normal loot rules.")
     if frac <= 0 then self:Hide() end
   end)
   self.lootPopup = f
@@ -486,7 +486,8 @@ function UI:RefreshLootDuel()
   s.cancel:SetShown(leader and (state == "inviting" or state == "revealing"))
   s.announce:SetShown(state == "done")
   local setup = not d or state == "cancelled"
-  s.all:SetShown(setup and mayLead and LD.channel() ~= nil)
+  -- Invite Party / Invite All only where it works: a group of up to 10 online
+  s.all:SetShown(setup and mayLead and LD.channel() ~= nil and #everyone() <= ns.Protocol.LOOT_MAX)
   if setup then
     local n = pickedCount()
     s.go:SetLabel("Invite Selected (" .. n .. ")"); s.go:SetShown(mayLead)
@@ -560,13 +561,13 @@ end
 ------------------------------------------------------------------------------------------------
 -- Live leaderboard beside the window (where match chat sits in a duel): never over the board
 ------------------------------------------------------------------------------------------------
-local BOARD_ROWS, BOARD_ROW = 10, 24
+local BOARD_ROWS, BOARD_ROW = 10, 30
 function UI:CreateLootBoard()
   local F = self.frame
   local w = 200
   local p = T.panel(F, C.gold, 0.96)
   p._layoutRoot = true -- sits outside the window: checked as its own screen (tests/layout.lua)
-  p:SetSize(w, 44 + BOARD_ROWS * BOARD_ROW + 36)
+  p:SetSize(w, 44 + BOARD_ROWS * BOARD_ROW + 46)
   p:SetPoint("TOPLEFT", F, "TOPRIGHT", 6, 0)
   p.title = T.label(p, "LOOT DUEL  -  LIVE"); p.title:SetPoint("TOPLEFT", 10, -10); p.title:SetTextColor(C.gold[1], C.gold[2], C.gold[3])
   p.sub = T.text(p, SZ.label, C.label); p.sub:SetPoint("TOPLEFT", 10, -26); p.sub:SetWidth(w - 20); p.sub:SetJustifyH("LEFT")
@@ -576,16 +577,16 @@ function UI:CreateLootBoard()
     r:SetSize(w - 12, BOARD_ROW); r:SetPoint("TOPLEFT", 6, -44 - (i - 1) * BOARD_ROW)
     r.me = T.tex(r, "BACKGROUND", C.goldDeep, 0.9); r.me:SetAllPoints()
     r.rank = T.display(r, SZ.small, C.label); r.rank:SetPoint("TOPLEFT", 4, -2); r.rank:SetWidth(24); r.rank:SetJustifyH("LEFT")
-    r.name = T.text(r, SZ.small, C.paper); r.name:SetPoint("TOPLEFT", 28, -2); r.name:SetWidth(98); r.name:SetJustifyH("LEFT")
+    r.name = T.text(r, SZ.small, C.paper); r.name:SetPoint("TOPLEFT", 28, -2); r.name:SetWidth(90); r.name:SetJustifyH("LEFT")
     if r.name.SetWordWrap then r.name:SetWordWrap(false) end
-    r.score = T.display(r, SZ.small, C.paper); r.score:SetPoint("TOPRIGHT", -4, -2); r.score:SetWidth(60); r.score:SetJustifyH("RIGHT")
-    r.status = T.text(r, SZ.label, C.label); r.status:SetPoint("TOPLEFT", 28, -13); r.status:SetWidth(w - 50); r.status:SetJustifyH("LEFT")
+    r.score = T.display(r, SZ.small, C.paper); r.score:SetPoint("TOPRIGHT", -4, -2); r.score:SetWidth(58); r.score:SetJustifyH("RIGHT")
+    r.status = T.text(r, SZ.label, C.label); r.status:SetPoint("TOPLEFT", 28, -17); r.status:SetWidth(w - 50); r.status:SetJustifyH("LEFT")
     if r.status.SetWordWrap then r.status:SetWordWrap(false) end
     r:Hide()
     p.rows[i] = r
   end
   p.foot = T.text(p, SZ.label, C.label); p.foot:SetPoint("BOTTOMLEFT", 10, 8); p.foot:SetWidth(w - 20); p.foot:SetJustifyH("LEFT")
-  p.foot:SetText("Live scores are provisional until every PC has replayed every run.")
+  p.foot:SetText("Live = provisional, until every PC has replayed every run.")
   p:Hide()
   self.lootBoard = p
 end
@@ -600,7 +601,7 @@ function UI:RefreshLootBoard()
   p:SetShown(show and true or false)
   if not show then return end
   local rows = ns.LootDuel.liveBoard(d)
-  p.sub:SetText(ns.Protocol.LOOT_RULESETS[d.rs].name .. "  -  " .. #rows .. " players, same pieces")
+  p.sub:SetText((d.rs == "l120" and "2:00" or "1:00") .. "  -  " .. #rows .. " players, same pieces")
   for i, r in ipairs(p.rows) do
     local x = rows[i]
     if x then

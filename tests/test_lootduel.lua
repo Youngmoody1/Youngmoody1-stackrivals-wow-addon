@@ -461,7 +461,7 @@ describe("Loot Duel between simulated clients", function()
     ok(UI.lootNote and UI.lootNote:find("At most 10", 1, true), tostring(UI.lootNote))
     -- Invite All is for groups of up to 10 online
     s.input:SetText("19019"); s.setItem:Click()
-    ok(not s.all:IsEnabled(), "20 online: Invite All is off")
+    ok(not s.all:IsShown(), "20 online: no Invite All (pick up to 10)")
     -- inviting enters nobody: everyone must Join
     s.go:Click(); net.step(120)
     local acc = LD(lead).accepted(LD(lead).current)
