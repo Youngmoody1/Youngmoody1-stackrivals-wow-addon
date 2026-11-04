@@ -119,7 +119,7 @@ StackRivals, beskeder i WoW-chatten du ikke selv har klikket på.
 | 1 | Installation | WoW gemte kl. 09:11:56, 14 s før installationen, så klienten var sandsynligvis åben. Nye filer indlæses først efter fuld genstart | proces | Guiden starter med "genstart WoW helt" |
 | 2 | Installation | 0.3.1-testen efterlod et afbrudt Classic-spil. 0.7.0 fortsætter et sådant spil med samme tilstand som 0.3.1's motor, og 0.3.1-rekorder inkl. `bestLog` / `bestDate` bevares | sikring | Regressionstests i `tests/test_stress.lua` (syntetiske data) |
 | 3 | Gennemgang | Menukortet hed "Guild Duel", skærmen "GUILD DUELS" | kosmetisk | **Rettet på branchen** (kun tekst; mode-ID'er, protokol og SavedVariables uændrede), med test. Kommer i næste test-ZIP, ikke i den installerede build |
-| 4 | **Din observation i den rigtige klient** (Spell Battle) | En **rød kasse** under Spell Battle | synlig fejl | **To kandidater fundet i koden, begge rettet** på `feature/loot-duel-raid` med regressionstests, der fejler på den gamle kode. Begge kommer i 0.7.2-test-ZIP'en, ikke i den installerede 0.7.0. **Ikke bekræftet i klienten:** send gerne et screenshot, så vi ved, hvilken af dem du så. |
+| 4 | **Din observation i den rigtige klient** (Spell Battle) | En **rød kasse** under Spell Battle | synlig fejl | **AFVENTER VERIFICERING I RIGTIG WOW.** Ikke lukket. **To kandidater fundet i koden, begge rettet** på `feature/loot-duel-raid` med regressionstests, der fejler på den gamle kode. Begge kommer i 0.7.2-test-ZIP'en, ikke i den installerede 0.7.0. **Ikke bekræftet i klienten:** send gerne et screenshot, så vi ved, hvilken af dem du så. |
 | | | **(a) Den sandsynligste** | | Ved hvert faseskift (pause, genoptag, nedtælling) viste duel-koden (`UI:RefreshDuel` i `UI/DuelUI.lua`) NEXT-brik nr. 5 igen og gjorde NEXT-panelet fuld højde. Brik 5 blev derfor tegnet **oven på bottens minibræt** i højre side. En I-brik er rød i StackRivals, så det så ud som en rød bjælke/kasse hen over bottens bræt; andre brikker gav en anden farve. Den sås også i vores egen preview `docs/preview/14-spell-battle.png` siden 0.5, uden at vi fangede den. Nu ejer Spell Battle-layoutet NEXT (2 brikker over bottens panel) |
 | | | (b) | | Bomb-spellens målmarkering (`bombTarget` i `UI/SpellUI.lua`) var en frame *over* brættet med en rød 2-px kant, så længe Bomb kunne kastes. Nu er den en svag rød flade *under* brikkerne og skjult uden mana (commit `bbb9c81`) |
 
@@ -143,19 +143,17 @@ StackRivals, beskeder i WoW-chatten du ikke selv har klikket på.
 Nye fejl fra din test får næste nummer, med testpunkt (fx 4.6), og rettes på `feature/loot-duel`
 med en regressionstest, før næste test-ZIP bygges.
 
-## Senere: kompatibilitet med de andre klienter
+## De andre klienter
 
-Efter de første Classic Era-tests. Én fælles spilmotor (`Engine/`, uændret mellem klienter);
-klient-specifikke tilpasninger kun i API-laget, hvor det er nødvendigt.
+Kompatibiliteten står nu i `docs/COMPATIBILITY.md`: klienter, matrix og begrænsninger. Hvert
+klientnavn, mappe og testrækkefølge står i `docs/INSTALL_AND_TEST.md` §2, og Forever-testen i
+`docs/FOREVER.md`.
 
-| Klient | Mappe hos dig | Status |
-|---|---|---|
-| Classic Era | `_classic_era_` | installeret, test i gang |
-| Hardcore | samme klient som Classic Era (Hardcore-realms) | IKKE TESTET. Tjek ekstra: ingen påvirkning af karakteren, pause i kamp |
-| Anniversary | `_anniversary_` | IKKE TESTET. Interface-nummeret skal aflæses i klienten |
-| Classic Progression (Cataclysm / MoP Classic) | `_classic_` | IKKE TESTET. Interface-nummeret skal aflæses i klienten |
-| WoW Forever | `_forever_` (1.60.1) | IKKE TESTET. TOC har 16001 |
-| Retail | `_retail_` | IKKE TESTET. TOC har 120105 |
+Aflæst på din PC 4/11 (kun læst, intet ændret):
+* Classic Era 1.15.9.70576
+* WoW Forever 1.60.1.70755 (`_forever_`)
+* Retail og Anniversary: mapperne findes, men spilfilerne er fra feb./mar. 2026, så launcheren
+  opdaterer dem først
+* Mists (`_classic_`): mappen findes, men uden spilfil
 
-For hver: `/dump select(4, GetBuildInfo())` giver interface-nummeret; sammenlign med TOC'ens
-`## Interface`-linje, før noget installeres (altid med backup og din godkendelse).
+Resultater fra de andre klienter skrives i deres egne testlogs, når de testes.

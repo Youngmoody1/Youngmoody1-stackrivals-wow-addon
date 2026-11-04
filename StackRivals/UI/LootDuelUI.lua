@@ -31,7 +31,7 @@ UI.LOOT_STATUS = STATUS
 -- the live board's words (Core/LootDuel.lua LD.liveBoard)
 local LIVE = {
   playing = { "playing", C.steel, "playing" }, topped_out = { "topped out", C.label, "done" }, time_up = { "finished", C.label, "done" },
-  no_signal = { "no signal", AMBER, "warn" }, disconnected = { "disconnected", AMBER, "warn" }, checking = { "checking...", C.gold, "unknown" },
+  no_signal = { "no signal", AMBER, "warn" }, held = { "held by WoW", AMBER, "warn" }, disconnected = { "disconnected", AMBER, "warn" }, checking = { "checking...", C.gold, "unknown" },
   checked = { "checked", C.green, "ready" }, failed = { "replay failed: out", AMBER, "warn" }, out = { "no result: out", AMBER, "warn" },
 }
 local ADDON = { yes = { "StackRivals", C.green }, old = { "old StackRivals", C.label }, you = { "you", C.label } }
@@ -621,8 +621,13 @@ function UI:RefreshLootDuel()
   end
   -- note: what happens / why not
   local note = self.lootNote
+  local commOk, commWhy = LD.commState()
   if not note then
-    if done then
+    if not commOk and commWhy == "locked" and (state == "revealing" or state == "playing") then
+      note = "WoW is holding addon messages right now (boss fight, Mythic+ or PvP match). Your run goes on; live scores and results follow when it lifts, and every timer waits."
+    elseif not commOk and (not d or state == "done" or state == "cancelled" or state == "inviting") and (commWhy == "locked" or commWhy == "locked_map" or commWhy == "trial") then
+      note = LD.WHY[commWhy]
+    elseif done then
       note = "No item is handed out by StackRivals: the loot master does it by hand, if your loot rules still allow it. Peer-checked, not proof against a modified addon."
       if d.agreement == "disputed" then note = "The leader's PC got a different result: check with the group before handing out loot." end
     elseif state == "cancelled" then note = REASON[d.endReason] or "Loot Duel cancelled."
@@ -730,6 +735,9 @@ function UI:RefreshLootBoard(force)
   local mine
   for _, x in ipairs(rows) do if ns.Comm.same(x.name, ns.Comm.me()) then mine = x end end
   p.sub:SetText((d.rs == "l120" and "2:00" or "1:00") .. "  -  " .. #rows .. " players" .. (mine and ("  -  you #" .. mine.rank) or ""))
+  local foot = d.lockedNow and "WoW is holding addon messages (boss fight / M+ / PvP): live scores wait, timers too."
+    or "Live = provisional, until the best runs are replayed."
+  if p.footText ~= foot then p.footText = foot; p.foot:SetText(foot) end
   -- the window: top rows from the scroll offset; your own row pinned at the bottom if out of view
   local maxOff = math.max(0, #rows - BOARD_ROWS)
   p.offset = math.min(p.offset or 0, maxOff)

@@ -207,7 +207,8 @@ function LD.liveBoard(d, t)
       row.score = lv and lv.score or 0
       local e = roster[k]
       if e and e.online == false then row.status = "disconnected"
-      elseif d.state == "playing" and t - (lv and lv.at or d.startAt or t) > 3 * LD.liveEvery(d) + 4 then row.status = "no_signal"
+      elseif d.state == "playing" and t - (lv and lv.at or d.startAt or t) > 3 * LD.liveEvery(d) + 4 then
+        row.status = (d.lockedNow or (d.lockedAt and t - d.lockedAt < 3 * LD.liveEvery(d) + 4)) and "held" or "no_signal"
       else row.status = "playing" end
     end
     rows[#rows + 1] = row
@@ -245,7 +246,22 @@ LD.WHY = {
   expired = "This invite has expired: start a new Loot Duel.",
   combat = "Not in combat.",
   unavailable = "Addon messages are not available here.",
+  trial = "Trial and Veteran accounts can't send addon messages in this WoW version, so they can't take part.",
+  locked = "WoW blocks addon messages right now (a boss fight, a Mythic+ run or a PvP match). Start the Loot Duel after it.",
+  locked_map = "WoW blocks addon messages in this zone. A Loot Duel can't run here: start it outside, or use your normal loot rules.",
 }
+
+--- Can this PC run a Loot Duel at all right now? Nothing is faked: no addon messages = no Loot Duel.
+function LD.commState()
+  local C = ns.Comm
+  if not (C and C.enabled) or C.unavailable then return false, "unavailable" end
+  if C.trial then return false, "trial" end
+  if C.isLocked and C.isLocked() then
+    -- the client may say why: a whole map (dungeon / raid zone) is different from an encounter
+    return false, (ns.Client and ns.Client.lockdownReason() == "map") and "locked_map" or "locked"
+  end
+  return true
+end
 
 ------------------------------------------------------------------------------------------------
 -- Item links
@@ -385,7 +401,8 @@ end
 
 --- Leader: create and invite. names = "Name-Realm" list (2..8, may include yourself).
 function LD.create(itemId, rs, names)
-  if not (ns.Comm and ns.Comm.enabled) then return false, "unavailable" end
+  local okComm, whyComm = LD.commState()
+  if not okComm then return false, whyComm end
   local okLead, why = LD.mayLead()
   if not okLead then return false, why end
   if LD.current and LD.current.state ~= "done" and LD.current.state ~= "cancelled" then return false, "busy" end
@@ -477,6 +494,8 @@ function LD.start()
   local d = LD.current
   if not d or d.role ~= "leader" or d.state ~= "inviting" then return false, "busy" end
   if not LD.canStart(d) then return false, "expired" end
+  local okComm, whyComm = LD.commState()
+  if not okComm then return false, whyComm end -- e.g. a boss was pulled: start after the fight
   local list = LD.accepted(d)
   if #list < 2 then return false, "few" end
   d.participants = sorted(list)
@@ -705,7 +724,7 @@ end
 function LD.claimsKnown(d, t)
   if #(d.participants or {}) <= LD.CONTENDERS then return true end
   local rs = P().LOOT_RULESETS[d.rs]
-  if d.startAt and rs and (t or now()) >= d.startAt + (rs.limitTicks + rs.countdownTicks) / 60 + LD.PAUSE_BUDGET + 5 then return true end
+  if d.startAt and rs and (t or now()) >= d.startAt + (d.frozen or 0) + (rs.limitTicks + rs.countdownTicks) / 60 + LD.PAUSE_BUDGET + 5 then return true end
   for _, p in ipairs(d.participants) do
     local r = d.results[key(p.name)]
     if not (r and r.score) and not (d.gone and d.gone[key(p.name)]) then return false end
@@ -1184,7 +1203,7 @@ end
 function LD.askMissing(d, t)
   local rs = P().LOOT_RULESETS[d.rs]
   if not (rs and d.startAt) then return end
-  local claimsDue = t >= d.startAt + (rs.limitTicks + rs.countdownTicks) / 60 + LD.PAUSE_BUDGET + 5
+  local claimsDue = t >= d.startAt + (d.frozen or 0) + (rs.limitTicks + rs.countdownTicks) / 60 + LD.PAUSE_BUDGET + 5
   d.asked = d.asked or {}
   d.nackSeen = d.nackSeen or {}
   if not d.knownAt and LD.claimsKnown(d, t) then d.knownAt = t end -- contenders send their logs from now
@@ -1235,9 +1254,43 @@ function H.LDR(m, sender)
 end
 
 --- Every frame (Duel.update): repeats, live score, timeouts, pause budget, deadline.
+--- My own run in a Loot Duel: live score out every few seconds, and the pause budget (combat,
+--- chat). Runs every frame while racing, also while WoW holds addon messages (the game is local).
+function LD.localRun(d, t)
+  local s = ns.App and ns.App.session
+  if d.iPlay and s and s.loot == d and not s.recorded then
+    if s.phase == "playing" and t - (d.liveAt or 0) >= LD.liveEvery(d) then
+      d.liveAt = t
+      d.live[key(me())] = { tick = s.state.tick, score = s.state.score, at = t }
+      bcast(P().encode("LDC", d.lid, P().b36(s.state.tick), P().b36(s.state.score)), { key = "LDC:" .. d.lid, low = true })
+      emit("live", d)
+    end
+    -- pauses (combat, chat) are allowed but limited: past the budget the run ends where it is
+    if s.phase == "paused" then
+      d.paused = (d.paused or 0) + math.max(0, t - (d.pauseT or t))
+      if d.paused > LD.PAUSE_BUDGET and s.finish then d.pauseLimit = true; s:finish("pause_limit") end
+    end
+    d.pauseT = t
+  end
+end
+
 function LD.update(t)
   local d = LD.current
   if not d then return end
+  -- WoW's addon chat lockdown (Retail / Forever: boss fight, Mythic+, PvP match): our messages are
+  -- held, not lost, so every waiting time stops too - nobody is "out" because WoW paused the channel
+  local dt = math.max(0, t - (d.lastT or t))
+  d.lastT = t
+  d.lockedNow = ns.Comm and ns.Comm.isLocked and ns.Comm.isLocked() or false
+  if d.lockedNow then d.lockedAt = t end
+  if d.lockedNow and dt > 0 and dt < 5 then
+    d.frozen = (d.frozen or 0) + dt
+    if d.revealAt then d.revealAt = d.revealAt + dt end
+    if d.deadline then d.deadline = d.deadline + dt end
+    if d.createdAt and d.state == "inviting" then d.createdAt = d.createdAt + dt end
+    if d.state == "playing" then LD.localRun(d, t) end -- my own run goes on: the game is local
+    return -- nothing to send or decide until it lifts
+  end
   if d.cancelMsg and d.cancelSends < 3 and t - d.cancelAt >= 3 then
     d.cancelSends, d.cancelAt = d.cancelSends + 1, t
     bcast(d.cancelMsg, { key = "LDX:" .. d.lid })
@@ -1285,21 +1338,7 @@ function LD.update(t)
       and not LD.allHeard(d) then
       LD.sendGo(d, (d.goSends or 0) >= 2)
     end
-    local s = ns.App and ns.App.session
-    if d.iPlay and s and s.loot == d and not s.recorded then
-      if s.phase == "playing" and t - (d.liveAt or 0) >= LD.liveEvery(d) then
-        d.liveAt = t
-        d.live[key(me())] = { tick = s.state.tick, score = s.state.score, at = t }
-        bcast(P().encode("LDC", d.lid, P().b36(s.state.tick), P().b36(s.state.score)), { key = "LDC:" .. d.lid, low = true })
-        emit("live", d)
-      end
-      -- pauses (combat, chat) are allowed but limited: past the budget the run ends where it is
-      if s.phase == "paused" then
-        d.paused = (d.paused or 0) + math.max(0, t - (d.pauseT or t))
-        if d.paused > LD.PAUSE_BUDGET and s.finish then d.pauseLimit = true; s:finish("pause_limit") end
-      end
-      d.pauseT = t
-    end
+    LD.localRun(d, t)
     -- once a second: complete logs that were held back (claims not settled, or someone above was
     -- rejected and this run moved into the best 10) are queued now
     if t - (d.requeueAt or 0) >= 1 then

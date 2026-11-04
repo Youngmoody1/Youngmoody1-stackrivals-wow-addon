@@ -323,7 +323,7 @@ describe("0.3.0 polish", function()
     local M, ns = boot(nil)
     local c = StackRivalsDB.diag.clients["16001"]
     ok(c, "client entry")
-    eq(c.interface, 16001); eq(c.build, "70338"); eq(c.loads, 1)
+    eq(c.interface, 16001); eq(c.build, "70532"); eq(c.loads, 1); eq(c.project, 18); eq(c.client, "forever")
     local M2, ns2 = boot(StackRivalsDB)
     eq(StackRivalsDB.diag.clients["16001"].loads, 2); eq(StackRivalsDB.diag.loads, 2)
   end)

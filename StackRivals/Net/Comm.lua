@@ -230,9 +230,21 @@ end
 local RESULT_RETRY = { [3] = true, [8] = true, [9] = true, [11] = true }  -- throttles, general error, lockdown
 local RESULT_FAIL = { [1] = "invalid", [2] = "invalid", [4] = "invalid", [5] = "not_in_group", [6] = "invalid", [7] = "invalid", [10] = "not_in_guild", [12] = "offline" }
 
+--- Is WoW refusing addon messages right now (Retail / Forever: boss encounter, Mythic+, PvP match)?
+function Comm.isLocked()
+  return (ns.Client and ns.Client.messagingLocked()) or (Comm.lockedUntil ~= nil and now() < Comm.lockedUntil)
+end
+
 function Comm.flush()
   if #Comm.queue == 0 then return end
   local t = now()
+  -- addon chat lockdown: hold everything (nothing is lost, nothing counts as a failed try) and send
+  -- it once WoW allows it again. Never worked around.
+  if Comm.isLocked() then
+    if not Comm.locked then Comm.locked = true; Comm.stats.lockdowns = (Comm.stats.lockdowns or 0) + 1; Comm.traceEvent("lockdown", "", nil, "held") end
+    return
+  end
+  Comm.locked = false
   local i = 1
   while i <= #Comm.queue do
     local q = Comm.queue[i]
@@ -262,6 +274,13 @@ function Comm.flush()
         table.remove(Comm.queue, i)
         Comm.stats.sent = Comm.stats.sent + 1
         if q.channel == "WHISPER" and q.target and not bnId then recentTargets[q.target:lower()] = t end
+      elseif code == 11 then
+        -- AddOnMessageLockdown (12.0+): WoW said no for now - keep it, try again in 2 s, not a failed try
+        q.tries = q.tries - 1
+        q.notBefore = t + 2
+        Comm.lockedUntil = t + 2
+        Comm.locked = true
+        i = i + 1
       elseif RESULT_FAIL[code] or q.tries >= MAX_TRIES then
         table.remove(Comm.queue, i)
         Comm.stats.dropped = Comm.stats.dropped + 1

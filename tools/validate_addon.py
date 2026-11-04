@@ -32,6 +32,13 @@ for req in ("Interface", "Title", "Version", "SavedVariables", "Notes"):
 ifaces = [x.strip() for x in meta.get("Interface", "").split(",")]
 if not ifaces or not all(re.fullmatch(r"\d{5,6}", x) for x in ifaces): err(f"TOC: bad Interface list {ifaces}")
 if "16001" not in ifaces: err("TOC: Forever interface 16001 missing")
+# the interface list = exactly the live clients in tools/clients.json (no dead or guessed numbers)
+clients_json = os.path.join(os.path.dirname(os.path.abspath(__file__)), "clients.json")
+if os.path.isfile(clients_json):
+    import json
+    live = sorted(str(c["interface"]) for c in json.load(open(clients_json, encoding="utf-8"))["clients"] if c.get("live"))
+    if sorted(set(ifaces)) != sorted(set(live)):
+        err(f"TOC: ## Interface {sorted(set(ifaces))} != live clients in tools/clients.json {sorted(set(live))}")
 if len(set(ifaces)) != len(ifaces): err("TOC: duplicate interface numbers")
 version = meta.get("Version", "")
 if not re.fullmatch(r"\d+\.\d+\.\d+", version): err(f"TOC: version '{version}' is not x.y.z")

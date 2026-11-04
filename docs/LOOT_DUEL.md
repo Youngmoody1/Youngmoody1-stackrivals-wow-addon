@@ -276,6 +276,9 @@ simulation, but this is the decisive real test (test plan below). Until it has b
   * who the master looter is;
   * the open loot window (for "From loot");
   * item info.
+* **WoW's addon chat lockdown** (Retail and Forever: boss fight, Mythic+, PvP match): Loot Duel
+  can't start then and says why. A lockdown mid-race holds the messages and every timer waits
+  (0.8.0; see `docs/FOREVER.md`). Classic clients have no such lockdown.
 * **Trial and veteran accounts** can't send addon messages in WoW Forever (and modern clients from
   12.1.7) ([warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_ChatInfo.SendAddonMessage)).
   Such a player can't join; they show as "no answer".
@@ -283,8 +286,8 @@ simulation, but this is the decisive real test (test plan below). Until it has b
 | Version | Loot in WoW | What that means for Loot Duel |
 |---|---|---|
 | Classic Era / Hardcore 1.15.x | Master loot, group loot, need / greed | The master looter hands out the winner's item. Group loot: everyone passes / rolls as agreed |
-| WoW Forever 1.60.x | **Not verified.** A Forever guide lists master, group and personal loot as "to confirm", with first raids of 10 and 20 ([guildorder.com](https://guildorder.com/th/games/wow_forever/wiki/loot-systems-for-a-10-and-a-20)). Check: `/dump C_PartyInfo.GetLootMethod()` | Loot Duel only decides. Whatever WoW allows applies |
-| Retail | Personal loot only. Items can be traded within 2 h to people who were eligible | The holder trades the item by hand, if it's tradeable |
+| WoW Forever 1.60.x | **Not verified.** Blizzard hasn't documented Forever's loot methods. A third-party guide lists master, group and personal loot as "to confirm". First raids are 10, 20 and 40 players, from 9 Dec. Check: `/dump C_PartyInfo.GetLootMethod()` (`docs/FOREVER.md` F7) | Loot Duel only decides. Whatever WoW allows applies. **Addon messages during boss fights are blocked by WoW** (Mainline rules); inside a dungeon **between** pulls is unverified (F2) |
+| Retail | Master loot was removed in 8.0.1. Dungeons use personal loot; raids default to group loot (need before greed). A personal-loot item can be traded within 2 h to group members if it isn't an item-level upgrade for the holder | The holder trades the item by hand, if WoW allows the trade. Same addon-message lockdown as Forever |
 | TBC / Mists Classic | Master loot exists | As Classic Era |
 
 Agree on the rules **before** the raid: which items, which time, and what happens on a tie or a

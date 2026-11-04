@@ -21,7 +21,9 @@ Automatic tests are **not** real client tests. Real client tests are tracked in
 | 0.6.1 | `feature/connected` | + Quickplay, cards, chat, account, sync, Battle.net | development, unchanged |
 | 0.7.0 | `feature/loot-duel` | 0.6.1 + review fixes + WoW colours + Loot Duel | development; **installed in Classic Era** for your first test (commit `9a68952`) |
 | 0.7.1 | `feature/loot-duel-raid` | 0.7.0 + Loot Duel for 2–10 at once, invites, live list, menu card, quick button | development; not installed (superseded) |
-| **0.7.2** | `feature/loot-duel-raid` | 0.7.1 + Loot Duel for 2–40 at once, result colours, CONGRATULATIONS, Spell Battle red-box fix, Guild Duels name | development (this one); not installed |
+| 0.7.2 | `feature/loot-duel-raid` | 0.7.1 + Loot Duel for 2–40 at once, result colours, CONGRATULATIONS, Spell Battle red-box fix, Guild Duels name | development; final commit `e2732d3` (CI green, ZIP verified); not installed |
+| 0.7.3 | `feature/loot-duel-raid` | 0.7.2 + Loot Duel QA (checking until a valid winner, fast start under loss, runs end together, resend requests) | development; no separate ZIP (in 0.8.0) |
+| **0.8.0** | `feature/multi-client` | 0.7.3 + one addon for every official client (client layer, lockdown handling, TOC = live clients) | development (this one); not installed. Per-client status: `docs/COMPATIBILITY.md` |
 
 ## Features
 
@@ -39,7 +41,8 @@ Automatic tests are **not** real client tests. Real client tests are tracked in
 | Account link (one-time code) | SRL1 / SRP1 copy and paste | BUILT addon side, PROPOSED formats | copy and paste in WoW edit boxes | needs the website's Link page (missing) |
 | Profile (rank, level, XP, season, history) | the SRP1 snapshot, display only | BUILT addon side | — | no signature check yet; the website is the authority |
 | Sync: play challenge codes, export results | SR1C / SR1R (vector-checked with the web) | BUILT addon side | copy of 2–3 KB codes in WoW | needs the website's SR1 import (missing) |
-| Loot Duel (2–40 at once) | LD* group messages (start in 2 leader messages), best 10 (+ ties) replayed on every PC | BUILT, SIMULATED (0.7.2: 2, 5, 10, 15, 20, 25, 40) | **a real raid of 20–40** (start and result time, FPS, the same winner everywhere), Forever's loot methods | peer-checked; runs below the best 10 aren't replayed (can't win); never touches loot |
+| Loot Duel (2–40 at once) | LD* group messages, best 10 (+ ties) replayed on every PC, then everyone if a top log is missing | BUILT, SIMULATED (0.7.3: 2–40, bad network, 12 / 25 forged claims, late go; 0.8.0: Forever / Classic / Retail / TBC / Mists profiles, lockdown mid-race) | **a real raid of 20–40**; **Forever: addon messages inside dungeons (FOREVER.md F2)**, Forever's loot methods | peer-checked; never touches loot; no start during WoW's addon chat lockdown |
+| Client support (Forever, Classic Era / Hardcore / SoD, Retail, TBC Anniversary, Mists, Titan) | `Core/Client.lua`, one universal TOC / ZIP | BUILT, MOCK-TESTED (9 profiles) | every client: load + `/sr version` + 10-minute test; only Classic Era 0.3.1 was smoke-tested | see `docs/COMPATIBILITY.md` |
 | Loot Duel results (colours, icons, CONGRATULATIONS / TIE) | the standings every PC computes | BUILT, PREVIEWED (0.7.2) | readability at your UI scale | — |
 | Loot Duel quick button | own frame on UIParent | BUILT, SIMULATED (0.7.1) | placement next to each client's group frames, other addons | — |
 | Web Quickplay / live web ↔ WoW | — | BLOCKED | — | addons have no internet access |

@@ -1,0 +1,19 @@
+{
+  "_about": "The official WoW clients StackRivals targets, one entry per client type. Source of truth for the TOC's ## Interface list (tools/validate_addon.py checks it) and the build manifest. Facts from warcraft.wiki.gg (WOW_PROJECT_ID, TOC format, Public client builds), checked 2026-11-04. 'live' = a live client exists today; 'interfaceVerified' = the number is documented for the live client (Forever's live number is blank on the wiki: 16001 is its beta/test number).",
+  "checked": "2026-11-04",
+  "clients": [
+    { "key": "forever", "name": "WoW Forever", "project": 18, "projectConst": "WOW_PROJECT_CAMELOT", "version": "1.60.1", "interface": 16001, "interfaceVerified": false, "tocSuffix": "_Forever / _Camelot, then _Mainline", "family": "mainline", "live": true, "priority": 1 },
+    { "key": "vanilla", "name": "Classic Era (incl. Hardcore and Season of Discovery realms)", "project": 2, "projectConst": "WOW_PROJECT_CLASSIC", "version": "1.15.9", "interface": 11509, "interfaceVerified": true, "tocSuffix": "_Vanilla", "family": "classic", "live": true, "priority": 1 },
+    { "key": "retail", "name": "Retail (Midnight)", "project": 1, "projectConst": "WOW_PROJECT_MAINLINE", "version": "12.1.5", "interface": 120105, "interfaceVerified": true, "tocSuffix": "_Standard, then _Mainline", "family": "mainline", "live": true, "priority": 2 },
+    { "key": "tbc", "name": "Burning Crusade Classic Anniversary", "project": 5, "projectConst": "WOW_PROJECT_BURNING_CRUSADE_CLASSIC", "version": "2.5.6", "interface": 20506, "interfaceVerified": true, "tocSuffix": "_TBC", "family": "classic", "live": true, "priority": 2 },
+    { "key": "mists", "name": "Mists of Pandaria Classic", "project": 19, "projectConst": "WOW_PROJECT_MISTS_CLASSIC", "version": "5.5.4", "interface": 50504, "interfaceVerified": true, "tocSuffix": "_Mists, then _Classic", "family": "classic", "live": true, "priority": 2 },
+    { "key": "wrath", "name": "Titan Reforged - Chrono (Wrath game type, China)", "project": 11, "projectConst": "WOW_PROJECT_WRATH_CLASSIC", "version": "3.80.2", "interface": 38002, "interfaceVerified": true, "tocSuffix": "_Wrath", "family": "classic", "live": true, "priority": 3 },
+    { "key": "cata", "name": "Cataclysm Classic (ended 1 Jul 2025: became the Mists pre-patch)", "project": 14, "interface": 40402, "interfaceVerified": true, "tocSuffix": "_Cata", "family": "classic", "live": false },
+    { "key": "wrath-classic", "name": "Wrath Classic (no live realm found)", "project": 11, "interface": 30405, "interfaceVerified": true, "tocSuffix": "_Wrath", "family": "classic", "live": false }
+  ],
+  "testClients": [
+    { "name": "Retail PTR 12.1.7", "interface": 120107 },
+    { "name": "Forever Beta / Test", "interface": 16001 },
+    { "name": "Classic Era Test", "interface": 11508 }
+  ]
+}

@@ -233,12 +233,14 @@ function M.install(G)
     fh:close()
   end
   G.C_AddOns = { GetAddOnMetadata = function(_, field) return toc[field] end }
-  G.GetBuildInfo = function() return "1.15.0", "70338", "Oct 2026", 16001 end
+  -- the default mock is WoW Forever (its own client type: WOW_PROJECT_CAMELOT = 18, interface 16001);
+  -- tests/clients.lua switches a mock to any other client
+  G.GetBuildInfo = function() return "1.60.1", "70532", "Oct 2026", 16001 end
   G.date = os.date
   G.tinsert = table.insert
   G.IsInGuild = function() return M.inGuild or false end
   -- social lists (Core/Social.lua): set M.guild / M.friends / M.bnet / M.ignored in a test
-  G.WOW_PROJECT_ID = 2 -- Classic Era
+  G.WOW_PROJECT_ID = 18 -- WoW Forever (WOW_PROJECT_CAMELOT)
   G.BNET_CLIENT_WOW = "WoW"
   G.GetNumGuildMembers = function() return M.guild and #M.guild or 0 end
   G.GetGuildRosterInfo = function(i) local e = M.guild and M.guild[i]; if e then return e.name, "Member", 1, 60, "Warrior", "Orgrimmar", "", "", e.online end end
@@ -253,7 +255,7 @@ function M.install(G)
     local e = M.bnet and M.bnet[i]
     if not e then return nil end
     return { battleTag = "Friend#1234", gameAccountInfo = { isOnline = e.online ~= false, clientProgram = e.client or "WoW", characterName = e.name,
-      realmName = e.realm, wowProjectID = e.project or 2, gameAccountID = 100 + i } }
+      realmName = e.realm, wowProjectID = e.project or G.WOW_PROJECT_ID, gameAccountID = 100 + i } }
   end }
   G.GetAutoCompleteRealms = function() return M.connected or {} end
   G.GetNumGroupMembers = function() return M.groupMembers and #M.groupMembers or 0 end

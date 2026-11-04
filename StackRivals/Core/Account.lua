@@ -56,11 +56,10 @@ function Acc.me() return ns.Comm and ns.Comm.me and ns.Comm.me() or nil end
 
 --- WoW flavour -> SR1/SRL1 platform.
 function Acc.platform()
-  local proj = WOW_PROJECT_ID
-  if proj == 1 then return "wow-retail" end
   if ns.BUILD and ns.BUILD.forever then return "wow-forever" end
-  local iface = GetBuildInfo and select(4, GetBuildInfo())
-  if iface == 16001 then return "wow-forever" end -- WoW Forever's interface (TOC)
+  local key = ns.Client and ns.Client.get().key
+  if key == "retail" then return "wow-retail" end
+  if key == "forever" then return "wow-forever" end -- its own client type (WOW_PROJECT_ID 18)
   return "wow-classic"
 end
 

@@ -1,8 +1,8 @@
-## Interface: 16001, 120105, 50504, 40402, 38002, 30405, 20506, 11509
+## Interface: 16001, 11509, 120105, 20506, 50504, 38002
 ## Title: |cfff6f4f0Stack|r|cffe0242fRivals|r
 ## Notes: Competitive falling-block puzzle minigame. Classic, Time Trial, Daily Challenge, Spell Battle vs Bot, and Duels vs other StackRivals players (Quickplay, guild, friends). Pauses itself in combat.
 ## Author: StackRivals
-## Version: 0.7.3
+## Version: 0.8.0
 ## SavedVariables: StackRivalsDB
 ## IconTexture: Interface\AddOns\StackRivals\Media\icon
 ## AddonCompartmentFunc: StackRivals_OnAddonCompartmentClick
@@ -10,6 +10,7 @@
 ## X-License: All Rights Reserved
 
 Core\Build.lua
+Core\Client.lua
 Engine\Prng.lua
 Engine\Pieces.lua
 Engine\Engine.lua

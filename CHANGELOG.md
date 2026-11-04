@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0 — One addon for every official WoW client (branch `feature/multi-client`, development, not released, not installed)
+
+- **Client layer** (`Core/Client.lua`): the client type comes from `WOW_PROJECT_ID` (the interface number only when that is missing), with names for Forever (18, `WOW_PROJECT_CAMELOT`, a Mainline-family client: not Classic Era), Retail (1), Classic Era (2, with Hardcore and Season of Discovery detected from the realm rules), TBC Anniversary (5), Wrath / Titan Reforged (11), Cataclysm (14), Mists Classic (19); an unknown future client loads and is named "unknown". Feature checks for addon messages, Battle.net game data, the chat-lockdown and restriction APIs, the loot method, secret values, item info.
+- **Addon chat lockdown** (Retail / Forever: boss encounter, Mythic+, PvP match): every message is held, not lost and not counted as a failed try, and goes out when WoW allows it again (also on result 11, `AddOnMessageLockdown`). Loot Duel can't be created or started during it and says why (a whole locked zone is told apart, if the client reports it); during a race every timer waits, your run goes on, the live list says "held by WoW". Never worked around.
+- **Trial / Veteran accounts** (no addon messages on Forever and modern clients): Loot Duel says so instead of failing silently.
+- **TOC**: `## Interface: 16001, 11509, 120105, 20506, 50504, 38002`, exactly the live clients in `tools/clients.json` (Cataclysm Classic 40402 and Wrath Classic 30405 removed: those clients no longer exist); one universal TOC and one ZIP for every client (see `docs/COMPATIBILITY.md`). The validator checks the list against `tools/clients.json`.
+- `/sr version` and the diagnostics in SavedVariables name the client (e.g. "WoW Forever 1.60.1 (16001)").
+- Tests: `tests/clients.lua` models 9 client profiles from the documentation (what each has and lacks); `tests/test_clients.lua` loads the whole addon on each, plays every solo mode, opens every screen, reloads saved data, reads the loot method, checks lockdown and trial handling, and runs Loot Duel between simulated clients of 5 client types (a 5-player dungeon party; on Forever / Retail a boss pulled mid-race). Mock tests, not client tests.
+
 ## 0.7.3 — Loot Duel QA after the 0.7.2 review (branch `feature/loot-duel-raid`, development, not released, not installed)
 
 - **Checking goes on until there is a valid winner**: a forged claim is rejected at once and the next moves up, as often as needed; if a top log never arrives, every remaining claim is checked in one more 40 s round (0.7.2: 10 at a time, twice). If nothing survives: NO WINNER, never an invented one. Tested with 12 and 25 forged top claims among 40.

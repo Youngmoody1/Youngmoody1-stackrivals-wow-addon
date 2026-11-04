@@ -44,6 +44,11 @@ function NS.new(opts)
     local env = setmetatable({}, { __index = NS.stdlib })
     local M = dofile(testdir .. "/wowmock.lua")
     M.install(env)
+    -- o.client = a client profile from tests/clients.lua (forever, vanilla, retail, ...)
+    if o.client then
+      NS.CL = NS.CL or dofile(testdir .. "/clients.lua")
+      NS.CL.apply(o.client, env, M)
+    end
     M.playerName, M.realm = o.name, o.realm or "Realm"
     M.faction, M.race, M.class, M.level = o.faction, o.race, o.class, o.level -- your character (defaults: Alliance Human Warrior 60)
     M.connected = o.connected -- connected realms (GetAutoCompleteRealms); whispers reach only these + your own
@@ -106,7 +111,7 @@ function NS.new(opts)
     env.C_BattleNet.GetFriendAccountInfo = function(i)
       local e = (o.bnet or {})[i]
       if not e then return nil end
-      return { gameAccountInfo = { isOnline = isOn(e.name, e.realm), clientProgram = "WoW", characterName = e.name, realmName = e.realm or "Realm", wowProjectID = e.project or 2, gameAccountID = 7000 + i } }
+      return { gameAccountInfo = { isOnline = isOn(e.name, e.realm), clientProgram = "WoW", characterName = e.name, realmName = e.realm or "Realm", wowProjectID = e.project or env.WOW_PROJECT_ID, gameAccountID = 7000 + i } }
     end
     env.IsInRaid = function() return o.raid == true and o.group ~= nil end
     -- a raid (o.raid = true on everyone in o.group): GetRaidRosterInfo over the group, you included
@@ -132,6 +137,10 @@ function NS.new(opts)
     env.math = setmetatable({ random = function(a, b) return a + math.floor(net.random() * (b - a + 1)) end }, { __index = math })
     local c = { name = full(o.name, o.realm), env = env, M = M, o = o, bucket = { tokens = 10, at = 0 }, online = true, lockdownUntil = -1 }
     env.C_ChatInfo.SendAddonMessage = function(prefix, text, channel, target) return net.send(c, prefix, text, channel, target) end
+    -- Mainline profiles: WoW's addon chat lockdown as the client reports it (net.lockAll / c.lockdownUntil)
+    if o.client and env.C_ChatInfo.InChatMessagingLockdown and env.issecretvalue then
+      env.C_ChatInfo.InChatMessagingLockdown = function() return net.time < c.lockdownUntil end
+    end
     local ns = {}
     for _, f in ipairs(tocFiles()) do
       local chunk = assert(loadfile(root .. "/" .. f))

@@ -31,6 +31,7 @@ function App:RecordDiag()
   d.clients[key] = c
   c.version, c.build, c.interface = tostring(version), tostring(build), tonumber(interface) or 0
   c.project = tonumber(WOW_PROJECT_ID) or 0
+  if ns.Client then local i = ns.Client.get(); c.client = i.key; c.hardcore = i.hardcore; c.sod = i.sod end
   c.addon = ns.VERSION
   c.last = date("!%Y-%m-%d %H:%M")
   c.loads = (c.loads or 0) + 1
@@ -293,7 +294,7 @@ function App:Share(where)
   if not s or s.phase ~= "over" then return end
   if ns.UI.inCombat() then return end
   -- Modern clients lock addon chat during encounters / M+ / rated PvP even out of combat.
-  if C_ChatInfo and C_ChatInfo.InChatMessagingLockdown and C_ChatInfo.InChatMessagingLockdown() then
+  if ns.Client and ns.Client.messagingLocked() then
     self:Print("Chat is locked here right now. Share after the encounter.")
     return
   end
@@ -372,7 +373,8 @@ local function slash(msg)
     if ns.Duel.busy() then ns.Duel.leave(); App:Print("You left the duel.") end
   elseif cmd == "version" then
     local flavour = (ns.BUILD and ns.BUILD.flavour ~= "full") and (", build " .. ns.BUILD.flavour .. (ns.BUILD.duels and "" or " (duels off)")) or ""
-    App:Print("version " .. ns.VERSION .. ", engine v" .. E.ENGINE_VERSION .. ", interface " .. tostring(select(4, GetBuildInfo())) .. flavour)
+    App:Print("version " .. ns.VERSION .. ", engine v" .. E.ENGINE_VERSION .. ", interface " .. tostring(select(4, GetBuildInfo())) .. flavour
+      .. (ns.Client and (", " .. ns.Client.label()) or ""))
   else
     App:Print("commands: /sr (open), /sr classic | trial | daily, /sr spell, /sr quickplay, /sr duel [Name] [3], /sr leave, /sr pause, /sr settings, /sr loot, /sr lootbutton [reset], /sr minimap, /sr scale 0.8, /sr reset, /sr sound, /sr stats, /sr version")
   end

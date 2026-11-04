@@ -80,6 +80,8 @@ echo "== 5/5 checksum + metadata"
 SHA=$(sha256sum "$OUT" | cut -d' ' -f1)
 echo "$SHA  $(basename "$OUT")" > "$OUT.sha256"
 FILES=$(cd "$STAGE" && find "$ADDON" -type f | LC_ALL=C sort | sed 's/.*/    "&"/' | paste -sd, -)
+# the clients this one ZIP is for (tools/clients.json; the TOC lists exactly their interfaces)
+CLIENTS=$(python3 -c 'import json; print(",\n".join("    {\"client\": \"%s\", \"name\": \"%s\", \"interface\": %d, \"interfaceVerified\": %s}" % (c["key"], c["name"].replace("\"", ""), c["interface"], str(c.get("interfaceVerified", False)).lower()) for c in json.load(open("tools/clients.json"))["clients"] if c.get("live")))')
 cat > "dist/$ADDON-$VERSION$SUFFIX.json" <<JSON
 {
   "name": "$ADDON",
@@ -90,6 +92,10 @@ cat > "dist/$ADDON-$VERSION$SUFFIX.json" <<JSON
   "sourceDateEpoch": $EPOCH,
   "interfaces": "$INTERFACES",
   "sha256": "$SHA",
+  "note": "One universal package: every live client loads the same files (docs/COMPATIBILITY.md). Mock tests only; see the real-client test status there.",
+  "clients": [
+$CLIENTS
+  ],
   "files": [
 $FILES
   ]

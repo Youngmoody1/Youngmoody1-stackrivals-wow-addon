@@ -50,52 +50,20 @@ brief say **2–40 is the priority**. This plan follows 2–40.
 | 0.7.0 test points 1–8 (`TEST_LOG_CLASSIC_ERA.md`) | waiting for the user |
 | 0.7.2 test ZIP install | only after the 0.7.0 report and approval |
 
-## 4. Universal compatibility: all official WoW clients (NEXT, separate branch)
+## 4. Universal compatibility: all official WoW clients (0.8.0, `feature/multi-client`)
 
-This is the brief of 4 Nov ("alle de officielle WoW-versioner"). It comes after 0.7.2 and is
-built on its code, without starting over.
-
-* **Clients, in priority order:**
-  1. Forever and Classic Era / Hardcore;
-  2. Retail (Midnight);
-  3. Classic Anniversary / TBC;
-  4. Mists of Pandaria Classic;
-  5. Titan Reforged and other progression versions;
-  6. Season of Discovery after client verification.
-* PTR / beta clients are researched but kept apart from stable builds. Private servers are not
-  supported.
-* **One code base:**
-  * a compatibility layer for client detection (`WOW_PROJECT_ID`, `GetBuildInfo()`, feature
-    checks);
-  * client-specific TOC files where useful;
-  * the APIs for group, faction / class, Battle.net, addon messages, chat, combat restrictions
-    (Retail's newer limits), loot and item links, SavedVariables, and UI templates.
-* **Rules:**
-  * Forever is its own client type, not Classic Era.
-  * A feature a client can't support is shown as unavailable, never as working.
-  * Only verified interface numbers are used.
-* **Loot Duel per client:** the loot systems differ (Retail: personal loot plus trading).
-  Loot Duel only decides; it explains when the item can't be handed over.
-* **Multiplayer per client:** PARTY / RAID / GUILD / WHISPER / Battle.net. Cross-client play is
-  tested separately.
-* **Builds:**
-  * decide between one universal ZIP and per-client ZIPs;
-  * automated packages with TOCs and checksums.
-* **Tests:**
-  * a mock test matrix per client type (load, UI, engine, input, spells, Quickplay, group
-    detection, Battle.net, account / sync, Loot Duel, SavedVariables, API fallbacks);
-  * a real-client test plan per version.
-  * Check which clients are installed on the user's PC first, read-only.
-* **Deliverables:**
-  * the analysis;
-  * the compatibility layer;
-  * TOC files;
-  * CI;
-  * packages;
-  * the matrix;
-  * an install guide per client;
-  * a list of limited features;
-  * a test plan.
+| Requirement | Status |
+|---|---|
+| Clients researched (project ID, interface, TOC suffix, API family, restrictions) | DONE: `docs/COMPATIBILITY.md`, `tools/clients.json` (sources: warcraft.wiki.gg, Blizzard posts) |
+| Installed clients on your PC checked (read only) | DONE: Classic Era 1.15.9.70576, Forever 1.60.1.70755; Retail and Anniversary present but outdated; Mists folder without the game |
+| One code base: client layer (`Core/Client.lua`), feature detection, Forever as its own Mainline-family client | DONE (mock-tested) |
+| WoW's addon chat lockdown (Retail / Forever): messages held, Loot Duel refuses to start and says why, timers wait mid-race | DONE (mock + simulated multiplayer) |
+| Trial / Veteran accounts | DONE (said plainly) |
+| TOC: exactly the live clients; one universal ZIP (per-client ZIPs would be identical) | DONE; validator checks it |
+| Mock test matrix: 9 client profiles + Loot Duel on 5 client types | DONE (`tests/test_clients.lua`) |
+| **Forever in the real client**: interface number, addon messages inside dungeons, loot methods | NEXT: `docs/FOREVER.md` S1–S7, F1–F9 (needs your approval to install) |
+| Retail, Anniversary, Mists in the real clients | LATER: update the clients in the launcher first; 10-minute test each |
+| Cross-client Battle.net (Retail ↔ Forever) | unknown: F8 |
 
 ## 5. Out of scope here
 
