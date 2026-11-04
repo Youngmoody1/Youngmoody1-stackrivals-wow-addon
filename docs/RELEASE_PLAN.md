@@ -1,8 +1,22 @@
-# Release plan: CurseForge Alpha → Beta → Release (from 0.8.1)
+# Release plan: "StackRivals – Loot Duels" on CurseForge (revised 4 Nov 2026)
 
-Goal: **one StackRivals project on CurseForge** for every official WoW client, with one universal
-ZIP. Clients are added to each file's **game versions only as far as their tests allow**. Nothing is
-uploaded or published without your explicit **GO**.
+Goal: **one project, "StackRivals – Loot Duels"**, for every official WoW client, with one universal
+ZIP. The addon and stackrivals.io launch as **one product**: the same account, progression and
+rewards, with the website as the authority. Clients are added to each file's game versions **only
+as far as their tests allow**. Nothing is uploaded or published without your explicit **GO**.
+
+## 0. Phases (decided 4 Nov 2026)
+
+| Phase | Version | What | Channel | Gate to the next phase |
+|---|---|---|---|---|
+| 1. Addon ready | **0.8.1** (now) | Internal Alpha; real-client tests on Forever and Classic Era (FOREVER.md, TEST_LOG_CLASSIC_ERA.md); fixes | internal only (your PC, named testers); **not on CurseForge** | Forever S1–S7 and F1–F3, Classic Era 1–6 passed; no critical Lua error |
+| 2. Integration | **0.9.x** (next) | Fixes from phase 1 + the website's contracts (`docs/INTEGRATION_CHECKLIST.md`): linking, profile with XP, level, Shards display, rank and season, cosmetics, achievements, results | internal Alpha builds | contracts agreed in writing; web vectors pass in CI; import / export tested |
+| 3. Joint QA | 0.9.x → **1.0.0-beta** | Full journey on real clients: link → play in WoW → export → website imports and verifies → profile back in WoW. Plus multiplayer with real players (Loot Duel with 5, then a raid) | **Beta** on CurseForge, only after your GO, tagged only with the clients that passed | §3 Beta GO list |
+| 4. Launch | **1.0.0** | Stable release after full QA, docs and your approval | **Release** | §4 Release GO list |
+
+**Why no public version earlier:** a public stable build that later needs its account, XP, Shards
+or profile reworked would break players' saved data and trust. Internal builds may go out at any
+time.
 
 The addon is and stays **free**: no ads, no paid or locked features, no donation prompts in the game.
 It contains no Shards and no web purchases. That is also Blizzard's AddOn policy.
@@ -11,7 +25,7 @@ It contains no Shards and no web purchases. That is also Blizzard's AddOn policy
 
 | Channel | What it is for | Who sees it | Needed before it |
 |---|---|---|---|
-| **Alpha** | Internal builds for us and named testers | CurseForge website; app users only if they opt in to Alpha | CI green; owner GO |
+| **Alpha** | Internal builds for us and named testers (phases 1–2). Shared directly as a ZIP, **not uploaded** to CurseForge | you and named testers only | CI green |
 | **Beta** | Public test build for the clients whose basics are checked | Website, and app users who opt in to Beta | the **Beta GO list** (§3) for each client tagged |
 | **Release** | The stable build that the CurseForge app installs and updates by default | Everyone | the **Release GO list** (§4) for each client tagged |
 
@@ -43,7 +57,8 @@ the description (§5). It is **never** called verified on the strength of a mock
 | B10 | No known exploit or critical bug in Loot Duel | LOOT_DUEL.md trust limits; open issues |
 | B11 | No promise of global / web matchmaking | description review |
 | B12 | Game versions on the upload = only the clients that pass B5–B7, plus clients named "mock-tested" in the text if you decide so | upload checklist |
-| B13 | **Your GO**, written | – |
+| B13 | The integration features this Beta announces are agreed and tested (none are announced before that) | INTEGRATION_CHECKLIST.md |
+| B14 | **Your GO**, written | – |
 
 A client that fails B5–B7 is **left off** that upload. That never blocks the others.
 
@@ -61,23 +76,27 @@ Everything in §3, plus:
 | R6 | **Multiplayer** (Quickplay, Guild Duels, Battle.net, Match Chat, Loot Duel) is announced as supported on a client **only after a test with real players on that client**. For Loot Duel that means at least 5 players. For "up to 40", a real raid (LOOT_DUEL.md R6). Until then the page says "not verified on this client yet" |
 | R7 | For Forever: FOREVER.md F1–F3 done. That covers the live interface number, delivery in the open world and in a dungeon between pulls, and the boss-fight lockdown |
 | R8 | Correct game-version tags on CurseForge |
-| R9 | **Your GO** |
+| R9 | **Integration:** the contracts are agreed; XP, Shards display, profile and linking are integrated; import and export are tested end to end with the real website (`docs/INTEGRATION_CHECKLIST.md`) |
+| R10 | No unverified WoW result gives a valuable reward. No paid web subscription or purchase is needed for any addon feature |
+| R11 | **Your GO** for this exact build (version, commit, SHA-256) |
 
 ## 5. Readiness today (4 Nov 2026, build 0.8.1)
 
 | Client | Automated | Real client | Beta-ready? | Missing for Release |
 |---|---|---|---|---|
-| **WoW Forever** | mock profile + multiplayer simulations green | **nothing yet** (client installed on your PC: 1.60.1.70755) | **after S1–S7** (FOREVER.md): live interface, load, solo play | F1–F3 (delivery in dungeons), loot methods, 5-player Loot Duel |
-| **Classic Era** (incl. Hardcore, SoD realms) | green | 0.3.1 smoke test OK; 0.7.0 installed, its test not done | **after the 0.7.0 test points 1–6 pass on 0.8.1** (TEST_LOG_CLASSIC_ERA.md) | multiplayer with real players; Hardcore and SoD realms each loaded once |
+| **WoW Forever** | mock profile + multiplayer simulations green | **nothing yet** (client installed on your PC: 1.60.1.70755) | client part: **after S1–S7** (FOREVER.md); then phase 2–3 | F1–F3 (delivery in dungeons, **2+ players**), loot methods, 5-player Loot Duel, integration |
+| **Classic Era** (incl. Hardcore, SoD realms) | green; a save written by 0.7.0 itself upgrades cleanly (test) | 0.3.1 smoke test OK; 0.7.0 installed, its test not done | client part: **after test points 1–6 pass on 0.8.1** (TEST_LOG_CLASSIC_ERA.md); then phase 2–3 | multiplayer with real players; Hardcore and SoD realms each loaded once; integration |
 | Retail (Midnight) | green | not tested (your client needs an update) | later: needs one real load + solo pass | the same |
 | TBC Anniversary | green | not tested (your client needs an update) | later: needs a tester or your client | the same |
 | Mists Classic | green | not tested (not installed) | later: external tester | the same |
 | Titan Reforged | green (older API model) | no access (China only) | not planned as a tagged version: we can't test it | a tester in China |
 
 **Safe first public release:**
-1. **Beta for Forever + Classic Era**, as soon as S1–S7 (Forever) and the solo points (Classic Era)
-   pass on the same build.
-2. Then **Release for those two**, after R1–R7.
+1. **Beta (1.0.0-beta) for Forever + Classic Era**, after:
+   * their client tests;
+   * the agreed website integration (phase 2);
+   * the joint QA (phase 3).
+2. Then **Release for those two**, after R1–R10.
 3. Retail, TBC Anniversary and Mists are added to later uploads of the same project as soon as
    each passes B5–B7 (an external tester is enough, see `docs/TESTERS.md`).
 4. The compatibility code for all of them stays in every build.
@@ -86,10 +105,11 @@ Everything in §3, plus:
 
 | Version | Content | Channel |
 |---|---|---|
-| 0.8.1 | universal build, client layer, `/sr report`, `/sr commtest` | Alpha (now, internal) → Beta after §3 |
-| 0.8.x | fixes from the first Forever and Classic Era client tests | Beta |
-| 0.9.0 | first public Release for Forever + Classic Era (solo verified; multiplayer marked by real status) | Release |
-| 1.0.0 | multiplayer verified with real players on Forever and Classic Era; more clients tagged | Release |
+| 0.8.1 | universal build, client layer, `/sr report`, `/sr commtest` | internal Alpha (now) |
+| 0.8.x | fixes from the first Forever and Classic Era client tests | internal Alpha |
+| 0.9.x | the website's integration (contracts agreed first) + fixes | internal Alpha |
+| 1.0.0-beta | joint QA passed on the clients tagged | **Beta** (first public file), after your GO |
+| 1.0.0 | stable: everything in §4 | **Release**, after your GO |
 
 Version numbers: `## Version` in the TOC = the CHANGELOG's top entry = the CurseForge display name
 `StackRivals 0.8.1`. Pre-releases may add `-beta1` to the display name only. The validator keeps

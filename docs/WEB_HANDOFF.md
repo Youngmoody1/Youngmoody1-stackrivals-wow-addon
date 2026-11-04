@@ -1,7 +1,12 @@
 # StackRivals WoW addon → stackrivals.io: the one handoff file
 
 * Repository: `Youngmoody1/Youngmoody1-stackrivals-wow-addon`.
-* Branch `feature/loot-duel` (addon 0.7.0). It contains everything from `feature/connected` (0.6.1).
+* Branch `feature/multi-client` (addon 0.8.1, every official WoW client). It contains everything from
+  `feature/loot-duel-raid` (0.7.3), `feature/loot-duel` (0.7.0) and `feature/connected` (0.6.1).
+* **Before the CurseForge launch:** `docs/INTEGRATION_CHECKLIST.md` lists every integration point:
+  account, profile, XP, Shards display, rank, cosmetics, achievements, dailies, results and reward
+  eligibility. It also has the `SRP2` proposal and the tasks waiting for the website. The public
+  launch waits for it (`docs/RELEASE_PLAN.md`).
 * **Start here.** This file is the entry point and the source of truth. The four detail documents
   below are referenced, not repeated, and they agree with this file:
 
@@ -86,7 +91,8 @@ Compatibility rules:
   * the profile snapshot;
   * the `linkId`.
 * Battle.net `gameAccountID`s are temporary. They are never stored or used as an identity.
-* No Shards, currencies, gold, bets or rewards in the addon.
+* No Shards logic, currencies, gold, bets or rewards in the addon. A Shards **balance** may be
+  **shown** from a website snapshot (proposed `SRP2`); the website stays the only authority.
 
 ## 5. What the website builds (functions + acceptance)
 

@@ -28,6 +28,7 @@ EPOCH=$(git log -1 --format=%ct 2>/dev/null || echo 1793750400)
 echo "== 1/5 validate addon folder"
 python3 tools/validate_addon.py "$ADDON"
 python3 tools/diag_report.py --selftest
+python3 tools/curseforge_upload.py --selftest
 
 if [ -n "${SKIP_TESTS:-}" ]; then
   echo "== 2/5 tests skipped (SKIP_TESTS: they already ran on this commit)"

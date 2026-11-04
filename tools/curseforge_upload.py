@@ -6,6 +6,9 @@ exactly what would be sent. Nothing leaves this machine.
   python3 tools/curseforge_upload.py --zip dist/StackRivals-0.8.1.zip --type beta \
       --clients forever,vanilla
 
+A client's version must exist EXACTLY on CurseForge, or the upload stops. A documented exception
+is possible only per client, by hand: --accept-version vanilla=1.15.8.
+
 Uploading needs ALL of these (never in CI, never automatic):
   --go "I approve uploading StackRivals <version> as <type>"   (the exact sentence)
   --project <CurseForge project id>
@@ -74,27 +77,34 @@ def verify_against_commit(zip_path):
     return subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True).stdout.strip()
 
 
-def resolve_versions(token, keys, cl):
-    """Version ids for each client's version string; the nearest lower one if CurseForge lacks it."""
+def pick_versions(versions, keys, cl, accepted):
+    """CurseForge version ids: the EXACT version of each client (tools/clients.json). Never a silent
+    substitute: if CurseForge lacks it, stop - unless that client has an explicit, documented
+    --accept-version <client>=<version> (e.g. a game version CurseForge hasn't added yet)."""
+    ids, problems = [], []
+    for k in keys:
+        type_id, flavor = CF_TYPES[k]
+        want = accepted.get(k, cl[k]["version"])
+        cands = [v for v in versions if v.get("gameVersionTypeID") == type_id]
+        exact = [v for v in cands if v.get("name") == want]
+        if exact:
+            ids.append(exact[0]["id"])
+            if k in accepted:
+                print(f"note: {flavor} tagged as {want} (accepted by --accept-version instead of {cl[k]['version']})")
+        else:
+            have = ", ".join(sorted(v["name"] for v in cands)[-5:]) or "none"
+            problems.append(f"{flavor}: CurseForge has no version {want} (latest it has: {have})")
+    if problems:
+        raise SystemExit("STOP, nothing uploaded:\n  " + "\n  ".join(problems)
+                         + "\nIf a listed version is right for this client, re-run with --accept-version <client>=<version>"
+                         + " and note it in the upload checklist (docs/CURSEFORGE.md).")
+    return ids
+
+
+def resolve_versions(token, keys, cl, accepted):
     import urllib.request
     req = urllib.request.Request(API + "/api/game/wow/versions", headers={"X-Api-Token": token})
-    versions = json.load(urllib.request.urlopen(req, timeout=30))
-    ids = []
-    for k in keys:
-        type_id, _ = CF_TYPES[k]
-        want = cl[k]["version"]
-        cands = [v for v in versions if v.get("gameVersionTypeID") == type_id]
-
-        def key(s):
-            return tuple(int(x) for x in re.findall(r"\d+", s))
-        exact = [v for v in cands if v.get("name") == want]
-        pick = exact[0] if exact else max((v for v in cands if key(v["name"]) <= key(want)), key=lambda v: key(v["name"]), default=None)
-        if not pick:
-            raise SystemExit(f"CurseForge has no version for {k} {want}")
-        if not exact:
-            print(f"note: CurseForge has no {want} for {k}; using {pick['name']}")
-        ids.append(pick["id"])
-    return ids
+    return pick_versions(json.load(urllib.request.urlopen(req, timeout=30)), keys, cl, accepted)
 
 
 def main():
@@ -104,7 +114,18 @@ def main():
     ap.add_argument("--clients", required=True, help="comma list of tools/clients.json keys that passed their GO list")
     ap.add_argument("--project", type=int)
     ap.add_argument("--go", default="")
+    ap.add_argument("--accept-version", action="append", default=[], metavar="CLIENT=VERSION",
+                    help="tag CLIENT with this exact CurseForge version instead of tools/clients.json's (documented exception)")
+    ap.add_argument("--selftest", action="store_true", help=argparse.SUPPRESS)
+    if "--selftest" in sys.argv:
+        return selftest()
     a = ap.parse_args()
+    accepted = {}
+    for x in a.accept_version:
+        k, _, v = x.partition("=")
+        if not v:
+            raise SystemExit(f"--accept-version needs CLIENT=VERSION, got {x}")
+        accepted[k.strip()] = v.strip()
 
     cl = clients()
     keys = [k.strip() for k in a.clients.split(",") if k.strip()]
@@ -119,7 +140,7 @@ def main():
         raise SystemExit(f"TOC interfaces {ifaces} != tools/clients.json")
     commit = verify_against_commit(a.zip)
     sha = hashlib.sha256(open(a.zip, "rb").read()).hexdigest()
-    display = f"StackRivals {version}" + ("" if a.type == "release" else f" ({a.type})")
+    display = f"StackRivals – Loot Duels {version}" + ("" if a.type == "release" else f" ({a.type})")
     metadata = {
         "changelog": changelog_for(version), "changelogType": "markdown", "displayName": display,
         "gameVersionNames": [f"{CF_TYPES[k][1]} {cl[k]['version']}" for k in keys],
@@ -139,7 +160,7 @@ def main():
     token = os.environ.get("CF_API_TOKEN")
     if not (token and a.project):
         raise SystemExit("--go given, but CF_API_TOKEN or --project is missing: nothing uploaded")
-    metadata["gameVersions"] = resolve_versions(token, keys, cl)
+    metadata["gameVersions"] = resolve_versions(token, keys, cl, accepted)
     del metadata["gameVersionNames"]
     import urllib.request
     import uuid
@@ -153,6 +174,20 @@ def main():
                                  headers={"X-Api-Token": token, "Content-Type": f"multipart/form-data; boundary={boundary}"})
     print(urllib.request.urlopen(req, timeout=120).read().decode())
     print("Uploaded. It waits for CurseForge's review, then for YOUR manual release on the website.")
+    return 0
+
+
+def selftest():
+    cl = {"forever": {"version": "1.60.1"}, "vanilla": {"version": "1.15.9"}}
+    versions = [{"id": 1, "name": "1.60.1", "gameVersionTypeID": 88568}, {"id": 2, "name": "1.15.8", "gameVersionTypeID": 67408}]
+    assert pick_versions(versions, ["forever"], cl, {}) == [1]
+    try:
+        pick_versions(versions, ["forever", "vanilla"], cl, {})
+        raise AssertionError("a missing version was substituted")
+    except SystemExit as e:
+        assert "no version 1.15.9" in str(e), e
+    assert pick_versions(versions, ["forever", "vanilla"], cl, {"vanilla": "1.15.8"}) == [1, 2]
+    print("curseforge_upload selftest OK")
     return 0
 
 

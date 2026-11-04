@@ -77,6 +77,20 @@ brief say **2–40 is the priority**. This plan follows 2–40.
 | Project page in English (features, limits, FAQ, bug link, Discord at the bottom) | DONE (text); **real screenshots missing** (taken during the Forever / Classic Era client tests) |
 | First Beta: Forever + Classic Era | waiting for the real-client tests (FOREVER.md S1–S7, Classic Era points 1–6) and your GO |
 
+## 4c. One product with stackrivals.io before launch (decided 4 Nov 2026)
+
+The public CurseForge launch of **"StackRivals – Loot Duels"** waits for the website integration:
+shared account, XP and level, Shards **display**, rank and season, cosmetics, achievements, results.
+The website stays the authority; the addon builds no economy and no reward rules.
+
+| Requirement | Status |
+|---|---|
+| Integration checklist per point (supported / website delivers / formats / tests / missing / real WoW test) | DONE: `INTEGRATION_CHECKLIST.md` |
+| Versioned contracts; newer versions refused with "update" | DONE (SRL1 / SRP1 / SR1; `SRP2` proposed for the Shards display + cosmetics) |
+| Waiting for web Claude: agreement of the formats, Link page, `SRP2` decision, signatures, import page, reward rules | WAITING (list in INTEGRATION_CHECKLIST.md) |
+| Integration in the addon (0.9.x) | after the web report; built on the existing account / sync code |
+| Joint QA, then Beta / Release | RELEASE_PLAN.md phases 3–4 |
+
 ## 5. Out of scope here
 
 * The website and Shards: separate projects.

@@ -24,7 +24,7 @@ Automatic tests are **not** real client tests. Real client tests are tracked in
 | 0.7.2 | `feature/loot-duel-raid` | 0.7.1 + Loot Duel for 2–40 at once, result colours, CONGRATULATIONS, Spell Battle red-box fix, Guild Duels name | development; final commit `e2732d3` (CI green, ZIP verified); not installed |
 | 0.7.3 | `feature/loot-duel-raid` | 0.7.2 + Loot Duel QA (checking until a valid winner, fast start under loss, runs end together, resend requests) | development; no separate ZIP (in 0.8.0) |
 | 0.8.0 | `feature/multi-client` | 0.7.3 + one addon for every official client (client layer, lockdown handling, TOC = live clients) | development; ZIP `fe519e6`; not installed |
-| **0.8.1** | `feature/multi-client` | 0.8.0 + `/sr report`, `/sr commtest`, CurseForge and release preparation | development (this one), Alpha; not installed. Per-client status: `docs/COMPATIBILITY.md`; release gates: `docs/RELEASE_PLAN.md` |
+| **0.8.1** | `feature/multi-client` | 0.8.0 + `/sr report`, `/sr commtest`, CurseForge and release preparation | internal Alpha (this one); not installed. Per-client status: `docs/COMPATIBILITY.md`; release gates: `docs/RELEASE_PLAN.md`; the public launch waits for the website integration (`docs/INTEGRATION_CHECKLIST.md`) |
 
 ## Features
 

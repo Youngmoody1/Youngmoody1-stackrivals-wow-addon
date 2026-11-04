@@ -300,6 +300,36 @@ describe("/sr commtest: proof that addon messages arrive (simulated clients)", f
   end)
 end)
 
+describe("upgrade: a save written by 0.7.0 itself (your installed version) loads in this build", function()
+  local function load070()
+    local chunk = assert(loadfile(testdir .. "/fixtures/sv_0.7.0_classic_era.lua"))
+    local env = {}
+    setfenv(chunk, env); chunk()
+    return env.StackRivalsDB
+  end
+  for _, client in ipairs({ "vanilla", "forever" }) do
+    it(CL.PROFILES[client].label .. ": records, Spell Battle stats, settings, keys, Daily export and the pending account link are all kept", function()
+      local saved = load070()
+      local M, ns = boot(client, saved)
+      eq(ns.db.records.classic.games, 1, "Classic"); eq(ns.db.records.blitz.games, 1, "Time Trial"); eq(ns.db.records.daily.games, 1, "Daily")
+      eq(ns.db.spell.stats.challenger.losses, 1, "Spell Battle stats"); eq(ns.db.spell.loadout, "1057"); eq(ns.db.spell.difficulty, "challenger")
+      eq(ns.db.settings.sound, false); eq(ns.db.settings.scale, 0.9)
+      eq(ns.db.bindings.spell1, "Q"); eq(ns.db.bindings.hardDrop, "SPACE")
+      eq(ns.db.sync.daily.score, 248, "Daily export kept")
+      eq((ns.Account.state()), "pending", "the account link is still pending")
+      eq(ns.db.settings.lootButton, true, "new setting added with its default")
+      -- play, log out, load again: nothing lost
+      SlashCmdList.STACKRIVALS(""); ns.App:Start("classic"); M.frames_step(250)
+      for _ = 1, 80 do if ns.App.session.phase == "over" then break end
+        ns.UI.keys:GetScript("OnKeyDown")(ns.UI.keys, "SPACE"); ns.UI.keys:GetScript("OnKeyUp")(ns.UI.keys, "SPACE"); M.frames_step(3) end
+      M.fire("PLAYER_LOGOUT")
+      local _, ns2 = boot(client, StackRivalsDB)
+      eq(ns2.db.records.classic.games, 2, "the new game is added to the old ones")
+      eq(ns2.db.spell.stats.challenger.losses, 1)
+    end)
+  end
+end)
+
 describe("client detection edge cases", function()
   it("an unreadable WOW_PROJECT_ID (secret) and an unknown interface never break loading", function()
     local M, ns = boot("forever", nil, function(G) G.WOW_PROJECT_ID = "SECRET"; G.GetBuildInfo = function() return "?", "?", "?", 0 end end)

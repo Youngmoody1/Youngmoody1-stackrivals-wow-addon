@@ -1,4 +1,9 @@
-# CurseForge kit (prepared, NOT submitted)
+# CurseForge kit: "StackRivals – Loot Duels" (prepared, NOT submitted)
+
+**Timing (decided 4 Nov 2026):** no public Beta or Release before the stackrivals.io integration
+(shared account, XP, Shards display, rank, profile, results) is agreed, integrated and tested, and
+before the real-client tests pass. See `docs/RELEASE_PLAN.md` and `docs/INTEGRATION_CHECKLIST.md`.
+Until then this kit is used only for internal Alpha builds and preparation.
 
 Everything needed for one official StackRivals project serving every WoW client. **Nothing is
 created, uploaded or published without your GO.** The process and the GO lists are in
@@ -46,8 +51,11 @@ release.
 
 | Field | Value |
 |---|---|
-| Name | StackRivals |
-| Summary (≤ 120 chars) | A falling-block puzzle game inside WoW: Loot Duels for up to 40, duels, spells and daily challenges. |
+| Name | **StackRivals – Loot Duels** (public name; decided 4 Nov 2026) |
+| Unchanged inside the addon | folder `StackRivals`, `StackRivals.toc` (`## Title: StackRivals`), `/sr`, SavedVariables `StackRivalsDB`, every message protocol, the original StackRivals X logo |
+| Tagline | Turn raid loot into a skill-based showdown. |
+| Summary (≤ 120 chars) | Turn raid loot into a skill-based showdown: Loot Duels for up to 40 players, plus duels, spells and daily challenges. (116) |
+| File display name | `StackRivals – Loot Duels 0.8.1 (beta)` (set by `tools/curseforge_upload.py`) |
 | Main category | Minigames |
 | Extra categories | Miscellaneous |
 | License | Custom: paste `LICENSE` (All Rights Reserved; readable source as Blizzard's policy requires) |
@@ -60,12 +68,18 @@ release.
 > **Status of this version.** StackRivals 0.8.x is a **Beta**.
 > Tested in the real game client: [FILL IN: e.g. "WoW Forever and Classic Era: solo modes"].
 > Multiplayer features are [FILL IN: "verified on …" / "not verified with real players yet"].
+> Loot Duel with **up to 40 players** has been tested in simulations; [FILL IN: "a real raid of N
+> players on <client>" / "it hasn't been tested in a real raid yet"].
 > Other WoW versions are included and pass our automated tests, but haven't been tested in their
 > real client yet. If you play one of them, `/sr report` and a comment help us a lot.
 
-**StackRivals** is a fast falling-block puzzle game you play inside World of Warcraft: in the
-queue, between pulls, or to settle who gets the loot. It gets out of your way the moment combat
-starts. Same pieces, rotation and scoring as **stackrivals.io**.
+## StackRivals – Loot Duels
+*Turn raid loot into a skill-based showdown.*
+
+**Compete for dungeon and raid loot with up to 40 players.** Challenge your party, battle your
+guildmates, and settle loot competitions with StackRivals: a fast falling-block puzzle game inside
+World of Warcraft. It gets out of your way the moment combat starts. Same pieces, rotation and
+scoring as **stackrivals.io**.
 
 **⚔ LOOT DUEL: compete for dungeon and raid loot with up to 40 players!**
 Instead of `/roll`, the group races for an item: everyone plays the **same pieces at the same
@@ -147,7 +161,7 @@ CurseForge.
 
 | # | Shot | Client | Taken |
 |---|---|---|---|
-| 1 | Loot Duel result in a dungeon party: CONGRATULATIONS, WINNER / LOST / PASSED | Forever (F1/F2) | no |
+| 1 (**main image**) | Loot Duel result in a dungeon party: CONGRATULATIONS, WINNER / LOST / PASSED | Forever (F1/F2) | no |
 | 2 | Loot Duel live leaderboard beside the board during a race | Forever or Classic Era | no |
 | 3 | Mode menu with the LOOT DUEL card and filled records | any | no |
 | 4 | Spell Battle vs Bot mid-match (spells and mana visible) | any | no |
