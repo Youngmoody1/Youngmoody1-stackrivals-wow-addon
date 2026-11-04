@@ -54,7 +54,7 @@ function LB:Create()
     if GameTooltip then
       GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
       GameTooltip:SetText("StackRivals: Loot Duel")
-      GameTooltip:AddLine("Race your group for an item instead of /roll: 2-10 players at once, same pieces.", 1, 1, 1, true)
+      GameTooltip:AddLine("Race your group for an item instead of /roll: 2-40 players at once, same pieces.", 1, 1, 1, true)
       GameTooltip:AddLine("Click: open the lobby (nothing is sent). Shift + drag: move. Right-click: hide (Settings shows it again).", 0.75, 0.75, 0.75, true)
       GameTooltip:Show()
     end

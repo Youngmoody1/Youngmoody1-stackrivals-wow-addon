@@ -117,7 +117,10 @@ function NS.new(opts)
       local x = all[i]
       if not x then return nil end
       local cls = x.o.class or "WARRIOR"
-      return x.o.name, x.o.lead and 2 or (x.o.assist and 1 or 0), 1, 60, cls:sub(1, 1) .. cls:sub(2):lower(), cls, "", x.online, false, "NONE", x.o.ml == true
+      -- like WoW: "Name" on your own realm, "Name-Realm" for someone from another realm; raid
+      -- groups of 5 (subgroup 1-8)
+      local nm = ((x.o.realm or "Realm") == (o.realm or "Realm")) and x.o.name or (x.o.name .. "-" .. (x.o.realm or "Realm"))
+      return nm, x.o.lead and 2 or (x.o.assist and 1 or 0), math.floor((i - 1) / 5) + 1, 60, cls:sub(1, 1) .. cls:sub(2):lower(), cls, "", x.online, false, "NONE", x.o.ml == true
     end
     -- Battle.net game data (C_BattleNet.SendGameData): only between mutual Battle.net friends; the
     -- receiver gets BN_CHAT_MSG_ADDON with the sender's game account ID as IT sees it (7000 + index
@@ -174,6 +177,7 @@ function NS.new(opts)
 
   local function enqueue(to, from, prefix, text, channel)
     if net.random() < net.drop then net.log[#net.log + 1] = "drop " .. text; return end
+    if net.dropIf and net.dropIf(to, from, text, channel) then net.log[#net.log + 1] = "dropIf " .. text; return end -- targeted loss (tests)
     local copies = (net.random() < net.dup) and 2 or 1
     for _ = 1, copies do
       net.seq = net.seq + 1

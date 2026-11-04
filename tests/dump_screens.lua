@@ -9,7 +9,9 @@ local function git(cmd) local p = io.popen("git " .. cmd .. " 2>/dev/null"); loc
 local branch, commit = git("rev-parse --abbrev-ref HEAD"), git("rev-parse --short HEAD")
 local dirty = git("status --porcelain -- StackRivals") ~= "" and "+local changes" or ""
 BUILD = (commit ~= "") and string.format("  (%s @ %s%s)", branch, commit, dirty ~= "" and (" " .. dirty) or "") or ""
+local only = arg[2] -- optional: only screens whose id contains this (development)
 for _, sc in ipairs(S.list) do
+  if not only or sc[1]:find(only, 1, true) then
   local M, ns, root_ = sc[3]()
   local F = root_ or StackRivalsFrame
   -- the hard-drop rim is an 0.18 s flash: never part of a still picture
@@ -17,4 +19,5 @@ for _, sc in ipairs(S.list) do
   local R, items = L.collect(M, F)
   L.dump(outdir .. "/" .. sc[1] .. ".txt", F, R, items, "StackRivals " .. (ns.VERSION or "?") .. BUILD .. "  -  " .. sc[2])
   print("dumped " .. sc[1])
+  end
 end

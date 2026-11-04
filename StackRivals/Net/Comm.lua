@@ -182,6 +182,12 @@ function Comm.unqueue(pred)
   return n
 end
 
+--- Is a message for which pred(q) is true still queued (not yet sent)?
+function Comm.queued(pred)
+  for _, q in ipairs(Comm.queue) do if pred(q) then return true end end
+  return false
+end
+
 local function refill(b, t)
   b.tokens = math.min(b.cap, b.tokens + (t - b.at) * b.rate)
   b.at = t

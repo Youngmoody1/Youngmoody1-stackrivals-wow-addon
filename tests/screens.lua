@@ -96,6 +96,56 @@ local function spellAutoplay(M, ns, frames)
   end
 end
 
+
+-- Loot Duel previews: a simulated party / raid of n (n > 5 = raid), every client runs the addon.
+local LOOT_CLS = { "WARRIOR", "SHAMAN", "MAGE", "ROGUE", "PRIEST", "DRUID", "HUNTER", "WARLOCK", "PALADIN" }
+local LOOT_NAMES = { "Lead", "Ann", "Ben", "Cid", "Dee", "Eve", "Fay", "Gus", "Hal", "Ivy", "Jon", "Kim", "Lou", "Max", "Ned",
+  "Oda", "Pia", "Quin", "Rex", "Sue", "Tam", "Uma", "Vic", "Wes", "Xan", "Yara", "Zed", "Abe", "Bea", "Cal", "Dot", "Eli",
+  "Flo", "Gil", "Hux", "Ida", "Jem", "Kai", "Liv", "Mo" }
+local function lootGroup(seed, n)
+  local _, _, _, NS = duelPair()
+  local net = NS.new({ seed = seed })
+  local list = {}
+  for i = 1, n do
+    list[i] = net.add({ name = LOOT_NAMES[i], group = "R", raid = n > 5, lead = (i == 1), class = LOOT_CLS[(i - 1) % #LOOT_CLS + 1], saved = { seenHelp = true } })
+    list[i].env.UIParent:SetSize(1920, 1080)
+  end
+  net.step(30)
+  return net, list
+end
+--- Invite players 1..k (or `inv`), answers: true = join, false = pass, nil = no answer yet.
+local function lootInvite(net, list, k, answer)
+  local names = {}
+  for i = 1, k do names[i] = list[i].name end
+  list[1].ns.LootDuel.create(19019, "l060", names); net.step(60 * 4)
+  for i = 2, k do
+    local a = answer and answer(i)
+    if a ~= nil then list[i].ns.LootDuel.answer(a) end
+  end
+  net.step(60 * 6)
+end
+--- Race: player i drops a piece every pace(i) frames, for `frames` frames (nil = until all are done).
+local function lootRace(net, list, k, frames, pace)
+  for f = 1, frames or 7000 do
+    local running = false
+    for i = 1, k do
+      local sx = list[i].ns.App.session
+      if sx and sx.loot and not sx.recorded then
+        running = true
+        if sx.phase == "playing" and f % pace(i) == 0 then
+          -- spread the pieces over the board (each player its own pattern), so runs last and differ
+          local shift = ((math.floor(f / pace(i)) * (i % 4 + 1)) % 9) - 4
+          for _ = 1, math.abs(shift) do local k = shift < 0 and "left" or "right"; sx:press(k); sx:release(k) end
+          if (f + i) % 5 == 0 then sx:press("rotateCW"); sx:release("rotateCW") end
+          sx:press("hardDrop"); sx:release("hardDrop")
+        end
+      end
+    end
+    net.step(1)
+    if not frames and not running then break end
+  end
+end
+
 S.list = {
   { "1-menu", "Mode menu", function()
     local M, ns = boot(); seedRecords(ns); SlashCmdList.STACKRIVALS(""); M.frames_step(1); return M, ns
@@ -422,32 +472,33 @@ S.list = {
     lead.ns.LootDuel.create(19019, "l060", { "Ann-Realm", "Ben-Realm" }); net.step(60)
     return ann.M, ann.ns, ann.ns.UI.lootPopup
   end },
-  { "24c-loot-result", "Loot Duel - result: replay-checked standings and the winner", function()
-    local _, _, _, NS = duelPair()
-    local net = NS.new({ seed = 42 })
-    local cs = {}
-    local cls = { "WARRIOR", "SHAMAN", "MAGE" }
-    for i, n in ipairs({ "Lead", "Ann", "Ben" }) do cs[n] = net.add({ name = n, group = "P", lead = (i == 1), class = cls[i], saved = { seenHelp = true } }) end
-    net.step(30)
-    cs.Lead.ns.LootDuel.create(19019, "l060", { "Lead-Realm", "Ann-Realm", "Ben-Realm" }); net.step(60)
-    cs.Ann.ns.LootDuel.answer(true); cs.Ben.ns.LootDuel.answer(true); net.step(120)
-    cs.Lead.ns.LootDuel.start(); net.step(240)
-    local pace = { Lead = 9, Ann = 5, Ben = 13 }
-    for f = 1, 6000 do
-      local running = false
-      for n, c in pairs(cs) do
-        local s = c.ns.App.session
-        if s and s.loot and not s.recorded then running = true; if s.phase == "playing" and f % pace[n] == 0 then s:press("hardDrop"); s:release("hardDrop") end end
-      end
-      net.step(1)
-      if not running then break end
-    end
+  { "24c-loot-result", "Loot Duel - final results (winner's view): CONGRATULATIONS, WINNER green, LOST red, PASSED red", function()
+    local net, list = lootGroup(42, 5)
+    lootInvite(net, list, 5, function(i) return i ~= 5 end) -- Dee passes
+    list[1].ns.LootDuel.start(); net.step(60 * 4)
+    local pace = { 9, 5, 13, 11 }
+    lootRace(net, list, 4, nil, function(i) return pace[i] end)
     net.step(60 * 20)
-    cs.Lead.ns.App:ShowMenu()
-    cs.Lead.ns.UI:ShowSheet("loot")
-    return cs.Lead.M, cs.Lead.ns, cs.Lead.env.StackRivalsFrame
+    local w = list[1].ns.LootDuel.history[1].winner
+    local c = list[1]
+    for _, x in ipairs(list) do if x.name == w then c = x end end
+    c.ns.App:ShowMenu(); c.ns.UI:ShowSheet("loot")
+    return c.M, c.ns, c.env.StackRivalsFrame
   end },
-  { "24d-loot-raid-pick", "Loot Duel - 20-player raid: the leader picks up to 10 (level, class, group, StackRivals)", function()
+  { "24c2-loot-result-lost", "Loot Duel - the same result on a loser's PC: everyone sees who won (no auto-loot)", function()
+    local net, list = lootGroup(42, 5)
+    lootInvite(net, list, 5, function(i) return i ~= 5 end)
+    list[1].ns.LootDuel.start(); net.step(60 * 4)
+    local pace = { 9, 5, 13, 11 }
+    lootRace(net, list, 4, nil, function(i) return pace[i] end)
+    net.step(60 * 20)
+    local d = list[1].ns.LootDuel.history[1]
+    local c = list[4]
+    for _, x in ipairs(list) do if x.name ~= d.winner and x ~= list[5] then c = x end end
+    c.ns.App:ShowMenu(); c.ns.UI:ShowSheet("loot")
+    return c.M, c.ns, c.env.StackRivalsFrame
+  end },
+  { "24d-loot-raid-pick", "Loot Duel - 20-player raid: the leader picks (level, class, group, StackRivals); Invite All / Selected", function()
     local _, _, _, NS = duelPair()
     local net = NS.new({ seed = 43 })
     local cls = { "WARRIOR", "SHAMAN", "MAGE", "ROGUE", "PRIEST", "DRUID", "HUNTER", "WARLOCK", "PALADIN" }
@@ -493,6 +544,42 @@ S.list = {
     if not a.ns.UI.frame:IsShown() then a.env.SlashCmdList.STACKRIVALS("") end
     a.ns.UI:RefreshPhase(); a.ns.UI:RefreshLootBoard()
     return a.M, a.ns, a.ns.UI.lootBoard
+  end },
+  { "24g-loot-raid-10", "Loot Duel - 10-player raid: everyone joined, ready, Start", function()
+    local net, list = lootGroup(47, 10)
+    lootInvite(net, list, 10, function() return true end)
+    local a = list[1]
+    a.env.SlashCmdList.STACKRIVALS(""); a.ns.UI:ShowSheet("loot")
+    return a.M, a.ns, a.env.StackRivalsFrame
+  end },
+  { "24h-loot-raid-40", "Loot Duel - 40-player raid after Invite All: joined / passed / no answer yet, page 1 of 4", function()
+    local net, list = lootGroup(48, 40)
+    lootInvite(net, list, 40, function(i) if i % 9 == 0 then return false elseif i % 7 == 0 then return nil end return true end)
+    local a = list[1]
+    a.env.SlashCmdList.STACKRIVALS(""); a.ns.UI:ShowSheet("loot")
+    return a.M, a.ns, a.env.StackRivalsFrame
+  end },
+  { "24i-loot-live-40", "Loot Duel - 40 racing at once: live top list (provisional), your own place pinned below", function()
+    local net, list = lootGroup(49, 40)
+    lootInvite(net, list, 40, function() return true end)
+    list[1].ns.LootDuel.start(); net.step(60 * 5)
+    lootRace(net, list, 40, 60 * 12, function(i) return 30 + (i * 7) % 31 end)
+    list[31].online = false
+    net.step(60 * 4)
+    local a = list[27]
+    if not a.ns.UI.frame:IsShown() then a.env.SlashCmdList.STACKRIVALS("") end
+    a.ns.UI:RefreshPhase(); a.ns.UI:RefreshLootBoard(true)
+    return a.M, a.ns, a.ns.UI.lootBoard
+  end },
+  { "24j-loot-result-40", "Loot Duel - 40-player final results: best 10 replay-checked, the rest listed as unchecked (can't win)", function()
+    local net, list = lootGroup(50, 40)
+    lootInvite(net, list, 40, function(i) return i ~= 38 end)
+    list[1].ns.LootDuel.start(); net.step(60 * 5)
+    lootRace(net, list, 40, nil, function(i) return 20 + (i * 7) % 23 end)
+    net.step(60 * 30)
+    local a = list[1]
+    a.ns.App:ShowMenu(); a.ns.UI:ShowSheet("loot")
+    return a.M, a.ns, a.env.StackRivalsFrame
   end },
   { "24f-loot-quick-button", "Loot Duel quick-access button near the group frames (own button; Shift-drag, right-click hides)", function()
     local _, _, _, NS = duelPair()

@@ -431,7 +431,7 @@ function UI:CreateMenu()
   -- hover: a warm gold wash and the CTA in white (calm: no animation over gameplay)
   lc:HookScript("OnEnter", function(self) self.shine:SetAlpha(0.10); self.cta:SetTextColor(C.paper[1], C.paper[2], C.paper[3]) end)
   lc:HookScript("OnLeave", function(self) self.shine:SetAlpha(0); self.cta:SetTextColor(C.gold[1], C.gold[2], C.gold[3]) end)
-  lc.tip = "Loot Duel: 2-10 players in your party or raid race at once for one item, instead of /roll. Same pieces, no spells. The loot master still hands out the item by hand."
+  lc.tip = "Loot Duel: 2-40 players in your party or raid race at once for one item, instead of /roll. Same pieces, no spells. The loot master still hands out the item by hand."
   self.lootCard = lc
   self.lootBtn = lc -- (the old name: everything that opened Loot Duel still does)
   -- QUICKPLAY: one wide red bar between the solo modes and the VERSUS row

@@ -1,7 +1,7 @@
 --[[
   StackRivals - Loot Duel screens: the sheet (item, time, players, invite / start, results), the
   invite popup, the live leaderboard beside the window, and the small rank panel under NEXT.
-  2-10 players race at once (one race, no 1v1 rounds). The loot master hands out the item in WoW;
+  2-40 players race at once (one race, no 1v1 rounds or heats). The loot master hands out the item in WoW;
   nothing here touches loot.
 ]]
 local _, ns = ...
@@ -10,19 +10,29 @@ local C = T.C
 local UI = ns.UI
 local SZ = T.SIZE
 
-local ROWS, ROW_H = 10, 16 -- a party or a 10-player race fits on one page; a 40-player raid pages
+local ROWS, ROW_H = 10, 16 -- 10 per page: a party or 10 on one page, a 40-player raid on 4
+-- Result colours (the class colour stays on the name): WINNER green, LOST / PASSED red, TIE gold,
+-- PLAYING steel; not checked / no result / disconnected are amber and never shown as a defeat.
+-- Every status also has an icon (Media/Status), so nothing depends on colour alone.
+local AMBER = { 0.91, 0.63, 0.25 }
+local ICON = function(n) return T.MEDIA .. "Status\\" .. n end
 local STATUS = {
-  invited = { "invited...", C.label }, accepted = { "joined", C.green }, declined = { "passed", C.label },
-  noanswer = { "no answer: normal loot instead", C.label }, version = { "other StackRivals version", C.label },
-  verified = { "replay-checked", C.green }, rejected = { "replay failed: out", C.redLight }, missing = { "no result: out", C.redLight },
-  pending = { "checking...", C.gold }, playing = { "playing", C.steel }, watching = { "", C.label },
-  locking = { "locking in...", C.gold }, locked = { "ready", C.green }, picked = { "", C.label },
+  invited = { "invited...", C.label }, accepted = { "joined", C.green, "ready" }, declined = { "passed", C.redLight, "passed" },
+  noanswer = { "no answer: normal loot instead", C.label, "unknown" }, version = { "other StackRivals version", C.label },
+  verified = { "replay-checked", C.green, "ready" }, rejected = { "replay failed: out", AMBER, "warn" }, missing = { "no result: out", AMBER, "warn" },
+  pending = { "checking...", C.gold, "unknown" }, playing = { "playing", C.steel, "playing" }, watching = { "", C.label },
+  locking = { "locking in...", C.gold }, locked = { "ready", C.green, "ready" }, picked = { "", C.label },
+  -- final results
+  winner = { "WINNER", C.green, "winner" }, lost = { "LOST", C.redLight, "lost" }, tie = { "TIE", C.gold, "tie" },
+  passed = { "PASSED", C.redLight, "passed" }, unchecked = { "NOT CHECKED", AMBER, "unknown" },
+  noresult = { "NO RESULT", AMBER, "warn" }, failed = { "REPLAY FAILED", AMBER, "warn" }, silent = { "NO ANSWER", C.label, "unknown" },
 }
+UI.LOOT_STATUS = STATUS
 -- the live board's words (Core/LootDuel.lua LD.liveBoard)
 local LIVE = {
-  playing = { "playing", C.steel }, topped_out = { "topped out", C.label }, time_up = { "finished", C.label },
-  no_signal = { "no signal", C.gold }, disconnected = { "disconnected", C.redLight }, checking = { "checking...", C.gold },
-  checked = { "checked", C.green }, failed = { "replay failed: out", C.redLight }, out = { "no result: out", C.redLight },
+  playing = { "playing", C.steel, "playing" }, topped_out = { "topped out", C.label, "done" }, time_up = { "finished", C.label, "done" },
+  no_signal = { "no signal", AMBER, "warn" }, disconnected = { "disconnected", AMBER, "warn" }, checking = { "checking...", C.gold, "unknown" },
+  checked = { "checked", C.green, "ready" }, failed = { "replay failed: out", AMBER, "warn" }, out = { "no result: out", AMBER, "warn" },
 }
 local ADDON = { yes = { "StackRivals", C.green }, old = { "old StackRivals", C.label }, you = { "you", C.label } }
 local REASON = {
@@ -37,6 +47,7 @@ local REASON = {
 }
 
 local function short(n) return ns.Duel and ns.Duel.short(n) or n end
+local function setIcon(tex, name) if name then tex:SetTexture(ICON(name)); tex:Show() else tex:Hide() end end
 local function itemText(d)
   local name, _, q = ns.LootDuel.itemInfo(d.itemId)
   local r, g, b = T.qualityColor(q or 1)
@@ -87,7 +98,7 @@ function UI:CreateLootDuel()
   local cw = self.frame:GetWidth() - 2 * L - 2
   local title = T.text(s, SZ.title, C.gold, "", nil, "italic"); title:SetPoint("TOPLEFT", L, -14); title:SetText("LOOT DUEL")
   s.sub = T.text(s, SZ.small, C.label); s.sub:SetPoint("TOPLEFT", L, -38)
-  s.sub:SetText("2-10 players race at once for one item. Winning doesn't hand out the item.")
+  s.sub:SetText("2-40 players race at once for one item. Winning doesn't hand out the item.")
 
   -- the item
   local it = T.panel(s, C.gold)
@@ -148,6 +159,25 @@ function UI:CreateLootDuel()
   s.rules = T.text(s, SZ.label, C.body); s.rules:SetPoint("LEFT", s.l120, "RIGHT", 10, 0); s.rules:SetWidth(cw - 140); s.rules:SetJustifyH("LEFT")
   s.rules:SetText("Same pieces, no spells, all at once. Highest score wins; tie: lines, then /roll.")
   s.banner = T.display(s, SZ.title, C.gold); s.banner:SetPoint("TOPLEFT", L, -100); s.banner:SetWidth(cw); s.banner:SetJustifyH("LEFT")
+  -- final result header (everyone sees the same, once every needed replay is checked)
+  local fin = CreateFrame("Frame", nil, s)
+  fin:SetSize(cw, 62); fin:SetPoint("TOPLEFT", L, -98)
+  fin.glow = fin:CreateTexture(nil, "BACKGROUND"); fin.glow:SetTexture(T.MEDIA .. "glow"); fin.glow:SetBlendMode("ADD")
+  fin.glow:SetSize(220, 90); fin.glow:SetPoint("LEFT", -60, 0); fin.glow:SetVertexColor(0.48, 0.89, 0.63); fin.glow:SetAlpha(0)
+  fin.icon = fin:CreateTexture(nil, "ARTWORK"); fin.icon:SetSize(30, 30); fin.icon:SetPoint("TOPLEFT", 0, -2)
+  fin.big = T.text(fin, SZ.title, C.green, "", nil, "italic"); fin.big:SetPoint("TOPLEFT", 38, 0); fin.big:SetWidth(cw - 40); fin.big:SetJustifyH("LEFT")
+  fin.line = T.display(fin, SZ.heading, C.paper); fin.line:SetPoint("TOPLEFT", 38, -22); fin.line:SetWidth(cw - 40); fin.line:SetJustifyH("LEFT")
+  if fin.line.SetWordWrap then fin.line:SetWordWrap(false) end
+  fin.detail = T.text(fin, SZ.label, C.label); fin.detail:SetPoint("TOPLEFT", 38, -42); fin.detail:SetWidth(cw - 40); fin.detail:SetJustifyH("LEFT")
+  if fin.detail.SetWordWrap then fin.detail:SetWordWrap(false) end
+  fin.pop = T.popAnim(fin, 1.12, 0.35, false)
+  local ga = fin.glow:CreateAnimationGroup()
+  local g1 = ga:CreateAnimation("Alpha"); g1:SetFromAlpha(0); g1:SetToAlpha(0.7); g1:SetDuration(0.25); g1:SetOrder(1)
+  local g2 = ga:CreateAnimation("Alpha"); g2:SetFromAlpha(0.7); g2:SetToAlpha(0.15); g2:SetDuration(1.2); g2:SetOrder(2)
+  ga:SetScript("OnFinished", function() fin.glow:SetAlpha(0.15) end)
+  fin.glowAnim = ga
+  fin:Hide()
+  s.final = fin
 
   -- players (paged: a raid can have 40)
   s.head = T.label(s, "PLAYERS"); s.head:SetPoint("TOPLEFT", L, -162)
@@ -155,6 +185,16 @@ function UI:CreateLootDuel()
   s.next = T.button(s, ">", 26, 18, "frame", function() UI.lootPage = (UI.lootPage or 1) + 1; UI:RefreshLootDuel() end)
   s.next:SetPoint("TOPRIGHT", -L - 2, -158); s.prev:SetPoint("RIGHT", s.next, "LEFT", -4, 0)
   s.page = T.text(s, SZ.label, C.label); s.page:SetPoint("RIGHT", s.prev, "LEFT", -6, 0)
+  -- Select All / Deselect All (online members, at most 40): picking is not inviting
+  s.selNone = T.button(s, "None", 44, 18, "frame", function() UI.lootPick = {}; UI.lootNote, UI.lootConfirmAll = nil, nil; UI:RefreshLootDuel() end)
+  s.selAll = T.button(s, "All", 40, 18, "frame", function()
+    UI.lootPick = {}
+    for _, n in ipairs(everyone()) do if pickedCount() < ns.Protocol.LOOT_MAX then UI.lootPick[n:lower()] = true end end
+    UI.lootNote, UI.lootConfirmAll = nil, nil
+    UI:RefreshLootDuel()
+  end)
+  s.selAll.tip = "Tick everyone online (you included). Nobody is invited until you click Invite Selected."
+  s.selNone.tip = "Untick everyone."
   s.rows = {}
   UI.lootPick = {}
   for i = 1, ROWS do
@@ -163,6 +203,8 @@ function UI:CreateLootDuel()
     row.box = T.tex(row, "BORDER", C.line, 1); row.box:SetSize(12, 12); row.box:SetPoint("LEFT", 2, 0)
     row.fill = T.tex(row, "OVERLAY", C.gold, 1); row.fill:SetSize(8, 8); row.fill:SetPoint("CENTER", row.box, "CENTER")
     row.rank = T.display(row, SZ.small, C.label); row.rank:SetPoint("LEFT", 2, 0)
+    row.icon = row:CreateTexture(nil, "ARTWORK"); row.icon:SetSize(13, 13); row.icon:Hide()
+    row.bg = T.tex(row, "BACKGROUND", C.green, 0); row.bg:SetAllPoints()
     row.name = T.text(row, SZ.small, C.paper); row.name:SetPoint("LEFT", 22, 0); row.name:SetWidth(150); row.name:SetJustifyH("LEFT")
     if row.name.SetWordWrap then row.name:SetWordWrap(false) end
     row.detail = T.text(row, SZ.label, C.label); row.detail:SetPoint("LEFT", 176, 0); row.detail:SetWidth(104); row.detail:SetJustifyH("LEFT")
@@ -285,8 +327,16 @@ function UI:CreateLootDuel()
     if PlaySound and SOUNDKIT and SOUNDKIT.READY_CHECK then pcall(PlaySound, SOUNDKIT.READY_CHECK) end
   end)
   LD.on("result", function(d)
-    -- the standings: open the sheet on the results (the over screen stays underneath)
+    -- everyone (players and watchers) gets the same result: the sheet with the final header,
+    -- and one line in your own chat window (shown to you only, nothing is sent)
     if UI.frame and UI.frame:IsShown() then UI:ShowSheet("loot") end
+    if ns.App and ns.App.Print and not d.printed then
+      d.printed = true
+      local item = itemText(d)
+      local line = d.winner and ("Loot Duel for " .. item .. ": " .. short(d.winner) .. " wins (replay-checked). The loot master hands out the item.")
+        or (#d.tied > 1 and ("Loot Duel for " .. item .. ": a tie - roll off.")) or ("Loot Duel for " .. item .. ": no checked result - use your normal loot rules.")
+      ns.App:Print(line)
+    end
     local s2 = ns.App and ns.App.session
     if s2 and s2.loot == d and UI.over:IsShown() then
       UI.overBadge:SetText(d.winner and ("WINNER: " .. string.upper(short(d.winner))) or (#d.tied > 1 and "TIE: ROLL OFF" or "NO WINNER"))
@@ -331,6 +381,57 @@ function UI:CreateLootPopup()
   self.lootPopup = f
 end
 
+--- Final status of one standing (WINNER / TIE / LOST, or a separate amber status).
+local function finalKey(d, x)
+  if x.status == "verified" then
+    if d.winner and ns.Comm.same(x.name, d.winner) then return "winner" end
+    for _, t in ipairs(d.tied or {}) do if ns.Comm.same(t, x.name) then return "tie" end end
+    return "lost"
+  end
+  return ({ unchecked = "unchecked", missing = "noresult", rejected = "failed" })[x.status] or "noresult"
+end
+UI.lootFinalKey = finalKey
+
+--- The final header: CONGRATULATIONS (one winner), TIE (roll off), or NO WINNER. The same on
+--- every PC, shown only once every needed replay is checked (state "done").
+function UI:FillLootFinal(d)
+  local s = self.lootSheet
+  local fin = s.final
+  local LD = ns.LootDuel
+  local item = itemText(d)
+  local n = #(d.participants or {})
+  if d.winner then
+    local r = d.results[d.winner:lower()] or {}
+    setIcon(fin.icon, "winner")
+    fin.big:SetText("CONGRATULATIONS!"); fin.big:SetTextColor(C.green[1], C.green[2], C.green[3])
+    fin.line:SetText(T.classText(r.class or LD.classOf(d.winner), short(d.winner)) .. " wins the Loot Duel!")
+    -- the item (name + icon) is in the item box right above
+    fin.detail:SetText("Score " .. T.commas(r.score or 0) .. "  -  #1 of " .. n .. "  -  highest replay-checked score")
+    fin.glow:SetVertexColor(0.48, 0.89, 0.63)
+  elseif #(d.tied or {}) > 1 then
+    local names = {}
+    for _, x in ipairs(d.tied) do names[#names + 1] = T.classText(LD.classOf(x), short(x)) end
+    local r = d.results[d.tied[1]:lower()] or {}
+    setIcon(fin.icon, "tie")
+    fin.big:SetText("TIE!"); fin.big:SetTextColor(C.gold[1], C.gold[2], C.gold[3])
+    if #names <= 3 then fin.line:SetText(table.concat(names, ", ") .. " tie at " .. T.commas(r.score or 0))
+    else fin.line:SetText(#names .. " players tie at " .. T.commas(r.score or 0) .. " (listed below)") end
+    fin.detail:SetText("Roll off with /roll (the agreed tiebreak). No winner is invented.")
+    fin.glow:SetVertexColor(0.95, 0.81, 0.42)
+  else
+    setIcon(fin.icon, "warn")
+    fin.big:SetText("NO WINNER"); fin.big:SetTextColor(AMBER[1], AMBER[2], AMBER[3])
+    fin.line:SetText("No replay-checked result")
+    fin.detail:SetText("Use your normal loot rules for " .. item .. ".")
+    fin.glow:SetVertexColor(AMBER[1], AMBER[2], AMBER[3])
+  end
+  -- a short victory effect, once per Loot Duel
+  if fin.shownFor ~= d.lid then
+    fin.shownFor = d.lid
+    fin.pop:Play(); fin.glowAnim:Play()
+  end
+end
+
 --- One row per player: before the invite the group (pick), then the invitees, then standings.
 function UI:RefreshLootDuel()
   local s = self.lootSheet
@@ -341,6 +442,7 @@ function UI:RefreshLootDuel()
   local leader = d and d.role == "leader"
   local mayLead, why = LD.mayLead()
   local raid = IsInRaid and IsInRaid()
+  local MAX = ns.Protocol.LOOT_MAX
   -- item
   local itemId = d and d.itemId or self.lootItemId
   local it = s.item
@@ -362,40 +464,30 @@ function UI:RefreshLootDuel()
     it.hint:SetText(#lootList > 0 and "Pick it from the loot window, or shift-click / paste below." or "The leader, an assistant or the master looter picks the item.")
   end
   s.input:SetShown(editable); s.setItem:SetShown(editable)
-  -- compact: without the item box, the rules and the list move up
+  -- compact: without the item box the rules and the list move up; the result header takes room
+  local done = state == "done"
   local top = editable and 0 or 30
+  local listTop = done and -164 or (-162 + top)
   s.l060:ClearAllPoints(); s.l060:SetPoint("TOPLEFT", 24, -132 + top)
-  s.head:ClearAllPoints(); s.head:SetPoint("TOPLEFT", 24, -162 + top)
-  s.next:ClearAllPoints(); s.next:SetPoint("TOPRIGHT", -26, -158 + top)
-  for i, row in ipairs(s.rows) do row:ClearAllPoints(); row:SetPoint("TOPLEFT", 24, -178 + top - (i - 1) * ROW_H) end
-  s.empty:ClearAllPoints(); s.empty:SetPoint("TOPLEFT", 24, -182 + top)
-  -- rules / banner
+  s.head:ClearAllPoints(); s.head:SetPoint("TOPLEFT", 24, listTop)
+  s.next:ClearAllPoints(); s.next:SetPoint("TOPRIGHT", -26, listTop + 4)
+  for i, row in ipairs(s.rows) do row:ClearAllPoints(); row:SetPoint("TOPLEFT", 24, listTop - 16 - (i - 1) * ROW_H) end
+  s.empty:ClearAllPoints(); s.empty:SetPoint("TOPLEFT", 24, listTop - 20)
+  -- rules / result header
   local rs = d and d.rs or self.lootRs
   setSeg(s.l060, rs == "l060"); setSeg(s.l120, rs == "l120")
-  local showRules = state ~= "done"
+  local showRules = not done
   s.l060:SetShown(showRules); s.l120:SetShown(showRules); s.rules:SetShown(showRules)
   if editable then s.l060:Enable(); s.l120:Enable() else s.l060:Disable(); s.l120:Disable() end
-  s.banner:SetShown(state == "done")
-  if state == "done" then
-    if d.winner then
-      local r, g, b = T.qualityColor(select(3, LD.itemInfo(d.itemId)) or 4)
-      s.banner:SetText("WINNER: " .. T.classText((d.results[d.winner:lower()] or {}).class or LD.classOf(d.winner), short(d.winner)))
-      s.banner:SetTextColor(r or 1, g or 1, b or 1)
-    elseif #d.tied > 1 then
-      local n = {}
-      for _, x in ipairs(d.tied) do n[#n + 1] = short(x) end
-      s.banner:SetText("TIE: " .. table.concat(n, ", ") .. "  -  /roll off")
-      s.banner:SetTextColor(C.gold[1], C.gold[2], C.gold[3])
-    else
-      s.banner:SetText("NO WINNER  -  use normal loot")
-      s.banner:SetTextColor(C.label[1], C.label[2], C.label[3])
-    end
-  end
+  s.banner:Hide()
+  s.final:SetShown(done)
+  if done then self:FillLootFinal(d) end
   -- rows
   local rows = {}
-  if not d or state == "cancelled" then
+  local setup = not d or state == "cancelled"
+  if setup then
     local picked = pickedCount()
-    s.head:SetText("PICK 2-10 WHO WANT IT  -  " .. picked .. " PICKED")
+    s.head:SetText("PICK 2-" .. MAX .. " WHO WANT IT  -  " .. picked .. " PICKED")
     for _, e in ipairs(LD.roster()) do
       local key = e.name:lower()
       local a = LD.addonStatus(e.name)
@@ -411,70 +503,92 @@ function UI:RefreshLootDuel()
     -- picked first, then players whose StackRivals answered, then the rest (offline last)
     table.sort(rows, function(a, b) if a.order ~= b.order then return a.order < b.order end return a.name:lower() < b.name:lower() end)
   elseif state == "inviting" then
-    s.head:SetText("INVITED " .. #d.inviteOrder .. "  -  " .. #LD.accepted(d) .. " JOINED")
+    local joined, passed = #LD.accepted(d), 0
     local left = math.max(0, math.ceil(LD.INVITE_TIME - (GetTime() - d.createdAt)))
     for _, n in ipairs(d.inviteOrder) do
       local a = d.answers[n:lower()]
+      if a and not a.accept then passed = passed + 1 end
       local st = a and (a.accept and "accepted" or "declined") or (left == 0 and "noanswer" or "invited")
       rows[#rows + 1] = { name = n, class = LD.classOf(n), statusKey = st }
     end
+    s.head:SetText(#d.inviteOrder .. " INVITED  -  " .. joined .. " JOINED  -  " .. passed .. " PASSED")
   elseif state == "revealing" then
-    s.head:SetText("LOCKING IN THE PIECES  -  " .. #d.participants .. " PLAYERS")
+    local ready = 0
     for _, p in ipairs(d.participants) do
-      rows[#rows + 1] = { name = p.name, statusKey = d.reveals[p.name:lower()] and "locked" or "locking" }
+      local r = d.reveals[p.name:lower()] and true
+      if r then ready = ready + 1 end
+      rows[#rows + 1] = { name = p.name, statusKey = r and "locked" or "locking" }
     end
+    s.head:SetText("READY CHECK  -  " .. ready .. " OF " .. #d.participants .. " READY")
   elseif state == "playing" then
-    s.head:SetText("LIVE  -  " .. #d.participants .. " PLAYERS, SAME PIECES  -  NOT CHECKED YET")
-    for _, x in ipairs(LD.liveBoard(d)) do
+    local board = LD.liveBoard(d)
+    local checked = 0
+    for _, x in ipairs(board) do
+      if x.checked then checked = checked + 1 end
       local st = LIVE[x.status] or LIVE.playing
-      rows[#rows + 1] = { name = x.name, class = x.class, score = x.score, rank = x.rank, status = st[1], statusColor = st[2] }
+      rows[#rows + 1] = { name = x.name, class = x.class, score = x.score, rank = x.rank, status = st[1], statusColor = st[2], icon = st[3] }
     end
-  elseif state == "done" then
-    s.head:SetText("RESULT  -  " .. ns.Protocol.LOOT_RULESETS[d.rs].name .. "  -  " .. #d.participants .. " PLAYERS")
-    local prev, prevRank, sep
+    s.head:SetText("LIVE  -  " .. #d.participants .. " PLAYERS  -  PROVISIONAL" .. (checked > 0 and ("  -  " .. checked .. " CHECKED") or ""))
+  elseif done then
+    s.head:SetText("FINAL RESULTS  -  " .. ns.Protocol.LOOT_RULESETS[d.rs].name .. "  -  " .. #d.participants .. " PLAYERS")
+    local prev, prevRank
     for i, x in ipairs(d.standings) do
-      if x.status ~= "verified" and not sep then
-        -- results that don't count are shown apart: they never win
-        sep = true
-        rows[#rows + 1] = { sep = "NOT COUNTED" }
-      end
-      -- equal score and lines share a place (a tie is a tie)
+      -- equal score and lines share a place (a tie is a tie); only replay-checked runs get a place
       local rank = i
       if prev and prev.status == "verified" and x.score == prev.score and x.lines == prev.lines then rank = prevRank end
-      rows[#rows + 1] = { name = x.name, class = x.class, score = x.score, statusKey = x.status, rank = (x.status == "verified") and rank or nil }
+      local fk = finalKey(d, x)
+      rows[#rows + 1] = { name = x.name, class = x.class, score = (x.status ~= "missing") and x.score or nil, statusKey = fk,
+        rank = (x.status == "verified" or x.status == "unchecked") and rank or nil, tint = (fk == "winner" and C.green) or (fk == "tie" and C.gold) or nil }
       prev, prevRank = x, rank
     end
+    -- who was invited but passed or never answered: listed last, never a defeat for the others
+    local inRace = {}
+    for _, p in ipairs(d.participants) do inRace[p.name:lower()] = true end
+    for _, n in ipairs(d.inviteOrder or {}) do
+      if not inRace[n:lower()] then
+        local a = d.answers[n:lower()]
+        rows[#rows + 1] = { name = n, class = LD.classOf(n), statusKey = (a and not a.accept) and "passed" or "silent" }
+      end
+    end
   end
-  local pages = math.max(1, math.ceil(#rows / ROWS))
+  -- the final header is taller: 9 rows per page there, so the last row never meets the footer
+  local per = done and ROWS - 1 or ROWS
+  local pages = math.max(1, math.ceil(#rows / per))
   UI.lootPage = math.min(math.max(1, UI.lootPage or 1), pages)
   s.prev:SetShown(pages > 1); s.next:SetShown(pages > 1); s.page:SetShown(pages > 1)
   s.page:SetText(UI.lootPage .. " / " .. pages)
   if UI.lootPage > 1 then s.prev:Enable() else s.prev:Disable() end
   if UI.lootPage < pages then s.next:Enable() else s.next:Disable() end
-  local first = (UI.lootPage - 1) * ROWS
+  -- All / None sit left of the page buttons while picking
+  local pickBtns = setup and mayLead and #rows > 0
+  s.selAll:SetShown(pickBtns); s.selNone:SetShown(pickBtns)
+  if pickBtns then
+    s.selNone:ClearAllPoints()
+    if pages > 1 then s.selNone:SetPoint("RIGHT", s.page, "LEFT", -8, 0) else s.selNone:SetPoint("TOPRIGHT", -26, listTop + 4) end
+    s.selAll:ClearAllPoints(); s.selAll:SetPoint("RIGHT", s.selNone, "LEFT", -4, 0)
+  end
+  local first = (UI.lootPage - 1) * per
   for i, row in ipairs(s.rows) do
-    local r = rows[first + i]
-    if r and r.sep then
-      row.key, row.pickable, row.entry = nil, false, nil
-      row.box:Hide(); row.fill:Hide(); row.rank:Hide()
-      row.name:ClearAllPoints(); row.name:SetPoint("LEFT", 2, 0)
-      row.name:SetText("|cff8a93a8" .. r.sep .. "|r")
-      row.detail:SetText(""); row.score:SetText(""); row.status:SetText("")
-      row:Show()
-    elseif r then
+    local r = i <= per and rows[first + i] or nil
+    if r then
       row.key, row.pickable, row.entry = r.key, r.pick, r.entry
       row.box:SetShown(r.pick and true or false); row.fill:SetShown(r.pick and r.picked or false)
       row.rank:SetShown(r.rank ~= nil); row.rank:SetText(r.rank and ("#" .. r.rank) or "")
+      local st = STATUS[r.statusKey or ""]
+      local iconName = r.icon or (st and st[3])
+      setIcon(row.icon, (not r.pick) and iconName or nil)
+      local x0 = r.pick and 22 or (r.rank and 30 or 2)
+      row.icon:ClearAllPoints(); row.icon:SetPoint("LEFT", x0, 0)
       local cls = r.class or LD.classOf(r.name)
       row.name:SetText(T.classText(cls, short(r.name)))
-      row.name:ClearAllPoints(); row.name:SetPoint("LEFT", (r.pick or r.rank) and 22 or 2, 0)
+      row.name:ClearAllPoints(); row.name:SetPoint("LEFT", x0 + ((not r.pick and iconName) and 17 or 0), 0)
       row.detail:SetText(r.detail or "")
       row.status:SetWidth((r.detail and r.detail ~= "") and 118 or 144) -- the setup list has a level / class column
-      row.score:SetText(r.score and T.commas(r.score) or "")
-      local st = STATUS[r.statusKey or ""]
+      row.score:SetText(r.score and T.commas(r.score) or ((r.statusKey == "passed" or r.statusKey == "silent") and "-" or ""))
       row.status:SetText(st and st[1] or (r.status or ""))
       local c = (st and st[2]) or r.statusColor or C.label
       row.status:SetTextColor(c[1], c[2], c[3])
+      if r.tint then row.bg:SetColorTexture(r.tint[1], r.tint[2], r.tint[3], 0.10) else row.bg:SetColorTexture(0, 0, 0, 0) end
       row:Show()
     else
       row:Hide()
@@ -484,25 +598,23 @@ function UI:RefreshLootDuel()
   s.empty:SetText(LD.channel() and "Nobody else in your group yet." or "Join a party or raid: Loot Duels are for your group.")
   -- buttons
   s.cancel:SetShown(leader and (state == "inviting" or state == "revealing"))
-  s.announce:SetShown(state == "done")
-  local setup = not d or state == "cancelled"
-  -- Invite Party / Invite All only where it works: a group of up to 10 online
-  s.all:SetShown(setup and mayLead and LD.channel() ~= nil and #everyone() <= ns.Protocol.LOOT_MAX)
+  s.announce:SetShown(done)
+  s.all:SetShown(setup and mayLead and LD.channel() ~= nil)
   if setup then
     local n = pickedCount()
     s.go:SetLabel("Invite Selected (" .. n .. ")"); s.go:SetShown(mayLead)
-    if itemId and n >= 2 and n <= ns.Protocol.LOOT_MAX then s.go:Enable() else s.go:Disable() end
+    if itemId and n >= 2 and n <= MAX then s.go:Enable() else s.go:Disable() end
     local all = #everyone()
     s.all:SetLabel(UI.lootConfirmAll and ("Confirm: " .. all) or ((raid and "Invite All (" or "Invite Party (") .. all .. ")"))
-    s.all.tip = raid and ("Invites every online raid member (" .. all .. ", you included; at most " .. ns.Protocol.LOOT_MAX .. "). Asks you to confirm. Each still clicks Join or Pass.")
+    s.all.tip = raid and ("Invites every online raid member (" .. all .. ", you included). Asks you to confirm. Each still clicks Join or Pass.")
       or ("Invites everyone in your party (" .. all .. ", you included). Each still clicks Join or Pass.")
-    if itemId and all >= 2 and all <= ns.Protocol.LOOT_MAX then s.all:Enable() else s.all:Disable() end
+    if itemId and all >= 2 and all <= MAX then s.all:Enable() else s.all:Disable() end
   elseif leader and state == "inviting" then
     local n = #LD.accepted(d)
     local open = LD.canStart(d)
     s.go:SetLabel(not open and "Invite expired" or n >= 2 and ("Start (" .. n .. ")") or "Start: needs 2"); s.go:Show()
     if n >= 2 and open then s.go:Enable() else s.go:Disable() end
-  elseif leader and state == "done" then
+  elseif leader and done then
     s.go:SetLabel("New Loot Duel"); s.go:Show(); s.go:Enable()
   else
     s.go:Hide()
@@ -510,14 +622,15 @@ function UI:RefreshLootDuel()
   -- note: what happens / why not
   local note = self.lootNote
   if not note then
-    if state == "done" then
-      note = "The winner does NOT get the item automatically: the loot master hands it out by hand, if your loot rules still allow it. Every PC replayed every run (a peer check, not proof against a modified addon)."
-      if d.agreement == "disputed" then note = "The leader's PC got a different result: check with the group before handing out loot. " .. note end
+    if done then
+      note = "No item is handed out by StackRivals: the loot master does it by hand, if your loot rules still allow it. Peer-checked, not proof against a modified addon."
+      if d.agreement == "disputed" then note = "The leader's PC got a different result: check with the group before handing out loot." end
     elseif state == "cancelled" then note = REASON[d.endReason] or "Loot Duel cancelled."
     elseif d and d.leftOut and (state == "revealing" or state == "playing") then note = "You joined, but " .. short(d.leader) .. " left you out of the list. Tell the group before any loot is handed out."
-    elseif state == "revealing" then note = "Every player's addon confirms its secret seed share, then the race starts for everyone at once (nobody, the leader included, can know the pieces before)."
+    elseif state == "revealing" then note = "Every player's addon confirms its secret seed share, then all start at once (nobody, the leader included, can know the pieces before)."
     elseif state == "playing" and d.skipped == "duel" then note = "You were in a duel, so you're not racing in this one."
-    elseif state == "playing" and not d.iPlay then note = "You're watching. Live scores are provisional; the result comes when every run is replayed (out after the time limit + " .. LD.graceFor(d.rs) .. " s)."
+    elseif state == "playing" and not d.iPlay then note = "You're watching. Scores are provisional until the best runs are replayed (out after the time limit + " .. LD.graceFor(d.rs) .. " s)."
+    elseif state == "playing" and d.myFinal then note = "Your run is in. The best " .. LD.CONTENDERS .. " runs are replayed on every PC; then everyone sees the same result."
     elseif state == "playing" then note = "Same pieces for everyone. Pauses (combat, chat) count: past " .. LD.PAUSE_BUDGET .. " s in total your run ends where it is."
     elseif leader and state == "inviting" and not LD.canStart(d) then note = LD.WHY.expired
     elseif state == "inviting" and not leader then note = "Waiting for " .. short(d.leader) .. " to start. Players who don't join use the normal loot rules."
@@ -526,8 +639,7 @@ function UI:RefreshLootDuel()
       note = joined >= 2 and ("Joined " .. joined .. " of " .. #d.inviteOrder .. ". Start when everyone who wants it has joined: all play at once (no answer = not in).")
         or ("Joined " .. joined .. " of " .. #d.inviteOrder .. ": a Loot Duel needs at least 2 players who clicked Join.")
     elseif not mayLead then note = (LD.WHY[why] or "") .. " Anyone can join when invited."
-    elseif #LD.roster() > ns.Protocol.LOOT_MAX then note = "Pick up to 10 who want the item (and may get it under your loot rules), then Invite Selected. Nobody is entered automatically."
-    else note = "Agree the rules first. Invited players click Join or Pass; nobody is entered automatically and the addon hands out no loot." end
+    else note = "Tick who wants the item and may get it under your loot rules (All / None), or Invite " .. (raid and "All" or "Party") .. ". Nobody is entered automatically." end
   end
   s.note:SetText(note)
 end
@@ -571,28 +683,39 @@ function UI:CreateLootBoard()
   p:SetPoint("TOPLEFT", F, "TOPRIGHT", 6, 0)
   p.title = T.label(p, "LOOT DUEL  -  LIVE"); p.title:SetPoint("TOPLEFT", 10, -10); p.title:SetTextColor(C.gold[1], C.gold[2], C.gold[3])
   p.sub = T.text(p, SZ.label, C.label); p.sub:SetPoint("TOPLEFT", 10, -26); p.sub:SetWidth(w - 20); p.sub:SetJustifyH("LEFT")
+  if p.sub.SetWordWrap then p.sub:SetWordWrap(false) end
   p.rows = {}
   for i = 1, BOARD_ROWS do
     local r = CreateFrame("Frame", nil, p)
     r:SetSize(w - 12, BOARD_ROW); r:SetPoint("TOPLEFT", 6, -44 - (i - 1) * BOARD_ROW)
     r.me = T.tex(r, "BACKGROUND", C.goldDeep, 0.9); r.me:SetAllPoints()
-    r.rank = T.display(r, SZ.small, C.label); r.rank:SetPoint("TOPLEFT", 4, -2); r.rank:SetWidth(24); r.rank:SetJustifyH("LEFT")
-    r.name = T.text(r, SZ.small, C.paper); r.name:SetPoint("TOPLEFT", 28, -2); r.name:SetWidth(90); r.name:SetJustifyH("LEFT")
+    r.rank = T.display(r, SZ.small, C.label); r.rank:SetPoint("TOPLEFT", 4, -2); r.rank:SetWidth(28); r.rank:SetJustifyH("LEFT")
+    r.name = T.text(r, SZ.small, C.paper); r.name:SetPoint("TOPLEFT", 32, -2); r.name:SetWidth(88); r.name:SetJustifyH("LEFT")
     if r.name.SetWordWrap then r.name:SetWordWrap(false) end
     r.score = T.display(r, SZ.small, C.paper); r.score:SetPoint("TOPRIGHT", -4, -2); r.score:SetWidth(58); r.score:SetJustifyH("RIGHT")
-    r.status = T.text(r, SZ.label, C.label); r.status:SetPoint("TOPLEFT", 28, -17); r.status:SetWidth(w - 50); r.status:SetJustifyH("LEFT")
+    r.icon = r:CreateTexture(nil, "ARTWORK"); r.icon:SetSize(11, 11); r.icon:SetPoint("TOPLEFT", 32, -18); r.icon:Hide()
+    r.status = T.text(r, SZ.label, C.label); r.status:SetPoint("TOPLEFT", 46, -17); r.status:SetWidth(w - 70); r.status:SetJustifyH("LEFT")
     if r.status.SetWordWrap then r.status:SetWordWrap(false) end
     r:Hide()
     p.rows[i] = r
   end
   p.foot = T.text(p, SZ.label, C.label); p.foot:SetPoint("BOTTOMLEFT", 10, 8); p.foot:SetWidth(w - 20); p.foot:SetJustifyH("LEFT")
-  p.foot:SetText("Live = provisional, until every PC has replayed every run.")
+  p.foot:SetText("Live = provisional, until the best runs are replayed.")
+  -- many players: the mouse wheel scrolls the list (your own row stays in view)
+  p.offset = 0
+  p:EnableMouseWheel(true)
+  p:SetScript("OnMouseWheel", function(_, delta)
+    p.offset = math.max(0, (p.offset or 0) - delta * 3)
+    p.dirtyAt = nil
+    UI:RefreshLootBoard(true)
+  end)
   p:Hide()
   self.lootBoard = p
 end
 
---- Fill the live board (shown while you race in a Loot Duel and the window is open).
-function UI:RefreshLootBoard()
+--- Fill the live board (shown while you race in a Loot Duel and the window is open). At most 4
+--- times a second (40 players send ~7 scores a second); `force` redraws now (scrolling).
+function UI:RefreshLootBoard(force)
   local p = self.lootBoard
   if not p then return end
   local s = ns.App and ns.App.session
@@ -600,17 +723,34 @@ function UI:RefreshLootBoard()
   local show = d and self.frame and self.frame:IsShown() and not ns.App.inMenu and self.rivalPanel and self.rivalPanel:IsShown()
   p:SetShown(show and true or false)
   if not show then return end
+  local t = GetTime()
+  if not force and p.drawnAt and t - p.drawnAt < 0.25 then return end
+  p.drawnAt = t
   local rows = ns.LootDuel.liveBoard(d)
-  p.sub:SetText((d.rs == "l120" and "2:00" or "1:00") .. "  -  " .. #rows .. " players, same pieces")
+  local mine
+  for _, x in ipairs(rows) do if ns.Comm.same(x.name, ns.Comm.me()) then mine = x end end
+  p.sub:SetText((d.rs == "l120" and "2:00" or "1:00") .. "  -  " .. #rows .. " players" .. (mine and ("  -  you #" .. mine.rank) or ""))
+  -- the window: top rows from the scroll offset; your own row pinned at the bottom if out of view
+  local maxOff = math.max(0, #rows - BOARD_ROWS)
+  p.offset = math.min(p.offset or 0, maxOff)
+  local list = {}
+  for i = 1, math.min(BOARD_ROWS, #rows) do list[i] = rows[p.offset + i] end
+  if mine and #rows > BOARD_ROWS then
+    local inView = false
+    for _, x in ipairs(list) do if x == mine then inView = true end end
+    if not inView then list[BOARD_ROWS] = mine end
+  end
   for i, r in ipairs(p.rows) do
-    local x = rows[i]
+    local x = list[i]
     if x then
       r.rank:SetText("#" .. x.rank)
       r.name:SetText(T.classText(x.class or ns.LootDuel.classOf(x.name), short(x.name)))
       r.score:SetText(T.commas(x.score or 0))
       local st = LIVE[x.status] or LIVE.playing
       r.status:SetText(st[1]); r.status:SetTextColor(st[2][1], st[2][2], st[2][3])
-      r.me:SetShown(ns.Comm.same(x.name, ns.Comm.me()))
+      setIcon(r.icon, st[3])
+      r.status:ClearAllPoints(); r.status:SetPoint("TOPLEFT", st[3] and 46 or 32, -17)
+      r.me:SetShown(x == mine)
       r:Show()
     else
       r:Hide()

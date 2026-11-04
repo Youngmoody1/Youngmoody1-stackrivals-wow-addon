@@ -310,9 +310,9 @@ describe("Loot Duel for dungeons and raids: inviting, leaders, trouble (simulate
     -- on the sheet, results that don't count are listed apart
     local UI = lead.ns.UI
     lead.env.SlashCmdList.STACKRIVALS(""); UI:ShowSheet("loot")
-    local seen
-    for _, row in ipairs(UI.lootSheet.rows) do if row:IsShown() and (row.name:GetText() or ""):find("NOT COUNTED", 1, true) then seen = true end end
-    ok(seen, "a NOT COUNTED divider")
+    local seen = {}
+    for _, row in ipairs(UI.lootSheet.rows) do if row:IsShown() then seen[row.status:GetText() or ""] = row.icon:IsShown() end end
+    ok(seen["REPLAY FAILED"] and seen["NO RESULT"], "shown apart, with an icon (not as LOST)")
   end)
 
   it("the live board beside the window: 10 rows in class colours, your row marked, outside the board area", function()

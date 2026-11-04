@@ -68,12 +68,22 @@ describe("Loot Duel protocol", function()
       P.encode("LDI", "lid123", 20, P.hexName("Ann") .. "," .. P.hexName("Ben")), P.encode("LDH", "lid123", "l060", 1, 19019, c16, 40),
       P.encode("LDA", "lid123", "a", c16), P.encode("LDA", "lid123", "d", "-"),
       P.encode("LDQ", "lid123", "0a1b2c3d", 2, 1, 1, "1-" .. c16 .. ",2-" .. c16), P.encode("LDQ", "lid123", "0a1b2c3d", 40, 4, 4, "40-" .. c16),
-      P.encode("LDN", "lid123", "n0nce123"), P.encode("LDW", "lid123", "n0nce999", "0a1b2c3d", 1, 1, "1-n0nce123,2-n0nce456"),
+      P.encode("LDN", "lid123", "n0nce123"), P.encode("LDS", "lid123", "0a1b2c3d", 3, P.placeMask({ 1, 7, 40 }), c16),
+      P.encode("LDS", "lid123", "0a1b2c3d", 2, P.placeMask({ 2, 3 }), "-"), P.encode("LDG", "lid123", "n0nce999", "0a1b2c3d", "n0nce123"),
+      P.encode("LDG", "lid123", "n0nce999", "0a1b2c3d", "-"), P.encode("LDW", "lid123", "n0nce999", "0a1b2c3d", 1, 1, "1-n0nce123,2-n0nce456"),
       P.encode("LDC", "lid123", P.b36(600), P.b36(12345)), P.encode("LDE", "lid123", P.b36(3600), P.b36(9000), P.b36(12), P.b36(2), "0a1b2c3d", 2),
       P.encode("LDL", "lid123", 1, 2, "3A0B5F"), P.encode("LDX", "lid123", "cancel"), P.encode("LDR", "lid123", h, 0),
     }
     for _, s in ipairs(msgs) do ok(#s <= 255, s); ok(P.decode(s), "decode " .. s) end
     eq(P.decode(msgs[2]).names[2], "Ben-Realm")
+    -- the one-message list: places as a 10-digit bit mask (40 places), round trip
+    local all = {}
+    for i = 1, 40 do all[i] = i end
+    eq(P.placeMask(all), "ffffffffff"); eq(#P.unplaceMask(P.placeMask(all)), 40)
+    eq(P.placeMask({ 1 }), "1000000000"); eq(table.concat(P.unplaceMask(P.placeMask({ 40, 5, 1, 13 })), ","), "1,5,13,40")
+    local s1 = P.decode(P.encode("LDS", "lid123", "0a1b2c3d", 3, P.placeMask({ 1, 7, 40 }), c16))
+    eq(table.concat(s1.places, ","), "1,7,40"); eq(s1.leaderCommit, c16)
+    eq(P.decode(P.encode("LDG", "lid123", "n0nce999", "0a1b2c3d", "-")).leaderNonce, nil)
     local bad = {
       "1:LDH:lid123:x999:1:19019:0a1b2c3d4e5f6071:3", "1:LDH:lid123:l060:1:19019:0a1b2c3d4e5f6071:41", "1:LDH:lid123:l060:1:0:0a1b2c3d4e5f6071:3",
       "1:LDH:lid123:l060:1:19019:0a1b2c3d:3", "1:LDA:lid123:a:n0nce123", "1:LDQ:lid123:0a1b2c3d:2:1:1:1-n0nce123,2-n0nce456",
@@ -84,6 +94,8 @@ describe("Loot Duel protocol", function()
       "1:LDN:lid123:-", "1:LDW:lid123:n0nce:xyz:1:1:1-n0nce123", "1:LDW:lid123:n0nce999:0a1b2c3d:1:1:1-BAD!", "1:LDW:lid123:n0nce999:0a1b2c3d:1:1:0-n0nce123",
       "1:LDO:lid123:l060:1:19019:0a1b2c3d4e5f6071:3", "1:LDP:lid123:1:1:" .. h .. "-0a1b2c3d4e5f6071",
       "1:LDX:lid123:whatever", "1:LDR:lid123:" .. h .. ":2",
+      "1:LDS:lid123:0a1b2c3d:3:1000000000:-", "1:LDS:lid123:0a1b2c3d:1:1000000000:-", "1:LDS:lid123:0a1b2c3d:2:30000000:-",
+      "1:LDS:lid123:0a1b2c3d:2:300000000g:-", "1:LDS:lid123:0a1b2c3d:2:3000000000:n0nce", "1:LDG:lid123:n0nce999:xyz:-", "1:LDG:lid123:-:0a1b2c3d:-",
     }
     for _, s in ipairs(bad) do ok(P.decode(s) == nil, "accepted: " .. s) end
   end)
@@ -430,7 +442,7 @@ describe("Loot Duel between simulated clients", function()
     ok(seen.joined and seen.passed, "joined + passed shown")
   end)
 
-  it("P2 a 20-player raid: the list pages, nobody is entered without a click, at most 10 per Loot Duel; Invite All needs <= 10", function()
+  it("P2 a 20-player raid: All / None, the list pages, nobody is entered without a click, Invite All asks first", function()
     local net = NS.new({ seed = 51 })
     local cs, names = {}, {}
     local cls = { "WARRIOR", "SHAMAN", "MAGE", "ROGUE", "PRIEST", "DRUID", "HUNTER", "WARLOCK", "PALADIN" }
@@ -447,29 +459,27 @@ describe("Loot Duel between simulated clients", function()
     local UI = lead.ns.UI
     local s = UI.lootSheet
     ok(s.next:IsShown(), "more than one page"); eq(s.page:GetText(), "1 / 2")
-    -- the list shows level, class and raid group
     ok((s.rows[1].detail:GetText() or ""):find("60", 1, true), tostring(s.rows[1].detail:GetText()))
-    -- pick 10 over two pages, the 11th is refused
-    local picked = 0
-    for _ = 1, 2 do
-      for _, row in ipairs(s.rows) do
-        if row:IsShown() and picked < 11 and not UI.lootPick[row.key] then row:Click(); picked = picked + 1 end
-      end
-      s.next:Click()
-    end
+    -- All ticks everyone (picking is not inviting), None clears
+    s.selAll:Click()
     local n = 0
     for _ in pairs(UI.lootPick) do n = n + 1 end
-    eq(n, 10, "at most 10")
-    ok(UI.lootNote and UI.lootNote:find("At most 10", 1, true), tostring(UI.lootNote))
-    -- Invite All is for groups of up to 10 online
+    eq(n, 20, "All: 20 picked")
+    eq(LD(lead).current, nil, "picking sends nothing")
+    s.selNone:Click()
+    n = 0
+    for _ in pairs(UI.lootPick) do n = n + 1 end
+    eq(n, 0, "None")
+    -- Invite All for the raid asks first, then invites 20; nobody is entered
     s.input:SetText("19019"); s.setItem:Click()
-    ok(not s.all:IsShown(), "20 online: no Invite All (pick up to 10)")
-    -- inviting enters nobody: everyone must Join
-    s.go:Click(); net.step(120)
+    ok(s.all:IsShown() and s.all:IsEnabled(), "Invite All works for 20")
+    eq(s.all.fs:GetText(), "Invite All (20)")
+    s.all:Click(); eq(LD(lead).current, nil, "first click asks")
+    s.all:Click(); net.step(120)
+    eq(#LD(lead).current.inviteOrder, 20)
     local acc = LD(lead).accepted(LD(lead).current)
     ok(#acc <= 1, "only the leader's own pick of himself can count as joined")
     for _, nm in ipairs(names) do eq(cs[nm].ns.App.session, nil) end
-    eq(#LD(lead).current.inviteOrder, 10)
   end)
 
   it("the sheet: pick players, invite, join from the popup, start, result banner, announce only on click", function()
@@ -492,8 +502,9 @@ describe("Loot Duel between simulated clients", function()
     s.go:Click(); net.step(240)
     raceToEnd(net, cs)
     UI:ShowSheet("loot")
-    local b = s.banner:GetText() or ""
-    ok(b:find("WINNER", 1, true) or b:find("TIE", 1, true), b)
+    ok(s.final:IsShown(), "the final header")
+    local b = s.final.big:GetText() or ""
+    ok(b == "CONGRATULATIONS!" or b == "TIE!", b)
     eq(cs.Lead.M.chat[1], nil)
     s.announce:Click()
     ok(cs.Lead.M.chat[1] and cs.Lead.M.chat[1][2] == "PARTY" and cs.Lead.M.chat[1][1]:find("Loot Duel", 1, true), "posted once, by click")

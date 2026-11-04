@@ -83,6 +83,8 @@ local function newTexture(parent, layer, sub)
     SetDesaturated = function(o, v) o._desat = v and true or false end,
     SetTexCoord = function(o, ...) o._coords = { ... } end,
     SetDrawLayer = function() end,
+    SetBlendMode = function(o, m) o._blend = m end,
+    SetVertexColor = function(o, r, g, b, a) o._vr, o._vg, o._vb, o._va = r, g, b, a end,
   }), "Texture")
 end
 
@@ -133,6 +135,7 @@ local function newFrame(ftype, name, parent)
     SetClampedToScreen = function() end,
     SetMovable = function() end,
     EnableMouse = function() end,
+    EnableMouseWheel = function() end,
     RegisterForDrag = function() end,
     StartMoving = function() end,
     StopMovingOrSizing = function() end,

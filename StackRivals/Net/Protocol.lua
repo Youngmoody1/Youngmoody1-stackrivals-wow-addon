@@ -54,7 +54,14 @@
                                                      realm is sent without "-Realm" (0.7.2)
     1:LDA:<lid>:<a|d>:<commit16|->                    my answer (+ the commitment to my secret seed nonce)
     1:LDQ:<lid>:<listHash>:<count>:<k>:<n>:<i>-<commit16>[,...]  the fixed list, chunk k of n: reveal now
+    1:LDS:<lid>:<listHash>:<count>:<mask10>:<leaderCommit16|->  (0.7.2, > 10 players) the fixed list in
+                                                     ONE message: places as a bit mask; every PC already has
+                                                     each player's commitment from their LDA (the leader's,
+                                                     sent right behind the offer, is repeated here). LDQ
+                                                     follows only on repeats, for whoever missed an LDA.
     1:LDN:<lid>:<nonce>                               my nonce (matches my commitment)
+    1:LDG:<lid>:<nonceL>:<revealHash>:<leaderNonce|->  (0.7.2, > 10 players) go in ONE message: every PC has
+                                                     the players' nonces from their LDN; LDW follows on repeats
     1:LDW:<lid>:<nonceL>:<revealHash>:<k>:<n>:<i>-<nonce>[,...]  go, chunk k of n: every nonce + the leader's
     1:LDC:<lid>:<tick36>:<score36>                     my live score
     1:LDE:<lid>:<ticks36>:<score36>:<lines36>:<level36>:<hash>:<chunks>   my final result
@@ -162,7 +169,7 @@ local SPEC = {
   HEL = 2, HI = 3, INV = 4, ACC = 2, DEC = 2, RDY = 1, GO = 2, PNG = 1, SC = 5, END = 7, LOG = 4, BYE = 2, RQ = 2, FIN = 1,
   SP = 4, PSE = 3, RSM = 2, VER = 5,
   QS = 3, PRF = 8, CH = 3, QM = 3,
-  LDH = 6, LDI = 3, LDA = 3, LDQ = 6, LDN = 2, LDW = 6, LDC = 3, LDE = 7, LDL = 4, LDX = 2, LDR = 3,
+  LDH = 6, LDI = 3, LDA = 3, LDQ = 6, LDS = 5, LDN = 2, LDG = 4, LDW = 6, LDC = 3, LDE = 7, LDL = 4, LDX = 2, LDR = 3,
 }
 --- Loot Duel rules (WoW-only, peer-checked): same pieces for everyone, no spells, highest score.
 P.LOOT_RULESETS = {
@@ -170,6 +177,34 @@ P.LOOT_RULESETS = {
   l120 = { id = "l120", name = "Loot Duel 2:00", limitTicks = 7200, countdownTicks = 180 },
 }
 P.LOOT_MAX = 40 -- participants (all play at once; 2-40, a full raid)
+--- Places (1..LOOT_MAX) as a fixed-length hex bit mask: 10 digits for 40, digit j holds places
+--- 4j-3..4j (lowest bit first). Pure arithmetic: Lua 5.1 has no bit operators.
+function P.placeMask(places)
+  local dig = {}
+  for j = 1, P.LOOT_MAX / 4 do dig[j] = 0 end
+  local seen = {}
+  for _, pl in ipairs(places) do
+    if not seen[pl] and pl >= 1 and pl <= P.LOOT_MAX then
+      seen[pl] = true
+      local j = math.floor((pl - 1) / 4) + 1
+      dig[j] = dig[j] + 2 ^ ((pl - 1) % 4)
+    end
+  end
+  for j = 1, #dig do dig[j] = string.format("%x", math.floor(dig[j])) end
+  return table.concat(dig)
+end
+function P.unplaceMask(h)
+  if type(h) ~= "string" or #h ~= P.LOOT_MAX / 4 or not h:match("^[0-9a-f]+$") then return nil end
+  local list = {}
+  for j = 1, #h do
+    local v = tonumber(h:sub(j, j), 16)
+    for b = 0, 3 do
+      if v % 2 == 1 then list[#list + 1] = (j - 1) * 4 + b + 1 end
+      v = math.floor(v / 2)
+    end
+  end
+  return list
+end
 local function hexName(h) return type(h) == "string" and #h >= 4 and #h <= 128 and #h % 2 == 0 and h:match("^[0-9a-f]+$") ~= nil end
 local function unhexName(h)
   if not hexName(h) then return nil end
@@ -265,9 +300,17 @@ function P.decode(s)
       if not i or not isInt(i, 1, P.LOOT_MAX) or not isC16(c) or #m.entries >= P.LOOT_MAX then return nil, "bad" end
       m.entries[#m.entries + 1] = { i = tonumber(i), commit = c }
     end
+  elseif kind == "LDS" then
+    local places = P.unplaceMask(f[6])
+    if not isMid(f[3]) or not f[4]:match("^%x%x%x%x%x%x%x%x$") or not isInt(f[5], 2, P.LOOT_MAX)
+      or not places or #places ~= tonumber(f[5]) or not (f[7] == "-" or isC16(f[7])) then return nil, "bad" end
+    m.lid, m.listHash, m.count, m.places, m.leaderCommit = f[3], f[4], tonumber(f[5]), places, f[7] ~= "-" and f[7] or nil
   elseif kind == "LDN" then
     if not isMid(f[3]) or not isNonce(f[4]) then return nil, "bad" end
     m.lid, m.nonce = f[3], f[4]
+  elseif kind == "LDG" then
+    if not isMid(f[3]) or not isNonce(f[4]) or not f[5]:match("^%x%x%x%x%x%x%x%x$") or not (f[6] == "-" or isNonce(f[6])) then return nil, "bad" end
+    m.lid, m.nonce, m.revealHash, m.leaderNonce = f[3], f[4], f[5], f[6] ~= "-" and f[6] or nil
   elseif kind == "LDW" then
     if not isMid(f[3]) or not isNonce(f[4]) or not f[5]:match("^%x%x%x%x%x%x%x%x$")
       or not isInt(f[6], 1, 9) or not isInt(f[7], 1, 9) or tonumber(f[6]) > tonumber(f[7]) then return nil, "bad" end
