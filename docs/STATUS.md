@@ -130,7 +130,7 @@ Totals:
 * 0.6.1: 562
 * 0.7.0: 609 (Loot Duel), 615 (final polish), 617 (0.3.1 upgrade tests)
 * 0.7.1: 646
-* 0.7.2: see the CI log of `feature/loot-duel-raid`
+* 0.7.2: 671 (GitHub CI, Lua 5.1)
 
 ## Open blockers
 

@@ -177,7 +177,24 @@ At 40 that is 40 logs on the group channel and 40 replays per PC, which was too 
 Every simulated client runs the real addon. WoW's per-prefix throttle (10 messages, +1/s per
 sender) is enforced. "Start" = from the leader's Start click until the last run started.
 
-MEASUREMENTS_TABLE
+| Case | Group | Start | Result after the last run ended | Messages (all PCs, whole race) | Peak on the channel / one sender in 10 s | Replays per PC (max one) | Refused by WoW's limit |
+|---|---|---|---|---|---|---|---|
+| 2 players | party of 5 | 0.5 s | 0.2 s | 14 (0.5 KB) | 4 msg/s / 6 | 2 (1.0 ms) | 0 |
+| 5 | party of 5 | 0.6 s | 0.2 s | 30 (1.2 KB) | 6 / 7 | 5 (1.6 ms) | 0 |
+| 10 | raid of 10 | 0.7 s | 0.2 s | 55 (2.3 KB) | 10 / 7 | 10 (1.9 ms) | 0 |
+| 15 | raid of 20 | 0.7 s | 0.6 s | 81 (2.7 KB) | 16 / 7 | 15 = best 10 + 5 tied with the 10th (2.1 ms) | 0 |
+| 20 | raid of 20 | 0.7 s | 1.2 s | 106 (3.4 KB) | 22 / 7 | 20 = best 10 + ties (1.9 ms) | 0 |
+| 25 | raid of 25 | 0.7 s | 1.2 s | 118 (3.8 KB) | 25 / 7 | 11 (2.1 ms) | 0 |
+| **40** | raid of 40 | **1.0 s** | **1.1 s** | 181 (5.7 KB) | 39 / 8 | 14 (3.3 ms) | 0 |
+| 40, bad network: latency up to 2.5 s, 20% duplicates, 5% loss; 5 players at 5 fps | raid of 40 | 52.8 s (leader had every share after 28 s) | 18.7 s | 686 (24.5 KB) | 36 / 6 | 10 (15.2 ms) | 0 |
+| 40, 3 disconnect mid-race | raid of 40 | 1.0 s | 1.2 s (nobody waits for the 3) | 397 (10.5 KB) | 42 / 8 | 10 (5.8 ms) | 0 |
+| 40, a forged top claim | raid of 40 | 1.0 s | 1.3 s (rejected everywhere, next one moved up) | 180 (5.6 KB) | 39 / 8 | 13 (3.3 ms) | 0 |
+| 20, one member missed a join and the one-message list / go | raid of 20 | that member: 21.7 s (full list and go from the repeats) | – | – | – | – | 0 |
+
+Simulated races are short: the test bots top out in a few seconds. A real 1:00 race adds the
+minute itself. The results are the same on every PC in every case. The local numbers are from
+texlua (Lua 5.3 with shims); the same tests pass on Lua 5.1 in GitHub CI (671 tests, run
+`41822289833`).
 
 * **Memory:** "+KB" is the Lua heap of *all* simulated clients together in one Lua state, about
   0.6–0.7 MB per client. A real client holds one of those.
@@ -313,7 +330,7 @@ few friends; steps 4–6 need a real raid.
 | R3 | 5 | One player `/reload`s mid-race | "disconnected", then NO RESULT (amber, not LOST); the others get a result without waiting ~2 min | NOT TESTED |
 | R4 | 10 | Invite All → confirm, all Join, Start | Every run starts within a few seconds (write down the time); live list readable at your UI scale | NOT TESTED |
 | R5 | 20–25 | Invite All, ~20 Join | Start time; result time after the race; the board scrolls; your row pinned | NOT TESTED |
-| R6 | **40** | Invite All (confirm), 30–40 Join, Start | **Start time (sim: ~1 s), result time after the race (sim: ~1–7 s), FPS during the race, any Lua error, the same winner on 3+ screens** | NOT TESTED |
+| R6 | **40** | Invite All (confirm), 30–40 Join, Start | **Start time (sim: ~1 s), result time after the race (sim: ~1 s), FPS during the race, any Lua error, the same winner on 3+ screens** | NOT TESTED |
 | R7 | 40 | Repeat R6 with 2 players going offline mid-race | Offline players: NO RESULT; the others' result doesn't wait for the deadline | NOT TESTED |
 | R8 | any | A player without StackRivals is invited | Shown as no answer; the race starts without them | NOT TESTED |
 | R9 | any | Master looter (not the leader) creates one; a normal member tries | Allowed; refused | NOT TESTED |
