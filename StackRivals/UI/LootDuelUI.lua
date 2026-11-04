@@ -288,8 +288,13 @@ function UI:RefreshLootDuel()
     for i, x in ipairs(list) do x.rank = i; rows[#rows + 1] = x end
   elseif state == "done" then
     s.head:SetText("RESULT  -  " .. ns.Protocol.LOOT_RULESETS[d.rs].name)
+    local prev, prevRank
     for i, x in ipairs(d.standings) do
-      rows[#rows + 1] = { name = x.name, class = x.class, score = x.score, statusKey = x.status, rank = (x.status == "verified") and i or nil }
+      -- equal score and lines share a place (a tie is a tie)
+      local rank = i
+      if prev and prev.status == "verified" and x.score == prev.score and x.lines == prev.lines then rank = prevRank end
+      rows[#rows + 1] = { name = x.name, class = x.class, score = x.score, statusKey = x.status, rank = (x.status == "verified") and rank or nil }
+      prev, prevRank = x, rank
     end
   end
   for i, row in ipairs(s.rows) do
