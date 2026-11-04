@@ -14,6 +14,11 @@ Blizzard textures (item icons, class icons, faction emblems, portraits) can't be
 WoW: the previews draw them as a crossed square or an empty circle. In the client they are the
 real icons.
 
+0.7.1 adds: `24-loot-setup` (dungeon party of 5), `24a-loot-party-joined` (3 joined, 1 passed,
+1 invited), `24d-loot-raid-pick` (20-player raid, pick up to 10), `24e-loot-live-board` (10 players
+racing, the list beside the window), `24f-loot-quick-button` (the button near the group frames) and
+the new main menu (`1-menu`: LOOT DUEL card; Daily Challenge in the button row).
+
 Final visual decisions wait for real in-client screenshots.
 
 Regenerate (after committing, so the banner names the commit):
