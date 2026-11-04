@@ -54,6 +54,8 @@ StackRivalsDB = {
 ["quads"] = 1,
 ["bestLevel"] = 4,
 ["best"] = 9100,
+["bestDate"] = "2026-10-30",
+["bestLog"] = "1;a1b2c3d4e5f60718;1;600;8,2 20,0 29,0 47,5 70,0 81,5 97,1 120,5 144,1 182,5 210,2 263,1 292,5",
 ["playSeconds"] = 610,
 },
 ["daily"] = {
@@ -79,8 +81,9 @@ StackRivalsDB = {
 ["playSeconds"] = 0,
 },
 ["dailyToday"] = {
-["tries"] = 0,
-["best"] = 0,
+["date"] = "2026-10-30",
+["tries"] = 1,
+["best"] = 250,
 },
 },
 ["schema"] = 1,

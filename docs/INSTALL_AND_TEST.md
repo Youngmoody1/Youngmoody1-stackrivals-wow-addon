@@ -8,7 +8,7 @@ Dette er den samlede guide. Detaljerede tjeklister ligger i:
 * `docs/FIRST_TEST_CLASSIC_ERA.md` (den korte plan til første test i Classic Era, og hvad der
   kræver to rigtige spillere).
 
-**Status lige nu:** **0 rigtige klienttests.** Alt er kun testet automatisk i simulerede
+**Status lige nu (4/11):** 0.3.1 smoke-test i Classic Era **OK** (din melding), og 0.7.0 dev er installeret i Classic Era (se `docs/TEST_LOG_CLASSIC_ERA.md`). **Ingen 0.7.0-funktion er testet i klienten endnu.** Alt er kun testet automatisk i simulerede
 WoW-klienter (lua-tests i GitHub CI). Et punkt er først bestået, når du har krydset det af efter
 en rigtig test. Automatiske tests må aldrig skrives som klienttests.
 
