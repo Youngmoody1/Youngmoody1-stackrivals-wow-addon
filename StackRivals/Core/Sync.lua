@@ -30,6 +30,7 @@ Sync.ERRORS = {
   ruleset_or_seed = "Unknown rules or seed in this code.",
   combat = "Not in combat. Play it after the fight.",
   duel = "Finish or leave your duel first.",
+  loot = "You're in a Loot Duel: finish it (or pass) first.",
   too_long = "This run is too long for a result code.",
 }
 

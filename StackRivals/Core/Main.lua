@@ -66,6 +66,7 @@ function App:Start(mode)
   if md and (md.duel or md.challenge or md.loot) then return end -- duels, web challenges and loot duels have their own start
   local d = ns.Duel and ns.Duel.current
   if d and (d.state == "playing" or d.state == "waiting") then self:Print("Finish or leave your duel first (/sr leave)."); return end
+  if ns.LootDuel and ns.LootDuel.busy() then self:Print("You're in a Loot Duel: finish it (or pass) first."); return end
   if ns.Duel then ns.Duel.clear() end -- a finished/cancelled duel must not cover the new run
   if self.session and self.session.spell then ns.SpellBattle.settleAll(self.session) end -- count it first
   ns.UI:Create()
@@ -112,6 +113,7 @@ function App:StartChallenge(code)
   if ns.UI.inCombat() then return false, "combat" end
   local d = ns.Duel and ns.Duel.current
   if d and (d.state == "playing" or d.state == "waiting") then return false, "duel" end
+  if ns.LootDuel and ns.LootDuel.busy() then return false, "loot" end
   if ns.Duel then ns.Duel.clear() end
   if self.session and self.session.spell then ns.SpellBattle.settleAll(self.session) end
   ns.UI:Create()

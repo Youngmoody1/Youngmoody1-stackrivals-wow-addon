@@ -222,7 +222,8 @@ function Session:update(dt)
   end
   if self.phase ~= "playing" and self.phase ~= "countdown" then return false end
   local maxDt, maxSteps = MAX_DT, MAX_STEPS_PER_FRAME
-  if self.duel then maxDt, maxSteps = DUEL_MAX_DT, DUEL_MAX_STEPS_PER_FRAME end
+  -- races against others step in real time (a low frame rate must never slow your game down)
+  if self.duel or self.loot then maxDt, maxSteps = DUEL_MAX_DT, DUEL_MAX_STEPS_PER_FRAME end
   if dt > maxDt then dt = maxDt end
   self.acc = self.acc + dt
   local changed, n = false, 0

@@ -47,15 +47,18 @@
     1:QM:<mid>:<n>:<code>                           (0.6.1+) quick message n: 1 GL, 2 GG, 3 WP, 4 Rematch?
     Loot Duel (0.7.0+), all on the group channel (PARTY / RAID); <lid> = loot duel id, names = hex
     of "Name-Realm" (UTF-8). See docs/LOOT_DUEL.md.
-    1:LDO:<lid>:<l060|l120>:<engine>:<itemId>:<commitL>:<invitees>   offer (raid leader / assist / loot master)
+    1:LDO:<lid>:<l060|l120>:<engine>:<itemId>:<commitL16>:<invitees>   offer (raid leader / assist / loot master)
     1:LDI:<lid>:<k>:<hexName>[,<hexName>...]         invitee list chunk k
-    1:LDA:<lid>:<a|d>:<nonce|->                       my answer (+ my seed nonce when I accept)
-    1:LDP:<lid>:<k>:<total>:<hexName>-<nonce>[,...]   final participant list chunk k of total
-    1:LDS:<lid>:<nonceL>:<listHash>:<count>           start: reveals the leader's nonce; seed from all nonces
+    1:LDA:<lid>:<a|d>:<commit16|->                    my answer (+ the commitment to my secret seed nonce)
+    1:LDP:<lid>:<k>:<total>:<hexName>-<commit16>[,...] final participant list chunk k of total
+    1:LDS:<lid>:<listHash>:<count>                    the list is fixed: participants reveal their nonces
+    1:LDN:<lid>:<nonce>                               my nonce (matches my commitment)
+    1:LDV:<lid>:<k>:<total>:<hexName>-<nonce>[,...]   the leader relays every revealed nonce
+    1:LDG:<lid>:<nonceL>:<revealHash>                 go: reveals the leader's nonce; seed from all nonces
     1:LDC:<lid>:<tick36>:<score36>                     my live score
     1:LDE:<lid>:<ticks36>:<score36>:<lines36>:<level36>:<hash>:<chunks>   my final result
     1:LDL:<lid>:<i>:<n>:<payload>                      my log chunk i of n (as LOG)
-    1:LDX:<lid>:<cancel|left>                          the leader cancelled
+    1:LDX:<lid>:<cancel|left|noreveal>                 the leader cancelled
     1:LDR:<lid>:<hexWinner|->:<tie 0|1>                the leader's computed result (display only)
   Older clients ignore kinds they don't know (decode -> "kind"), so these never break a 0.4 duel.
 
@@ -122,6 +125,7 @@ function P.unb36(s)
 end
 
 local function isMid(s) return type(s) == "string" and #s >= 4 and #s <= 10 and s:match("^[0-9a-z]+$") ~= nil end
+local function isC16(s) return type(s) == "string" and #s == 16 and s:match("^[0-9a-f]+$") ~= nil end
 local function isNonce(s) return type(s) == "string" and #s >= 4 and #s <= 12 and s:match("^[0-9a-z]+$") ~= nil end
 local function isVer(s) return type(s) == "string" and #s >= 1 and #s <= 20 and s:match("^[%w%.%-]+$") ~= nil end
 local function isInt(s, lo, hi)
@@ -130,6 +134,13 @@ local function isInt(s, lo, hi)
 end
 
 --- Commitment to the inviter's nonce (sent in INV, checked against the nonce revealed in GO).
+--- 64-bit commitment (two independent FNV-1a 32 hashes): finding a second nonce with the same
+--- commitment to steer a seed is out of reach in a game session (Loot Duel).
+function P.commit16(id, nonce)
+  local H = ns.Prng and ns.Prng.hashString
+  if not H then return "0000000000000000" end
+  return string.format("%08x%08x", H("srcommit-" .. id .. "-" .. nonce), H(nonce .. "|" .. id .. "|srloot-c2"))
+end
 function P.commit(mid, nonce)
   local h = ns.Prng and ns.Prng.hashString("srcommit-" .. mid .. "-" .. nonce)
   return string.format("%08x", h or 0)
@@ -150,7 +161,7 @@ local SPEC = {
   HEL = 2, HI = 3, INV = 4, ACC = 2, DEC = 2, RDY = 1, GO = 2, PNG = 1, SC = 5, END = 7, LOG = 4, BYE = 2, RQ = 2, FIN = 1,
   SP = 4, PSE = 3, RSM = 2, VER = 5,
   QS = 3, PRF = 8, CH = 3, QM = 3,
-  LDO = 6, LDI = 3, LDA = 3, LDP = 4, LDS = 4, LDC = 3, LDE = 7, LDL = 4, LDX = 2, LDR = 3,
+  LDO = 6, LDI = 3, LDA = 3, LDP = 4, LDS = 3, LDN = 2, LDV = 4, LDG = 3, LDC = 3, LDE = 7, LDL = 4, LDX = 2, LDR = 3,
 }
 --- Loot Duel rules (WoW-only, peer-checked): same pieces for everyone, no spells, highest score.
 P.LOOT_RULESETS = {
@@ -220,7 +231,7 @@ function P.decode(s)
     m.mid, m.n, m.code = f[3], tonumber(f[4]), tonumber(f[5])
   elseif kind == "LDO" then
     if not isMid(f[3]) or not P.LOOT_RULESETS[f[4]] or not isInt(f[5], 1, 9999) or not isInt(f[6], 1, 9999999)
-      or not f[7]:match("^%x%x%x%x%x%x%x%x$") or not isInt(f[8], 2, P.LOOT_MAX) then return nil, "bad" end
+      or not isC16(f[7]) or not isInt(f[8], 2, P.LOOT_MAX) then return nil, "bad" end
     m.lid, m.rs, m.engine, m.itemId, m.commit, m.count = f[3], f[4], tonumber(f[5]), tonumber(f[6]), f[7], tonumber(f[8])
   elseif kind == "LDI" then
     if not isMid(f[3]) or not isInt(f[4], 1, 9) then return nil, "bad" end
@@ -232,10 +243,25 @@ function P.decode(s)
     end
   elseif kind == "LDA" then
     if not isMid(f[3]) or (f[4] ~= "a" and f[4] ~= "d") then return nil, "bad" end
-    if f[4] == "a" and not isNonce(f[5]) then return nil, "bad" end
+    if f[4] == "a" and not isC16(f[5]) then return nil, "bad" end
     if f[4] == "d" and f[5] ~= "-" then return nil, "bad" end
-    m.lid, m.accept, m.nonce = f[3], f[4] == "a", f[4] == "a" and f[5] or nil
+    m.lid, m.accept, m.commit = f[3], f[4] == "a", f[4] == "a" and f[5] or nil
   elseif kind == "LDP" then
+    if not isMid(f[3]) or not isInt(f[4], 1, 9) or not isInt(f[5], 1, 9) or tonumber(f[4]) > tonumber(f[5]) then return nil, "bad" end
+    m.lid, m.k, m.total, m.entries = f[3], tonumber(f[4]), tonumber(f[5]), {}
+    for part in (f[6] .. ","):gmatch("([^,]*),") do
+      local h, c = part:match("^([0-9a-f]+)%-([0-9a-f]+)$")
+      local nm = h and unhexName(h)
+      if not nm or not isC16(c) or #m.entries >= P.LOOT_MAX then return nil, "bad" end
+      m.entries[#m.entries + 1] = { name = nm, commit = c }
+    end
+  elseif kind == "LDS" then
+    if not isMid(f[3]) or not f[4]:match("^%x%x%x%x%x%x%x%x$") or not isInt(f[5], 2, P.LOOT_MAX) then return nil, "bad" end
+    m.lid, m.listHash, m.count = f[3], f[4], tonumber(f[5])
+  elseif kind == "LDN" then
+    if not isMid(f[3]) or not isNonce(f[4]) then return nil, "bad" end
+    m.lid, m.nonce = f[3], f[4]
+  elseif kind == "LDV" then
     if not isMid(f[3]) or not isInt(f[4], 1, 9) or not isInt(f[5], 1, 9) or tonumber(f[4]) > tonumber(f[5]) then return nil, "bad" end
     m.lid, m.k, m.total, m.entries = f[3], tonumber(f[4]), tonumber(f[5]), {}
     for part in (f[6] .. ","):gmatch("([^,]*),") do
@@ -244,9 +270,9 @@ function P.decode(s)
       if not nm or not isNonce(nonce) or #m.entries >= P.LOOT_MAX then return nil, "bad" end
       m.entries[#m.entries + 1] = { name = nm, nonce = nonce }
     end
-  elseif kind == "LDS" then
-    if not isMid(f[3]) or not isNonce(f[4]) or not f[5]:match("^%x%x%x%x%x%x%x%x$") or not isInt(f[6], 2, P.LOOT_MAX) then return nil, "bad" end
-    m.lid, m.nonce, m.listHash, m.count = f[3], f[4], f[5], tonumber(f[6])
+  elseif kind == "LDG" then
+    if not isMid(f[3]) or not isNonce(f[4]) or not f[5]:match("^%x%x%x%x%x%x%x%x$") then return nil, "bad" end
+    m.lid, m.nonce, m.revealHash = f[3], f[4], f[5]
   elseif kind == "LDC" then
     local t, sc = P.unb36(f[4]), P.unb36(f[5])
     if not isMid(f[3]) or not t or not sc then return nil, "bad" end
@@ -260,7 +286,7 @@ function P.decode(s)
     if #f[6] > P.CHUNK_PAYLOAD or not f[6]:match("^[0-9a-zA-G]*$") then return nil, "bad" end
     m.lid, m.i, m.n, m.payload = f[3], tonumber(f[4]), tonumber(f[5]), f[6]
   elseif kind == "LDX" then
-    if not isMid(f[3]) or (f[4] ~= "cancel" and f[4] ~= "left") then return nil, "bad" end
+    if not isMid(f[3]) or (f[4] ~= "cancel" and f[4] ~= "left" and f[4] ~= "noreveal") then return nil, "bad" end
     m.lid, m.reason = f[3], f[4]
   elseif kind == "LDR" then
     if not isMid(f[3]) or (f[4] ~= "-" and not unhexName(f[4])) or (f[5] ~= "0" and f[5] ~= "1") then return nil, "bad" end

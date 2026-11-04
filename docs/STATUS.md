@@ -64,6 +64,34 @@ Plausible issues, also fixed:
 * Cards are re-sent until the rival's arrives.
 * Older rivals are shown as "older StackRivals".
 
+## Review of Loot Duel (independent, 4 Nov 2026)
+
+Eight confirmed problems. All are fixed, with tests R1–R9 in `tests/test_lootduel.lua`:
+
+1. The leader could steer the seed, and could leave out a player who had joined. Fixed: players
+   commit to their shares (64-bit) before the list is fixed, every PC checks the list, and a
+   missing share cancels the race.
+2. "Start" worked after the members had given up. Fixed: invites expire after 80 s.
+3. The last finisher waited for the deadline. Fixed: that PC finishes at once, and an early
+   leader result is buffered.
+4. A low frame rate slowed the run down. Fixed: real-time stepping, as in duels.
+5. A Loot Duel wasn't "busy". Fixed: duels, Quickplay and solo starts wait, and invites are
+   answered busy.
+6. The replay skipped the duel and web checks (input rate, inputs after a top-out). Fixed: it now
+   uses `Engine/Verify.lua`.
+7. After the leader reloaded, the group ignored the new offer. Fixed: the cancel is sent at logout
+   and repeated, and the same leader's new offer replaces the old one.
+8. Pausing gave free thinking time. Fixed: a 15 s pause budget.
+
+Plausible issues, also fixed:
+
+* Results that arrive before my start are kept.
+* Longer grace for slow log delivery (90 s / 120 s).
+* Another assistant's offer replaces one that doesn't involve me.
+* `INSTANCE_CHAT` groups are supported.
+* The leader's tie flag is compared.
+* "Announce" never cuts a link in half.
+
 Kept as documented limits (not fixable in the addon):
 
 * The faction claim and the profile snapshot are self-made data.
@@ -76,7 +104,7 @@ Totals:
 
 * 0.6.0: 482
 * 0.6.1: 562
-* 0.7.0: see the latest CI run on `feature/loot-duel`; the final count is in the delivery note.
+* 0.7.0: 609
 
 ## Open blockers
 

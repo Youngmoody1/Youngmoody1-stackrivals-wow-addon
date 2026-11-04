@@ -62,6 +62,7 @@ function QP.start(mode)
   if st ~= "available" then return false, why end
   if ns.UI and ns.UI.inCombat and ns.UI.inCombat() then return false, "you are in combat" end
   if ns.Duel and ns.Duel.busy() then return false, "you are already in a duel" end
+  if ns.LootDuel and ns.LootDuel.busy() then return false, "you are in a Loot Duel" end
   QP.state, QP.mode = "searching", mode
   QP.qid = P().token(6, function(a, b) return math.random(a, b) end)
   QP.started, QP.lastAd, QP.note = now(), -99, nil

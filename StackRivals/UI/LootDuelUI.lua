@@ -15,13 +15,17 @@ local STATUS = {
   noanswer = { "no answer: no StackRivals? /roll instead", C.label }, version = { "other StackRivals version", C.label },
   verified = { "replay-checked", C.green }, rejected = { "replay failed: out", C.redLight }, missing = { "no result: out", C.redLight },
   pending = { "checking...", C.gold }, playing = { "playing", C.steel }, watching = { "", C.label },
+  locking = { "locking in...", C.gold }, locked = { "ready", C.green },
 }
 local REASON = {
   leader_cancelled = "The leader cancelled this Loot Duel.", cancelled = "Loot Duel cancelled.",
   not_started = "The leader didn't start this Loot Duel.",
-  bad_start_commit = "The start didn't match the offer (seed check failed): cancelled.",
+  bad_start_commit = "The leader's seed share didn't match the offer: cancelled.",
   bad_start_list = "The player list didn't check out: cancelled.", bad_start_not_invited = "Someone not invited was in the list: cancelled.",
-  bad_start_my_nonce = "Your seed share didn't match: cancelled.",
+  bad_start_commit_swap = "A player's seed share was changed after they joined: cancelled.",
+  bad_start_my_commit = "Your seed share was changed in the list: cancelled.",
+  bad_start_reveal = "The seed shares didn't check out: cancelled.", bad_start_my_nonce = "Your seed share didn't match: cancelled.",
+  noreveal = "Not every player confirmed in time, so the seed couldn't be fixed: cancelled. Start a new one.",
 }
 
 local function short(n) return ns.Duel and ns.Duel.short(n) or n end
@@ -267,6 +271,11 @@ function UI:RefreshLootDuel()
       local st = a and (a.accept and "accepted" or "declined") or (left == 0 and "noanswer" or "invited")
       rows[#rows + 1] = { name = n, class = LD.classOf(n), statusKey = st }
     end
+  elseif state == "revealing" then
+    s.head:SetText("LOCKING IN THE PIECES  -  " .. #d.participants .. " PLAYERS")
+    for _, p in ipairs(d.participants) do
+      rows[#rows + 1] = { name = p.name, statusKey = d.reveals[p.name:lower()] and "locked" or "locking" }
+    end
   elseif state == "playing" then
     s.head:SetText("LIVE  -  SAME PIECES FOR " .. #d.participants .. " PLAYERS")
     local list = {}
@@ -305,7 +314,7 @@ function UI:RefreshLootDuel()
   s.empty:SetShown(#rows == 0)
   s.empty:SetText(LD.channel() and "Nobody else in your group yet." or "Join a party or raid: Loot Duels are for your group.")
   -- buttons
-  s.cancel:SetShown(leader and state == "inviting")
+  s.cancel:SetShown(leader and (state == "inviting" or state == "revealing"))
   s.announce:SetShown(state == "done")
   if not d or state == "cancelled" then
     local n = 0
@@ -314,8 +323,9 @@ function UI:RefreshLootDuel()
     if itemId and n >= 2 and n <= ns.Protocol.LOOT_MAX then s.go:Enable() else s.go:Disable() end
   elseif leader and state == "inviting" then
     local n = #LD.accepted(d)
-    s.go:SetLabel("Start (" .. n .. ")"); s.go:Show()
-    if n >= 2 then s.go:Enable() else s.go:Disable() end
+    local open = LD.canStart(d)
+    s.go:SetLabel(open and ("Start (" .. n .. ")") or "Invite expired"); s.go:Show()
+    if n >= 2 and open then s.go:Enable() else s.go:Disable() end
   elseif leader and state == "done" then
     s.go:SetLabel("New Loot Duel"); s.go:Show(); s.go:Enable()
   else
@@ -328,7 +338,12 @@ function UI:RefreshLootDuel()
       note = "Every PC replayed every run (peer check, not proof against a modified addon). The loot master hands out the item in WoW."
       if d.agreement == "disputed" then note = "The leader's PC got a different result: check with the group before handing out loot. " .. note end
     elseif state == "cancelled" then note = REASON[d.endReason] or "Loot Duel cancelled."
-    elseif state == "playing" and not d.iPlay then note = "You're watching. Results arrive as players finish (out after the time limit + " .. LD.GRACE .. " s)."
+    elseif d and d.leftOut and (state == "revealing" or state == "playing") then note = "You joined, but " .. short(d.leader) .. " left you out of the list. Tell the group before any loot is handed out."
+    elseif state == "revealing" then note = "Every player confirms their secret seed share: then the race starts (nobody, the leader included, can know the pieces before)."
+    elseif state == "playing" and d.skipped == "duel" then note = "You were in a duel, so you're not racing in this one."
+    elseif state == "playing" and not d.iPlay then note = "You're watching. Results arrive as players finish (out after the time limit + " .. LD.graceFor(d.rs) .. " s)."
+    elseif state == "playing" then note = "Same pieces for everyone. Pauses (combat, chat) count: past " .. LD.PAUSE_BUDGET .. " s in total your run ends where it is."
+    elseif leader and state == "inviting" and not LD.canStart(d) then note = LD.WHY.expired
     elseif state == "inviting" and not leader then note = "Waiting for " .. short(d.leader) .. " to start. Players who don't join can /roll instead."
     elseif not mayLead then note = LD.WHY[why] or ""
     else note = "Players who join must click Join. Nobody is entered automatically; no loot is handed out by the addon." end
@@ -342,19 +357,22 @@ function UI:AnnounceLoot()
   if not d or d.state ~= "done" then return end
   local ch = ns.LootDuel.channel()
   if not ch then return end
-  local _, link = ns.LootDuel.itemInfo(d.itemId)
-  local what = link or ("item " .. d.itemId)
-  local msg
-  if d.winner then
-    local r = d.results[d.winner:lower()] or {}
-    msg = string.format("[StackRivals] Loot Duel for %s: %s wins (%s). Every PC replayed every run.", what, short(d.winner), T.commas(r.score or 0))
-  elseif #d.tied > 1 then
-    local n = {}
-    for _, x in ipairs(d.tied) do n[#n + 1] = short(x) end
-    msg = string.format("[StackRivals] Loot Duel for %s: tie between %s - roll off.", what, table.concat(n, ", "))
-  else
-    msg = string.format("[StackRivals] Loot Duel for %s: no checked result - /roll instead.", what)
+  local name, link = ns.LootDuel.itemInfo(d.itemId)
+  local function line(what)
+    if d.winner then
+      local r = d.results[d.winner:lower()] or {}
+      return string.format("[StackRivals] Loot Duel for %s: %s wins (%s). Every PC replayed every run.", what, short(d.winner), T.commas(r.score or 0))
+    elseif #d.tied > 1 then
+      local n = {}
+      for _, x in ipairs(d.tied) do n[#n + 1] = short(x) end
+      return string.format("[StackRivals] Loot Duel for %s: tie between %s - roll off.", what, table.concat(n, ", "))
+    end
+    return string.format("[StackRivals] Loot Duel for %s: no checked result - /roll instead.", what)
   end
+  local msg = line(link or name or ("item " .. d.itemId))
+  -- WoW's chat line limit is 255: never cut a link in half (drop the link, then shorten plain text)
+  if #msg > 255 then msg = line(name and name:gsub("|", "") or ("item " .. d.itemId)) end
+  if #msg > 255 then msg = msg:sub(1, 252) .. "..." end
   local send = (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
   if send then pcall(send, msg, ch) end
 end

@@ -79,6 +79,7 @@ Duel.WHY_NOT = {
   unavailable = "addon messages are unavailable on this client", ruleset = "unknown rules",
   old = "they need StackRivals 0.5 or newer for Spell Battle",
   deciding = "your last duel's result is still being decided",
+  loot = "you're in a Loot Duel",
 }
 --- What each result rests on (see the header). Only "replay" is a played-out, checked result.
 Duel.BASIS = {
@@ -262,6 +263,7 @@ function Duel.challenge(name, rulesetId, opts)
   if not ns.Comm.enabled then return false, "unavailable" end
   if ns.Comm.trial then return false, "trial" end
   if Duel.busy() then return false, (Duel.current and Duel.current.viewLeft) and "deciding" or "busy" end
+  if ns.LootDuel and ns.LootDuel.busy() then return false, "loot" end
   if inCombat() then return false, "combat" end
   local rival = ns.Comm.fullName(name)
   if not rival or ns.Comm.same(rival, ns.Comm.me()) then return false, "self" end
@@ -297,7 +299,7 @@ local function onInvite(msg, sender)
   -- we challenged each other at the same moment: the lower match id wins, the other side accepts it
   local crossed = cur and cur.state == "inviting" and ns.Comm.same(cur.rival, sender)
   if crossed and cur.mid < msg.mid then return end -- my invite wins; they will accept it
-  if not crossed and Duel.busy() then
+  if not crossed and (Duel.busy() or (ns.LootDuel and ns.LootDuel.busy())) then
     return reply(sender, P.encode("DEC", msg.mid, "busy"))
   end
   if msg.engine ~= E.ENGINE_VERSION then return reply(sender, P.encode("DEC", msg.mid, "version")) end

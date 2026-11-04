@@ -9,8 +9,10 @@ local pure = H.load(root, { "Engine/Prng.lua", "Engine/Pieces.lua", "Engine/Engi
 local P = pure.Protocol
 
 --- A party: Lead (leader) + players. opts[name] = extra client options.
-local function party(seed, names, opts)
-  local net = NS.new({ seed = seed })
+local function party(seed, names, opts, netOpts)
+  netOpts = netOpts or {}
+  netOpts.seed = seed
+  local net = NS.new(netOpts)
   local cs = {}
   local classes = { "WARRIOR", "SHAMAN", "MAGE", "ROGUE", "PRIEST", "DRUID" }
   for i, n in ipairs(names) do
@@ -24,6 +26,13 @@ end
 local function LD(c) return c.ns.LootDuel end
 --- Play every running loot race to its end (hard drops), then let results travel.
 local function raceToEnd(net, cs, skip)
+  -- the race starts once every seed share is in (a few seconds on the group channel)
+  for _ = 1, 60 * 20 do
+    local started = false
+    for _, c in pairs(cs) do local s = c.ns.App.session; if s and s.loot then started = true end end
+    if started then break end
+    net.step(1)
+  end
   for _ = 1, 6000 do
     local running = false
     for n, c in pairs(cs) do
@@ -42,19 +51,23 @@ end
 describe("Loot Duel protocol", function()
   it("all messages round-trip and stay within 255 bytes; bad ones are refused", function()
     local h = P.hexName("Ann-Realm")
+    local c16 = "0a1b2c3d4e5f6071"
     local msgs = {
-      P.encode("LDO", "lid123", "l060", 1, 19019, "0a1b2c3d", 3), P.encode("LDI", "lid123", 1, h .. "," .. P.hexName("Ben-Realm")),
-      P.encode("LDA", "lid123", "a", "n0nce123"), P.encode("LDA", "lid123", "d", "-"),
-      P.encode("LDP", "lid123", 1, 1, h .. "-n0nce123"), P.encode("LDS", "lid123", "n0nce999", "0a1b2c3d", 2),
+      P.encode("LDO", "lid123", "l060", 1, 19019, c16, 3), P.encode("LDI", "lid123", 1, h .. "," .. P.hexName("Ben-Realm")),
+      P.encode("LDA", "lid123", "a", c16), P.encode("LDA", "lid123", "d", "-"),
+      P.encode("LDP", "lid123", 1, 1, h .. "-" .. c16), P.encode("LDS", "lid123", "0a1b2c3d", 2),
+      P.encode("LDN", "lid123", "n0nce123"), P.encode("LDV", "lid123", 1, 1, h .. "-n0nce123"), P.encode("LDG", "lid123", "n0nce999", "0a1b2c3d"),
       P.encode("LDC", "lid123", P.b36(600), P.b36(12345)), P.encode("LDE", "lid123", P.b36(3600), P.b36(9000), P.b36(12), P.b36(2), "0a1b2c3d", 2),
       P.encode("LDL", "lid123", 1, 2, "3A0B5F"), P.encode("LDX", "lid123", "cancel"), P.encode("LDR", "lid123", h, 0),
     }
     for _, s in ipairs(msgs) do ok(#s <= 255, s); ok(P.decode(s), "decode " .. s) end
     eq(P.decode(msgs[2]).names[2], "Ben-Realm")
     local bad = {
-      "1:LDO:lid123:x999:1:19019:0a1b2c3d:3", "1:LDO:lid123:l060:1:19019:0a1b2c3d:9", "1:LDO:lid123:l060:1:0:0a1b2c3d:3",
-      "1:LDI:lid123:1:zz", "1:LDI:lid123:1:" .. P.hexName("Bad|cName-Realm"), "1:LDA:lid123:a:-", "1:LDA:lid123:x:n0nce123",
-      "1:LDP:lid123:2:1:" .. h .. "-n0nce", "1:LDS:lid123:n0nce:nothex!:2", "1:LDE:lid123:1:1:1:1:xyz:1", "1:LDL:lid123:1:1:3AH",
+      "1:LDO:lid123:x999:1:19019:0a1b2c3d4e5f6071:3", "1:LDO:lid123:l060:1:19019:0a1b2c3d4e5f6071:9", "1:LDO:lid123:l060:1:0:0a1b2c3d4e5f6071:3",
+      "1:LDO:lid123:l060:1:19019:0a1b2c3d:3", "1:LDA:lid123:a:n0nce123", "1:LDP:lid123:1:1:" .. h .. "-n0nce123",
+      "1:LDI:lid123:1:zz", "1:LDI:lid123:1:" .. P.hexName("Bad|cName-Realm"), "1:LDA:lid123:a:-", "1:LDA:lid123:x:0a1b2c3d4e5f6071",
+      "1:LDP:lid123:2:1:" .. h .. "-0a1b2c3d4e5f6071", "1:LDS:lid123:nothex!:2", "1:LDE:lid123:1:1:1:1:xyz:1", "1:LDL:lid123:1:1:3AH",
+      "1:LDN:lid123:-", "1:LDG:lid123:n0nce:xyz", "1:LDV:lid123:1:1:" .. h .. "-BAD!",
       "1:LDX:lid123:whatever", "1:LDR:lid123:" .. h .. ":2",
     }
     for _, s in ipairs(bad) do ok(P.decode(s) == nil, "accepted: " .. s) end
@@ -103,7 +116,7 @@ describe("Loot Duel between simulated clients", function()
     net.step(120)
     eq(#LD(cs.Lead).accepted(LD(cs.Lead).current), 2)
     ok(LD(cs.Lead).start())
-    net.step(120)
+    net.step(60 * 10)
     local seed = LD(cs.Lead).current.seed
     eq(LD(cs.Ann).current.seed, seed); eq(LD(cs.Ben).current.seed, seed); eq(LD(cs.Cid).current.seed, seed, "watchers know it too")
     eq(cs.Ann.ns.App.session.seed, seed); eq(cs.Ben.ns.App.session.seed, seed)
@@ -209,10 +222,11 @@ describe("Loot Duel between simulated clients", function()
     LD(cs.Ann).answer(true); net.step(60)
     local d = LD(cs.Ann).current
     -- a start naming Ann plus an uninvited player, with a hash that matches that list
-    local entries = { { name = "Ann-Realm", nonce = d.myNonce }, { name = "Mal-Realm", nonce = "abcd1234" } }
+    local mal = "0123456789abcdef"
+    local entries = { { name = "Ann-Realm", commit = d.myCommit }, { name = "Mal-Realm", commit = mal } }
     local hash = LD(cs.Ann).listHash(d.lid, d.rs, d.itemId, entries)
-    net.inject(cs.Ann, "Lead-Realm", P.encode("LDP", d.lid, 1, 1, P.hexName("Ann-Realm") .. "-" .. d.myNonce .. "," .. P.hexName("Mal-Realm") .. "-abcd1234"), "PARTY")
-    net.inject(cs.Ann, "Lead-Realm", P.encode("LDS", d.lid, "zzzz9999", hash, 2), "PARTY")
+    net.inject(cs.Ann, "Lead-Realm", P.encode("LDP", d.lid, 1, 1, P.hexName("Ann-Realm") .. "-" .. d.myCommit .. "," .. P.hexName("Mal-Realm") .. "-" .. mal), "PARTY")
+    net.inject(cs.Ann, "Lead-Realm", P.encode("LDS", d.lid, hash, 2), "PARTY")
     net.step(10)
     eq(LD(cs.Ann).current.state, "cancelled")
     ok(LD(cs.Ann).current.endReason:find("bad_start"), LD(cs.Ann).current.endReason)
@@ -225,6 +239,171 @@ describe("Loot Duel between simulated clients", function()
     LD(cs.Lead).create(19019, "l060", { "Ann-Realm", "Ben-Realm" }); net.step(60)
     LD(cs.Ann).answer(true); net.step(60)
     eq(LD(cs.Lead).current.answers["ann-realm"].accept, false)
+  end)
+
+  -- regression tests for the independent review of Loot Duel (0.7.0)
+  local function joined(seed, names)
+    local net, cs = party(seed, names)
+    local others = {}
+    for i = 2, #names do others[#others + 1] = names[i] .. "-Realm" end
+    ok(LD(cs[names[1]]).create(19019, "l060", others)); net.step(60)
+    for i = 2, #names do LD(cs[names[i]]).answer(true) end
+    net.step(120)
+    return net, cs
+  end
+
+  it("R1 commit-reveal: nobody knows the seed before every share is in; a swapped share is refused", function()
+    local net, cs = joined(30, { "Lead", "Ann", "Ben" })
+    local L = LD(cs.Lead).current
+    ok(LD(cs.Lead).start()); net.step(2)
+    -- after the list is fixed but before the reveals arrive, nobody has a seed
+    eq(LD(cs.Ann).current.seed, nil)
+    net.step(240)
+    local seed = L.seed
+    ok(seed and LD(cs.Ann).current.seed == seed and LD(cs.Ben).current.seed == seed, "same seed once everything is revealed")
+    -- a modified leader swaps Ben's share in the list after Ben joined: Ann (who saw Ben's answer) refuses
+    local net2, cs2 = joined(31, { "Lead", "Ann", "Ben" })
+    local d = LD(cs2.Ann).current
+    local entries = {}
+    for _, p in ipairs(LD(cs2.Lead).accepted(LD(cs2.Lead).current)) do
+      entries[#entries + 1] = { name = p.name, commit = (p.name == "Ben-Realm") and "ffffffffffffffff" or p.commit }
+    end
+    local items = {}
+    for _, e in ipairs(entries) do items[#items + 1] = P.hexName(e.name) .. "-" .. e.commit end
+    net2.inject(cs2.Ann, "Lead-Realm", P.encode("LDP", d.lid, 1, 1, table.concat(items, ",")), "PARTY")
+    net2.inject(cs2.Ann, "Lead-Realm", P.encode("LDS", d.lid, LD(cs2.Ann).listHash(d.lid, d.rs, d.itemId, entries), 2), "PARTY")
+    net2.step(5)
+    eq(LD(cs2.Ann).current.state, "cancelled"); eq(LD(cs2.Ann).current.endReason, "bad_start_commit_swap")
+  end)
+
+  it("R1b a player who joined but was left out of the list is told so", function()
+    local net, cs = joined(32, { "Lead", "Ann", "Ben", "Cid" })
+    local d = LD(cs.Cid).current
+    local list = {}
+    for _, p in ipairs(LD(cs.Lead).accepted(LD(cs.Lead).current)) do if p.name ~= "Cid-Realm" then list[#list + 1] = p end end
+    local items = {}
+    for _, e in ipairs(list) do items[#items + 1] = P.hexName(e.name) .. "-" .. e.commit end
+    net.inject(cs.Cid, "Lead-Realm", P.encode("LDP", d.lid, 1, 1, table.concat(items, ",")), "PARTY")
+    net.inject(cs.Cid, "Lead-Realm", P.encode("LDS", d.lid, LD(cs.Cid).listHash(d.lid, d.rs, d.itemId, list), #list), "PARTY")
+    net.step(5)
+    ok(LD(cs.Cid).current.leftOut, "Cid sees that he was left out")
+    eq(LD(cs.Cid).busy(), false, "and is free again")
+  end)
+
+  it("R1c a missing reveal cancels the whole race (no re-roll by leaving someone out)", function()
+    local net, cs = joined(33, { "Lead", "Ann", "Ben" })
+    cs.Ben.online = false
+    ok(LD(cs.Lead).start())
+    net.step(60 * 30)
+    eq(LD(cs.Lead).current.state, "cancelled"); eq(LD(cs.Lead).current.endReason, "noreveal")
+    eq(LD(cs.Ann).current.state, "cancelled")
+    eq(cs.Ann.ns.App.session, nil, "nobody raced")
+  end)
+
+  it("R2 the leader can't start after the invite expired (members stopped waiting)", function()
+    local net, cs = joined(34, { "Lead", "Ann", "Ben" })
+    net.step(60 * 80) -- past START_LIMIT after the offer
+    local okS, why = LD(cs.Lead).start()
+    ok(not okS); eq(why, "expired")
+  end)
+
+  it("R3 the last finisher gets the result at once, and agrees with the leader", function()
+    local net, cs = joined(35, { "Lead", "Ann", "Ben" })
+    LD(cs.Lead).start(); net.step(240)
+    -- Ben plays on a little longer than Ann
+    raceToEnd(net, cs, { Ben = true })
+    local s = cs.Ben.ns.App.session
+    for _ = 1, 400 do if s.recorded then break end; if s.phase == "playing" then s:press("hardDrop"); s:release("hardDrop") end; net.step(1) end
+    net.step(60 * 3)
+    eq(LD(cs.Ben).current.state, "done", "Ben's PC finished right after his own run")
+    net.step(60 * 15)
+    eq(LD(cs.Ben).history[1].agreement, "agreed")
+  end)
+
+  it("R4 a low frame rate doesn't slow the race down (real-time stepping)", function()
+    local net, cs = joined(36, { "Lead", "Ann", "Ben" })
+    cs.Ann.frameDt = 1 / 5
+    LD(cs.Lead).start(); net.step(60 * 5)
+    local t0a, t0b = cs.Ann.ns.App.session.state.tick, cs.Ben.ns.App.session.state.tick
+    net.step(60 * 20)
+    local da, db = cs.Ann.ns.App.session.state.tick - t0a, cs.Ben.ns.App.session.state.tick - t0b
+    ok(math.abs(da - db) <= 15, "Ann at 5 fps: " .. da .. " ticks, Ben: " .. db)
+  end)
+
+  it("R5 a running Loot Duel is busy: no duels, no Quickplay, no solo start, and invites are declined", function()
+    local net, cs = joined(37, { "Lead", "Ann", "Ben" })
+    eq(LD(cs.Ann).busy(), true, "joined = busy")
+    local okC, why = cs.Ann.ns.Duel.challenge("Ben-Realm", "b120"); ok(not okC); eq(why, "loot")
+    LD(cs.Lead).start(); net.step(240)
+    cs.Lead.ns.Duel.challenge("Ann-Realm", "b120"); net.step(60)
+    eq(cs.Ann.ns.Duel.current, nil, "Ann's addon declined as busy")
+    ok(not cs.Ann.ns.Quickplay.start("b120"))
+    local loot = cs.Ann.ns.App.session
+    cs.Ann.ns.App:Start("classic")
+    eq(cs.Ann.ns.App.session, loot, "the loot run wasn't thrown away")
+  end)
+
+  it("R6 a log with inhuman input (6 hard drops in one tick) is rejected", function()
+    local net, cs = joined(38, { "Lead", "Ann", "Ben" })
+    LD(cs.Lead).start(); net.step(240)
+    local d = LD(cs.Lead).current
+    local E = cs.Lead.ns.Engine
+    local log = { 10, 5, 10, 5, 10, 5, 10, 5, 10, 5, 10, 5 }
+    local st = E.replay(d.seed, { startLevel = 1 }, log, 100)
+    local packed = P.packLog(log)
+    net.inject(cs.Lead, "Ben-Realm", P.encode("LDE", d.lid, P.b36(100), P.b36(st.score), P.b36(st.lines), P.b36(st.level), E.hashState(st), 1), "PARTY")
+    net.inject(cs.Lead, "Ben-Realm", P.encode("LDL", d.lid, 1, 1, packed), "PARTY")
+    net.step(2)
+    local r = d.results["ben-realm"]
+    eq(r.status, "rejected"); eq(r.why, "inhuman_input_rate")
+  end)
+
+  it("R7 a leader who /reloads during the invite can offer again; the group sees the new one", function()
+    local net, cs = party(39, { "Lead", "Ann", "Ben" })
+    LD(cs.Lead).create(19019, "l060", { "Ann-Realm", "Ben-Realm" }); net.step(60)
+    LD(cs.Ann).answer(true); net.step(30)
+    local lead = net.reload(cs.Lead) -- logout tells the group; the old invite is gone
+    net.step(60)
+    eq(LD(cs.Ann).current.state, "cancelled")
+    ok(lead.ns.LootDuel.create(19019, "l060", { "Ann-Realm", "Ben-Realm" })); net.step(60)
+    eq(LD(cs.Ann).current.lid, lead.ns.LootDuel.current.lid)
+    -- even without the goodbye (a crash): the same leader's new offer replaces the open one
+    local net2, cs2 = party(40, { "Lead", "Ann", "Ben" })
+    LD(cs2.Lead).create(19019, "l060", { "Ann-Realm", "Ben-Realm" }); net2.step(60)
+    LD(cs2.Lead).current = nil
+    ok(LD(cs2.Lead).create(17076, "l060", { "Ann-Realm", "Ben-Realm" })); net2.step(60)
+    eq(LD(cs2.Ann).current.itemId, 17076)
+  end)
+
+  it("R8 pauses are limited: past the budget the run ends where it is (and still counts)", function()
+    local net, cs = joined(41, { "Lead", "Ann", "Ben" })
+    LD(cs.Lead).start(); net.step(60 * 6)
+    local s = cs.Ann.ns.App.session
+    s:pause("manual")
+    net.step(60 * (cs.Ann.ns.LootDuel.PAUSE_BUDGET + 3))
+    ok(s.recorded, "Ann's run ended at the pause limit")
+    ok(LD(cs.Ann).current.pauseLimit)
+    raceToEnd(net, cs)
+    local ann
+    for _, r in ipairs(LD(cs.Lead).current.standings) do if r.name == "Ann-Realm" then ann = r end end
+    eq(ann.status, "verified")
+  end)
+
+  it("R9 out of order, duplicated and 5% lost messages: the same winner everywhere", function()
+    local net, cs = party(42, { "Lead", "Ann", "Ben", "Cid" }, nil, { latency = { 0.05, 2.5 }, dup = 0.2, drop = 0.05 })
+    ok(LD(cs.Lead).create(19019, "l060", { "Ann-Realm", "Ben-Realm", "Cid-Realm" })); net.step(60 * 15)
+    for _, n in ipairs({ "Ann", "Ben", "Cid" }) do LD(cs[n]).answer(true) end
+    net.step(60 * 15)
+    ok(LD(cs.Lead).start())
+    raceToEnd(net, cs)
+    net.step(60 * 30)
+    local w
+    for _, n in ipairs({ "Lead", "Ann", "Ben", "Cid" }) do
+      local d = LD(cs[n]).history[1]
+      ok(d, n .. " has a result")
+      w = w or (d.winner or "tie")
+      eq(d.winner or "tie", w, n)
+    end
   end)
 
   it("the sheet: pick players, invite, join from the popup, start, result banner, announce only on click", function()
@@ -244,7 +423,7 @@ describe("Loot Duel between simulated clients", function()
     cs.Ann.ns.UI.lootPopup.acc:Click(); cs.Ben.ns.UI.lootPopup.acc:Click(); net.step(120)
     UI:RefreshLootDuel()
     eq(s.go.fs:GetText(), "Start (2)")
-    s.go:Click(); net.step(60)
+    s.go:Click(); net.step(240)
     raceToEnd(net, cs)
     UI:ShowSheet("loot")
     local b = s.banner:GetText() or ""

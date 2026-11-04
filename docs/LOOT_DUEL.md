@@ -17,14 +17,28 @@ ranked, never on the website, no gold, no bets, no Shards.
    * Nobody is entered automatically.
    * No answer within 60 s counts as not in.
    * A player whose addon never answers is marked "no StackRivals: /roll instead".
-5. **Start (n).** The leader starts with everyone who joined (at least 2).
-   * The player list and the rules are fixed at the start.
-   * The start message carries a check (list hash and seed commitment). If it doesn't match what
-     a player saw, that player's run is cancelled.
-6. **Race.** Everyone gets the **same pieces** and **no spells**.
+   * Joining sends only a **commitment** to a secret seed share, not the share itself.
+5. **Start (n).** The leader starts with everyone who joined (at least 2), within 80 s of the
+   offer. After that the invite has expired and a new one is needed.
+   * The player list (names + commitments) and the rules are fixed at the start.
+   * Every PC checks the list against the answers it saw itself:
+     * a changed commitment cancels the race;
+     * an uninvited name cancels the race;
+     * a player who joined but was left out is told so on screen.
+6. **Lock in the pieces.** Every player reveals their seed share. The leader relays them all and
+   reveals its own share, which was committed in the offer.
+   * Every PC checks each share against its commitment.
+   * If anyone's share is missing after 20 s, the **whole race is cancelled**. Nobody can re-roll
+     the pieces by leaving someone out.
+7. **Race.** Everyone gets the **same pieces** and **no spells**.
    * Live scores show in the side panel.
    * Your run ends at the time limit, or earlier if you top out.
-7. **Results.** Every addon sends its final score and its full input log.
+   * The game runs in real time, as in duels: a low frame rate never slows your game down.
+   * Pauses (combat, chat) are allowed but limited to **15 s in total**. Past that, your run ends
+     where it is, and that score counts.
+   * While you're in a Loot Duel (joined, locking in or racing), duel invites are answered "busy".
+     Quickplay, duels and solo starts wait.
+8. **Results.** Every addon sends its final score and its full input log.
    * **Every PC replays every run.**
    * Ranking:
      1. replay-checked results, highest score first;
@@ -32,18 +46,23 @@ ranked, never on the website, no gold, no bets, no Shards.
      3. still equal at the top: **TIE** (roll off with `/roll`).
    * A run with no result (disconnect, offline, too late) or a failed replay is **out**. Nobody
      wins because someone else dropped out, and no result is invented.
-8. **Announce.** The leader can click **Announce** to post one line in party or raid chat. Nothing
+   * The replay uses the same checks as duels and the website (`Engine/Verify.lua`): time cap,
+     input rate (at most 4 inputs per tick), no inputs after a top-out, and the claimed score,
+     lines, level and hash.
+9. **Announce.** The leader can click **Announce** to post one line in party or raid chat. Nothing
    is posted without that click.
 
 ## Fairness
 
 | Rule | How |
 |---|---|
-| Same pieces | One seed for everyone, made from **every** player's secret nonce plus the leader's committed nonce (commit–reveal). Nobody, the leader included, knows the pieces before the start |
+| Same pieces | One seed for everyone, made from **every** player's secret share plus the leader's. All are committed (64-bit commitments) before anyone reveals, so nobody, the leader included, knows or can steer the pieces. A missing share cancels the race |
 | Same rules | Fixed time (1:00 or 2:00), no spells (random or offensive spells shouldn't decide an epic), the normal engine, `ENGINE_VERSION` checked |
 | Can't fake a score | Every PC replays every log. A claimed score that doesn't match its log is "replay failed: out" (tested with a lying client) |
 | Can't add game time | The replay refuses a run longer than the time limit. A pause doesn't give extra game time |
-| Disconnect | A result must arrive within the time limit + 60 s. Otherwise "no result: out". There is no automatic win for the others |
+| Disconnect | A result must arrive within the time limit + 90 s (1:00) or + 120 s (2:00): logs travel slowly on the group channel. Otherwise "no result: out". There is no automatic win for the others |
+| Thinking time | Pauses are limited to 15 s per race. Past that, the run ends where it is |
+| Frame rate | The race runs in real time (like duels). Capping your FPS doesn't slow your game down |
 | Ties | Score, then lines, then a declared tie (roll off). Settled before the start and shown in the popup |
 | No addon | Shown as "no StackRivals: /roll instead". The group decides how to include them (the usual fallback is `/roll`) |
 | Changes after the start | Not possible: the list and the rules are checked against the start's hash on every PC |
@@ -89,13 +108,16 @@ Blizzard doesn't settle loot disputes between players. **Agree on the rules befo
 |---|---|
 | `LDO` | offer: item, time, engine, seed commitment, number of invitees |
 | `LDI` | invitee list, as chunks |
-| `LDA` | join (with the player's seed nonce) or pass |
-| `LDP` | the final player list (names + nonces) |
-| `LDS` | start: reveals the leader's nonce, with the list hash |
+| `LDA` | join (with a commitment to the player's seed share) or pass |
+| `LDP` | the final player list (names + commitments) |
+| `LDS` | the list is fixed (list hash): reveal now |
+| `LDN` | a player's seed share (checked against their commitment) |
+| `LDV` | the leader relays every share |
+| `LDG` | go: the leader's share (committed in the offer) |
 | `LDC` | live score |
 | `LDE` | the player's final result |
 | `LDL` | the player's log, as chunks |
-| `LDX` | the leader cancelled |
+| `LDX` | the leader cancelled, left, or not every share arrived (sent 3 times, also at logout) |
 | `LDR` | the leader's computed winner (display only: every PC computes its own) |
 
 * Only the leader, an assistant or the master looter can make an offer. Offers from anyone else,
@@ -103,7 +125,12 @@ Blizzard doesn't settle loot disputes between players. **Agree on the rules befo
 * Names travel as hex.
 * All messages are ≤ 255 bytes, with the same queue and rate limits as duels.
 
-## Tests (simulated, `tests/test_lootduel.lua`, 13)
+## Tests (simulated, `tests/test_lootduel.lua`, 24)
+
+An independent review (4 Nov 2026) found 8 problems. All are fixed, and each has its own test
+(R1–R9): commit–reveal, the left-out player, a missing share, expiry, the last finisher,
+frame rate, busy, inhuman logs, the leader reloading, the pause budget, and a lossy, reordering
+network. The original tests cover:
 
 * Protocol round-trip and malformed messages.
 * Standings: the score / lines / tie rules; a rejected run comes last.
