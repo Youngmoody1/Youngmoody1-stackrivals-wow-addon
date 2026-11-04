@@ -344,6 +344,10 @@ seed is implied by the date.
 
 ### 6.8 Account linking (later)
 
+> **Superseded (0.6.1+).** Linking now uses the web code → `SRL1` → `SRP1` flow in
+> `docs/ACCOUNT_SYNC_HANDOFF.md`. The SR1R `link` field carries the character's `linkId`, uppercased.
+> The text below is kept as history.
+
 1. **Preferred: Battle.net OAuth on the website** (scope `wow.profile`, endpoint
    `/profile/user/wow`). Blizzard returns the account's characters, so ownership of `Name-Realm` is
    proven by Blizzard. Free Blizzard developer client needed (owner's decision). Classic/Forever
