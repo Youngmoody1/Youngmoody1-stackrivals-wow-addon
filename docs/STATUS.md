@@ -134,6 +134,8 @@ Totals:
 * 0.7.0: 609 (Loot Duel), 615 (final polish), 617 (0.3.1 upgrade tests)
 * 0.7.1: 646
 * 0.7.2: 671 (GitHub CI, Lua 5.1)
+* 0.7.3: 674 (CI run 41840520106, commit `cbca566`)
+* 0.8.0: 739 (CI run 41843944738, commit `463b77b`), incl. 65 client-profile tests (mocks, not clients)
 
 ## Open blockers
 
