@@ -189,8 +189,10 @@ function UI:RefreshCollection()
       for _, x in pairs(r) do x:SetText("") end
     end
   end
-  y.trust:SetText(v.verified and "VERIFIED (signed). WoW draws no skins yet."
+  local usable = v.verified and not v.stale
+  y.trust:SetText(usable and "VERIFIED (signed). WoW draws no skins yet."
+    or v.verified and "VERIFIED but OUT OF DATE: nothing applied in WoW."
     or "UNVERIFIED: names only, nothing applied in WoW.")
-  local tc = v.verified and C.green or C.gold
+  local tc = usable and C.green or C.gold
   y.trust:SetTextColor(tc[1], tc[2], tc[3])
 end

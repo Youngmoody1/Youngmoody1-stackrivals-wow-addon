@@ -4,6 +4,9 @@
 
 0.9.0 Alpha is frozen on `alpha/0.9.0` (`84dbb62`). 0.9.1 is 0.9.0 plus the following.
 
+- **Signature and age are two separate checks** (`Account.canApplyCosmetic`): a cosmetic from the website may only
+  ever be applied from a code that is VERIFIED **and** not OUT OF DATE (older than 7 days or past its `expires`).
+  A correctly signed old code unlocks nothing; the Collection tab says "VERIFIED but OUT OF DATE".
 - **Key registry**:
   - `Net/SnapshotKeys.lua` holds public keys only and is written by `tools/add_public_key.py`. The tool refuses
     the test kid `t1`, the RFC 8032 test keys, malformed hex and non-curve points, and it can retire a kid.

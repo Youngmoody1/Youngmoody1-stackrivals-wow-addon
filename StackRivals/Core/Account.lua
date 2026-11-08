@@ -202,9 +202,11 @@ end
 
 --- May WoW apply (draw) this cosmetic? Only from a VERIFIED profile that owns or equips it. WoW draws no
 --- cosmetics yet; this is the one gate any future drawing code must use.
+--- Two separate checks, both required: the signature (VERIFIED) and the age (not OUT OF DATE: older than
+--- STALE_AFTER or past the code's expires). A correctly signed but old code unlocks nothing.
 function Acc.canApplyCosmetic(id)
   local v = Acc.profileView()
-  if not (v and v.verified and type(id) == "string") then return false end
+  if not (v and v.verified and not v.stale and type(id) == "string") then return false end
   for _, e in pairs(v.equipped or {}) do if e == id then return true end end
   for _, o in ipairs(v.owned or {}) do if o == id then return true end end
   return false

@@ -115,7 +115,23 @@ describe("Collection tab (simulated client)", function()
     c.ns.Account.profileView = function() local v, st = real(); v.verified = true; return v, st end
     eq(c.ns.Account.canApplyCosmetic("skin_solar_inferno"), true)
     eq(c.ns.Account.canApplyCosmetic("skin_circuit"), false, "not owned")
+    -- signature and age are separate checks: a verified but OUT OF DATE code unlocks nothing
+    c.ns.Account.profileView = function() local v, st = real(); v.verified = true; v.stale = true; return v, st end
+    eq(c.ns.Account.canApplyCosmetic("skin_solar_inferno"), false, "verified but out of date")
+    c.ns.UI:RefreshCollection()
+    ok(y.trust:GetText():find("^VERIFIED but OUT OF DATE"), y.trust:GetText())
     c.ns.Account.profileView = real
+  end)
+  it("a verified code past its age limit unlocks nothing (real clock, not a stub)", function()
+    local c = linked2(7, { equipped = { skin = "skin_solar_inferno" }, owned = { "skin_solar_inferno" } })
+    local Acc = c.ns.Account
+    local real = Acc.isVerified
+    Acc.isVerified = function() return true end -- stands in for a checked signature
+    eq(Acc.canApplyCosmetic("skin_solar_inferno"), true, "fresh")
+    c.M.serverTime = c.M.serverTime + Acc.STALE_AFTER + 60
+    eq(Acc.profileView().stale, true)
+    eq(Acc.canApplyCosmetic("skin_solar_inferno"), false, "older than 7 days")
+    Acc.isVerified = real
   end)
   it("an SRP1 profile says how to get the SRP2 code; no profile says how to link", function()
     local net = NS.new({ seed = 6 })

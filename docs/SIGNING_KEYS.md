@@ -61,6 +61,7 @@ The contract lives in the website's docs and is reproduced here by the vectors:
     ownership.
   * **That the code is new.** An old signed code stays valid until `expires`. Newest-wins and the 7-day OUT OF
     DATE rule still apply.
+    Unlocking needs both: `Account.canApplyCosmetic` refuses a VERIFIED code that is OUT OF DATE.
 * **Local only:** the VERIFIED flag in SavedVariables is the player's own file. Editing it could only fool that
   player's own screen. It is also dropped when its kid isn't shipped. The website never trusts anything from
   WoW because of it.
