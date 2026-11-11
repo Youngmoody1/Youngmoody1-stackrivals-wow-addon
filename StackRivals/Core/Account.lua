@@ -145,6 +145,24 @@ function Acc.cancelLink()
   if r then r.pending, r.note = nil, nil end
 end
 
+--- The saved profile for a parsed snapshot p and its signature result sc. A VERIFIED profile keeps the signed
+--- code itself (code): after a reload the signature is checked again from it (Acc.reverify), so editing
+--- SavedVariables can't produce a VERIFIED profile or change one.
+function Acc.profileFrom(p, sc, text)
+  local verified = sc.state == "verified"
+  return {
+    linkId = p.linkId, accountId = p.accountId, name = p.name, issued = p.issued, expires = p.expires,
+    level = p.level, xp = p.xp, xpNext = p.xpNext, rank = p.rank, season = p.season, seasonPct = p.seasonPct,
+    wins = p.wins, losses = p.losses, draws = p.draws, history = p.history,
+    achUnlocked = p.achUnlocked, achTotal = p.achTotal, cosOwned = p.cosOwned, cosEquipped = p.cosEquipped,
+    signed = p.sig ~= nil, check = p.check,
+    verified = verified or nil, kid = sc.kid, sigNote = sc.reason, -- sigNote: unsigned | unknown_kid
+    code = verified and type(text) == "string" and (text:gsub("[ \t\r\n\f\v]", "")) or nil,
+    -- SRP2 only (nil from SRP1): the website's balance, ownership and events as of asOf — display only
+    format = p.format, shards = p.shards, asOf = p.asOf, equipped = p.equipped, owned = p.owned, events = p.events,
+  }
+end
+
 --- Step 3 / later syncs: import a profile snapshot. Returns true, "linked" | "updated" or nil, error.
 --- opts.step (optional): passed to the signature check (Account.importAsync uses coroutine.yield).
 function Acc.import(text, opts)
@@ -185,16 +203,7 @@ function Acc.import(text, opts)
     r.pending = nil
     result = "linked"
   end
-  r.profile = {
-    linkId = p.linkId, accountId = p.accountId, name = p.name, issued = p.issued, expires = p.expires,
-    level = p.level, xp = p.xp, xpNext = p.xpNext, rank = p.rank, season = p.season, seasonPct = p.seasonPct,
-    wins = p.wins, losses = p.losses, draws = p.draws, history = p.history,
-    achUnlocked = p.achUnlocked, achTotal = p.achTotal, cosOwned = p.cosOwned, cosEquipped = p.cosEquipped,
-    signed = p.sig ~= nil, check = p.check,
-    verified = sc.state == "verified" or nil, kid = sc.kid, sigNote = sc.reason, -- sigNote: unsigned | unknown_kid
-    -- SRP2 only (nil from SRP1): the website's balance, ownership and events as of asOf — display only
-    format = p.format, shards = p.shards, asOf = p.asOf, equipped = p.equipped, owned = p.owned, events = p.events,
-  }
+  r.profile = Acc.profileFrom(p, sc, text)
   r.lastSync = t
   r.note = nil
   return true, result
@@ -247,37 +256,76 @@ end
   onDone(ok, resultOrError) is called exactly once. One import at a time: returns false, "busy" otherwise. ]]
 Acc.ASYNC_BUDGET_MS = 5   -- per frame, when the client has debugprofilestop (every client does)
 Acc.ASYNC_STEPS = 12      -- per frame without a clock (tests); one step is about a quarter of a millisecond here
-local driver
-function Acc.importAsync(text, onDone)
-  if Acc.busy then return false, "busy" end
-  local co = coroutine.create(function(t) return Acc.import(t, { step = coroutine.yield }) end)
-  local first = true
+local driver, jobs = nil, {}
+--- Run fn(step) in a coroutine, a few milliseconds per frame; onDone(...) gets fn's results (nil, "internal" on error).
+local function runAsync(fn, onDone)
+  local co = coroutine.create(function() return fn(coroutine.yield) end)
   local function slice()
     local clock = rawget(_G or {}, "debugprofilestop")
     local t0, n = clock and clock() or 0, 0
     while true do
-      local okc, a, b = coroutine.resume(co, first and text or nil)
-      first = false
+      local okc, a, b = coroutine.resume(co)
       if not okc then
-        Acc.busy = nil
-        if ns.Report and ns.Report.noteError then ns.Report.noteError("import: " .. tostring(a)) end
+        if ns.Report and ns.Report.noteError then ns.Report.noteError("account: " .. tostring(a)) end
         onDone(nil, "internal")
         return true
       end
-      if coroutine.status(co) == "dead" then Acc.busy = nil; onDone(a, b); return true end
+      if coroutine.status(co) == "dead" then onDone(a, b); return true end
       n = n + 1
       if clock then
         if clock() - t0 >= Acc.ASYNC_BUDGET_MS then return false end
       elseif n >= Acc.ASYNC_STEPS then return false end
     end
   end
-  Acc.busy = co
-  if slice() then return true end
+  if slice() then return end
+  jobs[#jobs + 1] = slice
   driver = driver or CreateFrame("Frame")
   driver:SetScript("OnUpdate", function(f)
-    if not Acc.busy or slice() then f:SetScript("OnUpdate", nil) end
+    -- one job per frame keeps the per-frame budget; finished jobs leave the queue
+    if jobs[1] and jobs[1]() then table.remove(jobs, 1) end
+    if not jobs[1] then f:SetScript("OnUpdate", nil) end
   end)
+end
+
+function Acc.importAsync(text, onDone)
+  if Acc.busy then return false, "busy" end
+  Acc.busy = true
+  runAsync(function(step) return Acc.import(text, { step = step }) end, function(a, b) Acc.busy = nil; onDone(a, b) end)
   return true
+end
+
+--[[ After a reload: SavedVariables is a file the player can edit, so a saved profile is never VERIFIED by its
+  own say-so. Acc.sanitize loads it as unverified and marks it recheck; this checks the signature of the signed
+  code that was kept with it (same key table, same checks as an import, spread over frames) and rebuilds the
+  profile FROM THAT CODE. So what a VERIFIED profile shows after a reload is what the website signed, not what
+  the file says. Not a new import: the link, lastSync and the age rules (OUT OF DATE) are untouched.
+  onDone(true | false) is optional. ]]
+function Acc.reverify(onDone)
+  onDone = onDone or function() end
+  local r = Acc.rec()
+  local pr = r and r.profile
+  if not (pr and pr.recheck and r.link) then onDone(false); return end
+  local code, link = pr.code, r.link
+  pr.recheck = nil
+  runAsync(function(step)
+    local p
+    if code:match("^SRP2%.") then p = A().parseProfile2(code) else p = A().parseProfile(code) end
+    if not p then return false end
+    local me = Acc.me()
+    if p.linkId ~= link.linkId or p.accountId ~= link.accountId or not me or not ns.Comm.same(p.player, me) then return false end
+    local sc = ns.SnapshotSig.check(code, nil, step)
+    if sc.state ~= "verified" then return false end
+    return true, { p = p, sc = sc }
+  end, function(good, got)
+    -- only if nothing replaced the profile meanwhile (an import, an unlink)
+    if good and r.profile == pr and r.link == link then
+      r.profile = Acc.profileFrom(got.p, got.sc, code)
+    elseif r.profile == pr then
+      pr.code = nil
+    end
+    onDone(good == true and r.profile ~= pr)
+    if ns.UI and ns.UI.frame and ns.UI.RefreshAccount then ns.UI:RefreshAccount() end
+  end)
 end
 
 --- Forget the link on this PC (the website keeps its side until unlinked there).
@@ -327,11 +375,15 @@ function Acc.sanitize(raw)
             history = hist, achUnlocked = num(pr.achUnlocked, 0, 9999), achTotal = num(pr.achTotal, 0, 9999),
             cosOwned = num(pr.cosOwned, 0, 99999), cosEquipped = txt(pr.cosEquipped, 24),
             signed = pr.signed == true, check = id(pr.check, "^%x+$", 8, 8) or "00000000",
-            -- verified only with a kid this version still ships (a retired key's codes become UNVERIFIED)
-            verified = (pr.verified == true and type(pr.kid) == "string" and ns.SnapshotSig and ns.SnapshotSig.KEYS[pr.kid] ~= nil) or nil,
+            -- never VERIFIED from the file's own say-so: a profile that claims it, with a kid this version ships
+            -- and its signed code, is marked for Acc.reverify (after login), which checks the signature again
             kid = id(pr.kid, "^[a-z0-9]+$", 2, 2),
             sigNote = (pr.sigNote == "unsigned" or pr.sigNote == "unknown_kid") and pr.sigNote or nil,
           }
+          local code = (type(pr.code) == "string" and #pr.code <= 4096 and not pr.code:find("[^\33-\126]")) and pr.code or nil
+          if pr.verified == true and code and o.profile.kid and ns.SnapshotSig and ns.SnapshotSig.KEYS[o.profile.kid] ~= nil then
+            o.profile.code, o.profile.recheck = code, true
+          end
           if pr.format == "SRP2" then -- SRP2 extras, bounded like the parser (anything else is dropped)
             local P2, cid = o.profile, function(v) return id(v, "^[a-z0-9_]+$", 1, 32) end
             P2.format, P2.shards = "SRP2", num(pr.shards, 0, 1e12)

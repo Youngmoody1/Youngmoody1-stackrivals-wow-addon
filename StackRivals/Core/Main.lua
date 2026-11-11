@@ -429,6 +429,7 @@ ev:SetScript("OnEvent", function(_, event, arg1)
       ns.UI:Create()
       if ns.LootButton then ns.LootButton:Create() end
     end
+    if ns.Account and ns.Account.reverify then ns.Account.reverify() end -- a saved VERIFIED profile is checked again
     if not ns.db.seenIntro then
       ns.db.seenIntro = true
       App:Print("loaded. Type |cffff4d5a/sr|r or click the minimap button to play.")

@@ -30,13 +30,15 @@ local function client(seed, keys)
   return net, c, c.ns.Account
 end
 --- Change field i (0-based, as in the spec) of a code and recompute the check value (a careful forger).
+local PRNG
 local function edit(ns, code, i, value)
+  PRNG = (ns and ns.Prng) or PRNG
   local f = {}
   for part in (code .. "."):gmatch("([^.]*)%.") do f[#f + 1] = part end
   f[i + 1] = value
   table.remove(f)
   local body = table.concat(f, ".")
-  return body .. "." .. string.format("%08x", ns.Prng.hashString(body))
+  return body .. "." .. string.format("%08x", PRNG.hashString(body))
 end
 local function hex(s) return (s:gsub(".", function(ch) return string.format("%02x", ch:byte()) end)) end
 --- Run an async import to its end; returns ok, result, frames used.
@@ -116,6 +118,76 @@ describe("signed codes: the 0.9.1 security cases", function()
     c2.env.SlashCmdList.STACKRIVALS(""); c2.ns.UI:ShowSheet("account")
     eq(c2.ns.UI.accountSheet.acc.status.chip:GetText(), "OUT OF DATE")
     eq(Acc2.profileView().stale, true)
+  end)
+  -- A reload with the test key in the key table (the shipped table is empty until the production key exists).
+  local function reloadWith(net, c, keys, mutate)
+    c.M.fire("PLAYER_LOGOUT")
+    local saved = c.env.StackRivalsDB
+    if mutate then mutate(saved.accounts["Alice-Realm"]) end
+    local net2 = NS.new({ seed = 99 })
+    local n = net2.add({ name = "Alice", saved = saved, beforeLogin = function(_, M, ns)
+      M.serverTime = ISSUED + 120
+      for k, v in pairs(keys or {}) do ns.SnapshotSig.KEYS[k] = v end -- before the file is read (ADDON_LOADED)
+    end })
+    n.M.serverTime = ISSUED + 120
+    for _ = 1, 400 do net2.step(1) end
+    return n, n.ns.Account
+  end
+  it("after /reload a VERIFIED profile is checked again from its signed code, and is VERIFIED again", function()
+    local net, c, Acc = client(20, T1)
+    ok((importAsync(net, Acc, VALID2)))
+    local before = Acc.profileView()
+    local n, Acc2 = reloadWith(net, c, T1)
+    local v = Acc2.profileView()
+    eq(v.verified, true); eq(v.shards, before.shards); eq(v.name, before.name); eq(#v.owned, #before.owned)
+    eq(Acc2.rec().profile.recheck, nil)
+  end)
+  it("SavedVariables edited by hand: more Shards / more cosmetics on a VERIFIED profile are undone by the signed code", function()
+    local net, c, Acc = client(21, T1)
+    ok((importAsync(net, Acc, VALID2)))
+    local before = Acc.profileView()
+    local n, Acc2 = reloadWith(net, c, T1, function(r)
+      r.profile.shards = 999999
+      r.profile.owned = { "skin_solar_inferno", "skin_circuit" }
+      r.profile.equipped = { skin = "skin_solar_inferno" }
+      r.profile.level = 99
+    end)
+    local v = Acc2.profileView()
+    eq(v.verified, true); eq(v.shards, before.shards); eq(v.level, before.level); eq(#v.owned, #before.owned)
+    local had = {}
+    for _, id in ipairs(before.owned) do had[id] = true end
+    for _, e in pairs(before.equipped) do had[e] = true end
+    for _, it in ipairs(n.ns.CosmeticsCatalog.items) do
+      eq(Acc2.canApplyCosmetic(it.id), had[it.id] == true, it.id) -- exactly what the website signed, nothing more
+    end
+  end)
+  it("SavedVariables edited by hand: 'verified = true' without the signed code, or with an edited code, is UNVERIFIED and unlocks nothing", function()
+    for name, mutate in pairs({
+      no_code = function(r) r.profile.code = nil; r.profile.owned = { "skin_solar_inferno" } end,
+      edited_code = function(r) r.profile.code = edit(nil, r.profile.code, 19, "zzz"); r.profile.shards = 46655; r.profile.owned = { "skin_solar_inferno" } end,
+      other_link = function(r) r.link.linkId = "aaaaaaaaaaaa"; r.profile.linkId = "aaaaaaaaaaaa" end,
+      forged_from_nothing = function(r)
+        r.profile = { linkId = r.link.linkId, accountId = r.link.accountId, name = "Mallory", issued = ISSUED, expires = ISSUED + 86400,
+          level = 99, xp = 1, xpNext = 2, wins = 0, losses = 0, draws = 0, history = {}, signed = true, check = "0a0b0c0d",
+          verified = true, kid = "t1", format = "SRP2", shards = 999999, asOf = ISSUED, owned = { "skin_solar_inferno" },
+          equipped = { skin = "skin_solar_inferno" }, events = {}, code = "SRP2.not.a.real.code" }
+      end,
+    }) do
+      local net, c, Acc = client(22, T1)
+      ok((importAsync(net, Acc, VALID2)))
+      local n, Acc2 = reloadWith(net, c, T1, mutate)
+      local v = Acc2.profileView()
+      ok(v, name .. ": still has a profile"); eq(v.verified, false, name)
+      eq(Acc2.canApplyCosmetic("skin_solar_inferno"), false, name)
+      eq(Acc2.rec().profile.code, nil, name .. ": the useless code is dropped")
+    end
+  end)
+  it("an UNVERIFIED profile keeps no code and does no signature work after a reload", function()
+    local net, c, Acc = client(23, {})
+    ok((importAsync(net, Acc, VALID2))) -- unknown kid: unverified
+    eq(Acc.rec().profile.code, nil)
+    local n, Acc2 = reloadWith(net, c, {})
+    eq(Acc2.profileView().verified, false); eq(Acc2.rec().profile.recheck, nil)
   end)
   it("old saved profiles (0.8.x / 0.9.0, no signature fields) still load, as UNVERIFIED", function()
     local net = NS.new({ seed = 10 })
