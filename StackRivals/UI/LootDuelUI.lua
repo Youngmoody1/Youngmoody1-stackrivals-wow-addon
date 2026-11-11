@@ -324,7 +324,7 @@ function UI:CreateLootDuel()
     local f = UI.lootPopup
     f.d = d
     f:Show()
-    if PlaySound and SOUNDKIT and SOUNDKIT.READY_CHECK then pcall(PlaySound, SOUNDKIT.READY_CHECK) end
+    if ns.Sound.enabled and PlaySound and SOUNDKIT and SOUNDKIT.READY_CHECK then pcall(PlaySound, SOUNDKIT.READY_CHECK) end
   end)
   LD.on("result", function(d)
     -- everyone (players and watchers) gets the same result: the sheet with the final header,
@@ -657,9 +657,13 @@ function UI:AnnounceLoot()
   if not ch then return end
   local name, link = ns.LootDuel.itemInfo(d.itemId)
   local function line(what)
+    if d.agreement == "disputed" then
+      -- my PC and the leader's PC don't show the same result: never announce mine as the result
+      return string.format("[StackRivals] Loot Duel for %s: the PCs don't agree on the result - ask the leader, or use normal loot.", what)
+    end
     if d.winner then
       local r = d.results[d.winner:lower()] or {}
-      return string.format("[StackRivals] Loot Duel for %s: %s wins (%s) of %d. Every PC replayed every run.", what, short(d.winner), T.commas(r.score or 0), #d.participants)
+      return string.format("[StackRivals] Loot Duel for %s: %s wins (%s) of %d. Checked by replay on my PC.", what, short(d.winner), T.commas(r.score or 0), #d.participants)
     elseif #d.tied > 1 then
       local n = {}
       for _, x in ipairs(d.tied) do n[#n + 1] = short(x) end

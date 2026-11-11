@@ -142,6 +142,24 @@ local function reply(sender, text)
   ns.Comm.send(text, "WHISPER", sender, nil, { low = true })
 end
 
+--[[ Invites from one player right after I declined (or let time out) their last one: no new popup and no
+  ready-check sound for a while (30 s, doubling per repeat up to 10 min), just a quiet "busy". Without it one
+  player could open popups at another without end. Challenging them myself, or accepting, clears it. ]]
+Duel.INVITE_COOLDOWN, Duel.INVITE_COOLDOWN_MAX = 30, 600
+Duel.cooldown = {} -- sender (lower case) -> { untilT, step }
+local function coolKey(name) return (ns.Comm.fullName and ns.Comm.fullName(name) or name or ""):lower() end
+local function startCooldown(name)
+  local t, k = now(), coolKey(name)
+  for n, c in pairs(Duel.cooldown) do if t > c.untilT + Duel.INVITE_COOLDOWN_MAX then Duel.cooldown[n] = nil end end
+  local c = Duel.cooldown[k]
+  local step = c and math.min(c.step * 2, Duel.INVITE_COOLDOWN_MAX) or Duel.INVITE_COOLDOWN
+  Duel.cooldown[k] = { untilT = t + step, step = step }
+end
+local function coolingDown(name)
+  local c = Duel.cooldown[coolKey(name)]
+  return c ~= nil and now() < c.untilT
+end
+
 local function remember(m, reason)
   if not m or not m.mid then return end
   Duel.closed[m.mid] = { rival = m.rival, reason = reason, at = now() }
@@ -262,6 +280,7 @@ function Duel.challenge(name, rulesetId, opts)
   if known and not P.versionAtLeast(known.addon, minV) then return false, "old" end
   if not ns.Comm.enabled then return false, "unavailable" end
   if ns.Comm.trial then return false, "trial" end
+  Duel.cooldown[coolKey(name)] = nil -- I'm asking them: their invites are welcome again
   if Duel.busy() then return false, (Duel.current and Duel.current.viewLeft) and "deciding" or "busy" end
   if ns.LootDuel and ns.LootDuel.busy() then return false, "loot" end
   if inCombat() then return false, "combat" end
@@ -287,7 +306,7 @@ local function onInvite(msg, sender)
   -- otherwise: no popup, no answer (nobody can push a "match" on you)
   if msg.quickplay and not (ns.Quickplay and ns.Quickplay.wants(msg.ruleset, sender)) then
     local cur = Duel.current
-    if not (cur and cur.mid == msg.mid) then return end
+    if not (cur and cur.mid == msg.mid and ns.Comm.same(cur.rival, sender)) then return end -- only that match's own rival
   end
   if answerClosed(msg, sender) then return end -- an invite we already declined, re-sent
   if ns.Comm.trial then
@@ -302,6 +321,7 @@ local function onInvite(msg, sender)
   if not crossed and (Duel.busy() or (ns.LootDuel and ns.LootDuel.busy())) then
     return reply(sender, P.encode("DEC", msg.mid, "busy"))
   end
+  if not crossed and not msg.quickplay and coolingDown(sender) then return reply(sender, P.encode("DEC", msg.mid, "busy")) end
   if msg.engine ~= E.ENGINE_VERSION then return reply(sender, P.encode("DEC", msg.mid, "version")) end
   if inCombat() then return reply(sender, P.encode("DEC", msg.mid, "combat")) end
   if crossed then
@@ -353,6 +373,7 @@ function Duel.decline(reason)
   remember(m, reason or "no")
   m.state = "cancelled"
   m.endReason = (reason == "timeout") and "timeout" or (reason == "cancel") and "you_cancelled" or "you_declined"
+  if wasInvite and reason ~= "cancel" then startCooldown(m.rival) end
   if wasInvite then
     -- an unanswered invite never took over the screen: just forget it (the DEC stays queued)
     if ns.DuelDiag then ns.DuelDiag.poll(m) end
@@ -400,6 +421,11 @@ function Duel.leave(why)
   local m = Duel.current
   if not m then return end
   if m.state == "invited" or m.state == "inviting" or m.state == "lobby" then return Duel.decline("cancel") end
+  if m.state == "playing" and (m.rivalForfeit == "forfeit" or m.rivalForfeit == "quit") then
+    -- the rival already forfeited: leaving now is taking the win, not a second forfeit (their PC recorded a
+    -- loss; a "draw" here would only make the result disputed and uncounted)
+    return Duel.finish(m, "rival_forfeited")
+  end
   if m.state == "playing" then
     send(m, "BYE", m.mid, "forfeit")
     m.myForfeit = true
@@ -1234,7 +1260,11 @@ function Duel.update()
   --   * otherwise (silent: they most likely lost their connection right after their run): no result.
   -- A forfeit win is labelled as one (basis "forfeit", never "replay"), and their verdict (VER) can
   -- still make it "disputed".
-  if m.rivalEnd and not haveAllChunks(m) and t - math.max(m.rivalEnd.at, m.myEndAt or 0) > Duel.LOG_WAIT then
+  -- The wait counts from the last chunk that arrived: a long log inside an instance (whispers at 0.8 per second
+  -- there) is still arriving, not withheld. A hard cap by the log's size stops a trickle from stalling forever.
+  local since = math.max(m.rivalEnd and m.rivalEnd.at or 0, m.myEndAt or 0)
+  if m.rivalEnd and not haveAllChunks(m) and t - math.max(since, m.lastChunkIn or 0) > Duel.LOG_WAIT
+    or m.rivalEnd and not haveAllChunks(m) and t - since > Duel.LOG_WAIT + (m.rivalEnd.chunks or 0) * 1.5 then
     m.noLogTalking = t - m.lastHeard < Duel.SILENT_WARN
     if m.my and (m.rivalEnd.score < m.my.score or m.noLogTalking) then return Duel.finish(m, "rival_no_log") end
     return Duel.finish(m, "unchecked")

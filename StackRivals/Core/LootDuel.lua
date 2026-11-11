@@ -1349,7 +1349,11 @@ function LD.update(t)
       for _, e in ipairs(LD.roster()) do if e.online then on[key(e.name)] = true end end
       d.gone = {}
       for _, p in ipairs(d.participants) do if not on[key(p.name)] then d.gone[key(p.name)] = true end end
+      -- only queue here: the replays run one per frame below (ten in this loop would be one long frame)
+      local was = LD.deferChecks
+      LD.deferChecks = true
       for _, p in ipairs(d.participants) do LD.verify(d, p.name) end
+      LD.deferChecks = was
       if d.state == "playing" and LD.allIn(d) then LD.finish(d) end
       if d.state == "playing" then LD.askMissing(d, t) end
     end

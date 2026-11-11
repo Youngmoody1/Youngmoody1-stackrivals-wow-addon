@@ -114,12 +114,27 @@ function R.update(t)
   end
 end
 
-local answered = {}
+--[[ Answering a comm test. A ping is only answered when it came over the group channel from someone who is in
+  my group, at most once every PING_GAP seconds, at low priority and under ONE queue key. Before 0.9.1 every
+  ping with a new id (also whispered, from anyone) queued a normal-priority answer: a player repeating pings
+  could fill another player's send queue, so that player's duel or Loot Duel result never left their PC. ]]
+R.PING_GAP = 5
+local answered, answeredN, lastAnswer = {}, 0, -99
+local GROUP = { PARTY = true, RAID = true, INSTANCE_CHAT = true }
 local function onPing(m, sender, channel)
+  if not GROUP[channel or ""] then return end
   if answered[m.id] then return end
-  answered[m.id] = true
-  local ch = ns.LootDuel and ns.LootDuel.channel and ns.LootDuel.channel()
-  if ch and ns.Comm then ns.Comm.send(P().encode("CTA", m.id, ns.VERSION or "?"), ch, nil, nil, { key = "CTA:" .. m.id }) end
+  local t = now()
+  if t - lastAnswer < R.PING_GAP then return end
+  local LD = ns.LootDuel
+  local ch = LD and LD.channel and LD.channel()
+  if not (ch and ns.Comm) then return end
+  local member = false
+  for _, e in ipairs(LD.roster()) do if ns.Comm.same(e.name, sender) then member = true; break end end
+  if not member then return end
+  if answeredN >= 16 then answered, answeredN = {}, 0 end -- bounded
+  answered[m.id], answeredN, lastAnswer = true, answeredN + 1, t
+  ns.Comm.send(P().encode("CTA", m.id, ns.VERSION or "?"), ch, nil, nil, { key = "CTA", low = true })
 end
 local function onAnswer(m, sender)
   local c = R.cur

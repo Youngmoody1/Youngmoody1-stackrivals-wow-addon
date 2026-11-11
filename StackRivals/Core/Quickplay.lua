@@ -160,7 +160,7 @@ function QP.update(t)
       emit("changed")
       return
     end
-    if t - QP.started > QP.SEARCH_MAX then
+    if not QP.started or t - QP.started > QP.SEARCH_MAX then
       QP.state, QP.note = "none", "no_opponent"
       emit("changed")
       return
@@ -181,7 +181,8 @@ function QP.update(t)
         QP.state, QP.note, QP.match = "idle", "cancelled", nil
       else
         -- they didn't accept / didn't press Ready / left: skip them a while and keep searching
-        QP.state, QP.note, QP.match = "searching", "fell_through", nil
+        -- (only if a search was really running: a match that didn't come from my search goes to idle)
+        QP.state, QP.note, QP.match = QP.started and "searching" or "idle", "fell_through", nil
         QP.lastAd = -99
       end
       emit("changed")
