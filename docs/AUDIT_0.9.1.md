@@ -99,7 +99,7 @@ and never read: dead weight, left in place because removing it changes saved dat
 
 | | Before (`d72ee1f`) | After |
 |---|---|---|
-| Automated tests (Lua 5.1 in CI) | 850 | see the CI run of the branch head |
+| Automated tests (Lua 5.1 in CI) | 850 passed | 878 passed, 0 failed (`4b04554`) |
 | New | – | `tests/test_audit.lua` (24), `tests/test_signed_import.lua` (+4) |
 
 ## 5. Open, waiting for a decision
