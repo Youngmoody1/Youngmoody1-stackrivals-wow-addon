@@ -50,6 +50,21 @@ testes, fx `TEST_LOG_CLASSIC_ERA.md` eller `TEST_LOG_FOREVER.md`.
 | C4 | Lua-fejl (`/console scriptErrors 1`) | Ingen |
 | C5 | Loot Duel uden webkonto (en anden karakter, der ikke er linket) | Virker som før |
 
+## E. Fra kvalitetsgennemgangen (`docs/AUDIT_0.9.1.md`): kun en rigtig klient kan vise det
+
+| # | Test | Forventet |
+|---|---|---|
+| E1 | Time Trial til 0:00, og tryk Space / piletaster lige efter | Karakteren hopper og bevæger sig ikke i det første sekund. Derefter starter Space et nyt spil |
+| E2 | De sidste 10 sekunder af Time Trial | Rød kant pulserer om brættet, og der er et tik på 5-4-3-2-1 |
+| E3 | Hard drop, en linje, en QUAD | Kun én lyd pr. øjeblik. De landede felter blinker kort. QUAD får et gyldent skær |
+| E4 | Settings → slå "Sound effects" fra, luk og åbn vinduet, få en duel-invitation | Helt stille |
+| E5 | Settings → "Reduce effects" | Tekster og lyde er der stadig. Ingen blink, skær eller pulserende kant |
+| E6 | Under et Classic-spil: `/sr spell`, og derefter Back | Menuen viser "Continue last run", og spillet fortsætter med samme score |
+| E7 | Duel med en spiller, hvis navn har andre bogstaver end latinske (hvis muligt) | Navnet kan læses overalt |
+| E8 | Loot Duel med vinduet i størrelse 140 % | Live-listen står ved siden af vinduet og er helt på skærmen (evt. til venstre) |
+| E9 | `/sr commtest` i en gruppe på 2–5 | Alle svarer én gang |
+| E10 | Den ene forlader en duel, derefter den anden | Den, der blev, har vundet. Begge ser samme resultat |
+
 ## D. Bagefter
 
 * `/sr report` fra hver klient i testloggen.

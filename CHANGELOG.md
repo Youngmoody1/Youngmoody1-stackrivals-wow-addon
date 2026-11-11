@@ -4,6 +4,14 @@
 
 0.9.0 Alpha is frozen on `alpha/0.9.0` (`84dbb62`). 0.9.1 is 0.9.0 plus the following.
 
+- **Quality audit** (branch `audit/0.9.1-quality`, full list in `docs/AUDIT_0.9.1.md`):
+  - multiplayer: comm-test pings can't fill another player's send queue any more (this changed duel and
+    Loot Duel results; also present in 0.9.0), no forced Quickplay match, the log wait follows progress,
+    leaving after a forfeit keeps the win, invite cooldown, honest Announce;
+  - a saved VERIFIED profile is checked again from its signed code after a reload;
+  - effects in three tiers (`UI/Fx.lua`) and a **Reduce effects** setting; one sound per moment;
+  - a solo run is never orphaned by `/sr spell`; game keys are swallowed for a second after a run ends;
+  - names in any script are readable; result text never sits behind a button; side panels stay on screen.
 - **Signature and age are two separate checks** (`Account.canApplyCosmetic`): a cosmetic from the website may only
   ever be applied from a code that is VERIFIED **and** not OUT OF DATE (older than 7 days or past its `expires`).
   A correctly signed old code unlocks nothing; the Collection tab says "VERIFIED but OUT OF DATE".
