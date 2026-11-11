@@ -388,7 +388,7 @@ function UI:RenderSpell(sess)
   -- rival
   local rp = self.spellRival
   local label = string.upper((DIFF_LABEL[sp.difficulty] or "Bot") .. " bot")
-  if sp.rivalName then label = "VS " .. string.upper(sp.rivalName):sub(1, 13) end
+  if sp.rivalName then label = "VS " .. T.cut(string.upper(sp.rivalName), 13) end
   if rp.name._s ~= label then rp.name._s = label; rp.name:SetText(label) end
   Board.renderMini(rp.board, o.game, o.game.tick < o.blackoutUntil)
   local mh = math.max(1, rp.manaTrack:GetHeight() * o.mana / S.MANA_MAX)

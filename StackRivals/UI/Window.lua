@@ -81,7 +81,7 @@ function UI:Create()
   F:EnableMouse(true)
   F:RegisterForDrag("LeftButton")
   F:SetScript("OnDragStart", function(f) f:StartMoving() end)
-  F:SetScript("OnDragStop", function(f) f:StopMovingOrSizing(); UI:SavePosition() end)
+  F:SetScript("OnDragStop", function(f) f:StopMovingOrSizing(); UI:SavePosition(); UI:PlaceSidePanels() end)
   F:Hide()
   tinsert(UISpecialFrames, "StackRivalsFrame") -- Esc closes it when no run is live
 
@@ -1174,6 +1174,28 @@ function UI:RefreshLootCard()
   end
   lc.cta:SetText(cta); lc.side:SetText(side)
   if inCombat() then lc:Disable() else lc:Enable() end
+end
+
+--- A panel beside the window (live standings, match chat): on the right, or on the left when the right
+--- side would be off screen (wide addon scale, 4:3 / 16:10 screens). Only the main window is clamped.
+function UI:PlaceSidePanel(p)
+  local F = self.frame
+  if not (p and F) then return end
+  local left = false
+  if F.GetRight and F:GetRight() and UIParent.GetWidth then
+    local sc = F:GetScale() or 1
+    local room = (UIParent:GetWidth() or 0) - F:GetRight() * sc
+    local need = (p:GetWidth() + 6) * sc
+    left = room < need and (F:GetLeft() or 0) * sc >= need
+  end
+  if p.sideLeft == left then return end
+  p.sideLeft = left
+  p:ClearAllPoints()
+  if left then p:SetPoint("TOPRIGHT", F, "TOPLEFT", -6, 0) else p:SetPoint("TOPLEFT", F, "TOPRIGHT", 6, 0) end
+end
+function UI:PlaceSidePanels()
+  if self.lootBoard and self.lootBoard:IsShown() then self:PlaceSidePanel(self.lootBoard) end
+  if self.chat and self.chat:IsShown() then self:PlaceSidePanel(self.chat) end
 end
 
 --- Stop every transient effect (callout, score pop, flashes, spell toast). Called when the run on screen

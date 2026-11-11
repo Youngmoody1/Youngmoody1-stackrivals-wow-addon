@@ -145,11 +145,39 @@ function T.text(parent, size, c, flags, layer, kind)
   local fs = parent:CreateFontString(nil, layer or "OVERLAY")
   local path = (kind == "display" and T.DISPLAY) or (kind == "italic" and T.DISPLAY_ITALIC) or T.FONT
   T.setFont(fs, path, size or T.SIZE.body, flags)
+  if path ~= T.FONT then
+    -- Chakra Petch has Latin letters only (incl. æøå, ě, ł). A name in Cyrillic, Greek, Hangul or CJK would be
+    -- blank boxes in it, so such text is shown in WoW's own font (which the client localizes) at the same size.
+    local setText, usingOwn = fs.SetText, true
+    fs.SetText = function(self, text, ...)
+      local own = not (type(text) == "string" and text:find("[\198-\244]"))
+      if own ~= usingOwn then
+        usingOwn = own
+        T.setFont(self, own and path or T.FONT, size or T.SIZE.body, flags)
+      end
+      return setText(self, text, ...)
+    end
+  end
   c = c or T.C.paper
   fs:SetTextColor(c[1], c[2], c[3], 1)
   fs:SetShadowColor(0, 0, 0, 0.85)
   fs:SetShadowOffset(1, -1)
   return fs
+end
+
+--- The first n characters of s without cutting a UTF-8 character in half (s:sub(1, n) can).
+function T.cut(s, n)
+  if #s <= n then return s end
+  s = s:sub(1, n)
+  -- drop a trailing lead byte or an unfinished 3- / 4-byte sequence
+  local i = #s
+  while i > 0 and s:byte(i) >= 128 and s:byte(i) < 192 do i = i - 1 end
+  if i > 0 and s:byte(i) >= 192 then
+    local b = s:byte(i)
+    local need = (b >= 240 and 4) or (b >= 224 and 3) or 2
+    if #s - i + 1 < need then s = s:sub(1, i - 1) end
+  end
+  return s
 end
 
 --- Display-font shortcut (headings, numbers, buttons).

@@ -124,6 +124,7 @@ function UI:CreateMatchChat()
   p.note = T.text(p, SZ.label, C.gold); p.note:SetPoint("TOPLEFT", 10, -334); p.note:SetWidth(cw); p.note:SetJustifyH("LEFT")
   p:Hide()
   self.chat = p
+  p:HookScript("OnShow", function(f) UI:PlaceSidePanel(f) end)
 
   -- folded: a small tab with the number of unread lines
   local tab = T.button(F, "Chat", 64, 24, "steel", function()

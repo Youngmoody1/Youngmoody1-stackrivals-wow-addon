@@ -367,11 +367,15 @@ function UI:CreateLootPopup()
   f:SetScript("OnUpdate", function(self)
     local d = ns.LootDuel.current
     if not d or d ~= self.d or d.state ~= "inviting" or d.myAnswer then self:Hide(); return end
+    local frac = math.max(0, 1 - (GetTime() - d.createdAt) / ns.LootDuel.INVITE_TIME)
+    self.bar:SetWidth(math.max(1, 312 * frac))
+    if frac <= 0 then self:Hide(); return end
+    local secs = math.ceil(ns.LootDuel.INVITE_TIME * frac)
+    if self.shownSecs == secs and self.shownFor == d then return end -- the texts change once a second
+    self.shownSecs, self.shownFor = secs, d
     local _, _, _, icon = ns.LootDuel.itemInfo(d.itemId)
     self.icon:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
     self.title:SetText(itemText(d))
-    local frac = math.max(0, 1 - (GetTime() - d.createdAt) / ns.LootDuel.INVITE_TIME)
-    self.bar:SetWidth(math.max(1, 312 * frac))
     local n = #(d.inviteOrder or {})
     self.sub:SetText(short(d.leader) .. "  -  " .. (d.rs == "l120" and "2:00" or "1:00") .. "  -  " .. (n > 0 and (n .. " invited, ") or "") .. "all at once\n"
       .. "Join = you accept the result. The loot master hands out the item.\n"
@@ -674,7 +678,7 @@ function UI:AnnounceLoot()
   local msg = line(link or name or ("item " .. d.itemId))
   -- WoW's chat line limit is 255: never cut a link in half (drop the link, then shorten plain text)
   if #msg > 255 then msg = line(name and name:gsub("|", "") or ("item " .. d.itemId)) end
-  if #msg > 255 then msg = msg:sub(1, 252) .. "..." end
+  if #msg > 255 then msg = T.cut(msg, 252) .. "..." end
   local send = (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
   if send then pcall(send, msg, ch) end
 end
@@ -720,6 +724,7 @@ function UI:CreateLootBoard()
   end)
   p:Hide()
   self.lootBoard = p
+  p:SetScript("OnShow", function(f) UI:PlaceSidePanel(f) end)
 end
 
 --- Fill the live board (shown while you race in a Loot Duel and the window is open). At most 4

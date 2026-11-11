@@ -553,7 +553,7 @@ function UI:RenderRival()
   local their = r.score or 0
   -- the rival's name in WoW's class colour when their card told us the class
   local rc = m.rivalCard
-  rp.name:SetText("VS " .. T.classText(rc and rc.class, string.upper(short(m.rival)):sub(1, 13)))
+  rp.name:SetText("VS " .. T.classText(rc and rc.class, T.cut(string.upper(short(m.rival)), 13)))
   rp.score:SetText(T.commas(their))
   rp.state:SetText(m.silentWarned and "no signal..." or (r.over and "finished" or "playing"))
   local c = (their > my) and C.redLight or C.steel
@@ -567,6 +567,28 @@ end
 ------------------------------------------------------------------------------------------------
 -- Result on the game-over overlay
 ------------------------------------------------------------------------------------------------
+UI.OVER_NOTE_LINES, UI.OVER_NOTE_CHARS = 4, 27 -- the result text box: 176 wide at 12 pt, 62 high
+
+--- The full explanation as a tooltip over the result text (nil: no tooltip).
+function UI:SetOverNote(full)
+  local h = self.overNoteHit
+  if not h then
+    h = CreateFrame("Frame", nil, self.over)
+    h:SetPoint("TOPLEFT", self.overDetail, "TOPLEFT", 0, 0); h:SetPoint("BOTTOMRIGHT", self.overDetail, "BOTTOMRIGHT", 0, 0)
+    h:SetScript("OnEnter", function(f)
+      if not f.full then return end
+      GameTooltip:SetOwner(f, "ANCHOR_TOP")
+      GameTooltip:SetText(f.full, 1, 1, 1, 1, true)
+      GameTooltip:Show()
+    end)
+    h:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    self.overNoteHit = h
+  end
+  h.full = full
+  h:EnableMouse(full ~= nil)
+  h:SetShown(full ~= nil)
+end
+
 function UI:ShowDuelOver(m)
   local s = ns.App.session
   self.shareGuild:Hide(); self.shareGroup:Hide(); self.shareLabel:Hide()
@@ -576,9 +598,11 @@ function UI:ShowDuelOver(m)
     self.overTitle:SetTextColor(C.paper[1], C.paper[2], C.paper[3])
     self.overScore:SetText(T.commas(s and s.state.score or 0))
     local r = m.rival_
-    self.overBadge:SetText(short(m.rival) .. ": " .. T.commas(r.score or 0) .. (r.over and "" or "  (playing)"))
+    -- the badge is one line of the board's width: the name and the score only ("still playing" goes below)
+    self.overBadge:SetText(short(m.rival) .. ": " .. T.commas(r.score or 0))
     self.overBadge:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
-    self.overDetail:SetText(m.silentWarned and "No answer from your rival..." or "Waiting for your rival to finish.")
+    self.overDetail:SetText(m.silentWarned and "No answer from your rival..." or (r.over and "Your rival has finished. Checking the result..." or "Your rival is still playing."))
+    self:SetOverNote(nil)
     self.againBtn:SetLabel("Leave duel")
   else
     local o = outcomeOf(m)
@@ -597,14 +621,28 @@ function UI:ShowDuelOver(m)
     elseif m.spell and m.endReason == "check_failed" then
       note = "Your rival's spells or moves failed the replay check: their result is rejected."
     end
-    if m.basis and m.basis ~= "replay" and m.basis ~= "void" and BASIS[m.basis] then note = note .. "\n" .. BASIS[m.basis] end
-    if m.noClock then note = note .. "\nYour rival's StackRivals has no shared pauses or clock check (older version)." end
-    note = note .. "\n" .. (AGREEMENT[m.agreement] or "Confirming with your rival...")
+    local parts = { note }
+    if m.basis and m.basis ~= "replay" and m.basis ~= "void" and BASIS[m.basis] then parts[#parts + 1] = BASIS[m.basis] end
+    if m.noClock then parts[#parts + 1] = "Your rival's StackRivals has no shared pauses or clock check (older version)." end
+    parts[#parts + 1] = AGREEMENT[m.agreement] or "Confirming with your rival..."
     if m.agreement == "disputed" then
       self.overTitle:SetText("DISPUTED")
       self.overTitle:SetTextColor(C.label[1], C.label[2], C.label[3])
     end
-    self.overDetail:SetText(note)
+    -- The space above the Rematch button holds about four lines. The last line (do both PCs agree?) is the
+    -- one that must always be readable, so the middle goes first, then the reason is cut to its first
+    -- sentence; whatever was left out is in the tooltip (hover the text).
+    local full = table.concat(parts, "\n")
+    local function lines() local n = 0 for _, p in ipairs(parts) do n = n + math.max(1, math.ceil(#p / UI.OVER_NOTE_CHARS)) end return n end
+    while lines() > UI.OVER_NOTE_LINES and #parts > 2 do table.remove(parts, #parts - 1) end
+    if lines() > UI.OVER_NOTE_LINES then
+      parts[1] = (parts[1]:match("^(.-[%.:])%s") or parts[1])
+      local room = (UI.OVER_NOTE_LINES - math.ceil(#parts[#parts] / UI.OVER_NOTE_CHARS)) * UI.OVER_NOTE_CHARS
+      if #parts[1] > room then parts[1] = T.cut(parts[1], math.max(20, room - 3)) .. "..." end
+    end
+    local shown = table.concat(parts, "\n")
+    self.overDetail:SetText(shown)
+    self:SetOverNote(shown ~= full and full or nil)
     self.againBtn:SetLabel("Rematch")
     if m.outcome == "win" then self.badgePulse:Stop(); self.badgePulse:Play() end
   end

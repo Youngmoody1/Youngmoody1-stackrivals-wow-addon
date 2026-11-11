@@ -134,6 +134,7 @@ local function newFrame(ftype, name, parent)
     GetScript = function(o, ev) return o._scripts[ev] end,
     -- M.noEditBoxKeyDown = true models a client whose edit boxes have no OnKeyDown script
     HasScript = function(o, ev) return not (M.noEditBoxKeyDown and o._kind == "EditBox" and ev == "OnKeyDown") end,
+    GetLeft = function(o) return o._left end, GetRight = function(o) return o._right end, -- set by a test (no geometry here)
     HookScript = function(o, ev, fn) local old = o._scripts[ev]; o._scripts[ev] = function(...) if old then old(...) end fn(...) end end,
     SetFrameStrata = function() end,
     SetFrameLevel = function(o, l) o._level = l end,

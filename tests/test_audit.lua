@@ -160,6 +160,61 @@ describe("audit: feedback", function()
   end)
 end)
 
+describe("audit: text", function()
+  it("names outside Latin (Cyrillic, Hangul, CJK) are shown in WoW's own font, never in the Latin-only display font", function()
+    local net, c, ns = solo(40)
+    c.env.SlashCmdList.STACKRIVALS(""); net.step(2)
+    local T = ns.T
+    local fs = T.display(ns.UI.frame, 15)
+    local own = fs:GetFont()
+    fs:SetText("Alice"); eq(fs:GetFont(), own)
+    fs:SetText("Søren"); eq(fs:GetFont(), own, "æøå are in the display font")
+    fs:SetText("\208\144\208\187\208\184\209\129\208\176"); eq(fs:GetFont(), T.FONT, "Cyrillic")
+    fs:SetText("\237\149\156\234\184\128"); eq(fs:GetFont(), T.FONT, "Hangul")
+    fs:SetText("Bob"); eq(fs:GetFont(), own, "and back")
+    -- a cut never splits a character
+    eq(T.cut("\208\144\208\187\208\184", 3), "\208\144")
+    eq(T.cut("abc\237\149\156", 5), "abc")
+    eq(T.cut("abcdef", 4), "abcd"); eq(T.cut("ab", 4), "ab")
+  end)
+  it("the side panels (live standings, match chat) flip to the left when the right side is off screen", function()
+    local net, c, ns = solo(42)
+    c.env.SlashCmdList.STACKRIVALS(""); net.step(2)
+    local UI, F = ns.UI, ns.UI.frame
+    local p = c.env.CreateFrame("Frame", nil, F); p:SetSize(200, 300)
+    local W = c.env.UIParent:GetWidth()
+    F._left, F._right = (W - 500) / F:GetScale(), (W - 20) / F:GetScale() -- 20 units of room on the right
+    UI:PlaceSidePanel(p); eq(p.sideLeft, true)
+    F._left, F._right = 100 / F:GetScale(), 600 / F:GetScale()             -- plenty of room
+    UI:PlaceSidePanel(p); eq(p.sideLeft, false)
+    F._left, F._right = 10 / F:GetScale(), (W - 20) / F:GetScale()         -- no room on either side: stay right
+    UI:PlaceSidePanel(p); eq(p.sideLeft, false)
+  end)
+  it("duel result: the explanation never runs behind the Rematch button; the agreement line always shows", function()
+    local net, a, b = pair(41)
+    startDuel(net, a, b)
+    net.step(60 * 5); b.ns.Duel.leave(); net.step(60 * 3)
+    a.ns.App.session:finish("time"); net.step(60 * 3)
+    local m, UI = a.ns.Duel.current, a.ns.UI
+    eq(m.state, "done")
+    local L = dofile(testdir .. "/layout.lua")
+    for _, case in ipairs({
+      { endReason = "check_failed", check = { reasons = { "pause_limit" } }, agreement = "disputed", noClock = true, basis = "forfeit" },
+      { endReason = "rival_no_log", agreement = "unconfirmed", basis = "forfeit" },
+      { endReason = "checked", agreement = "agreed", basis = "replay" },
+      { endReason = "timeout", agreement = "unconfirmed", noClock = true },
+    }) do
+      for k, v in pairs(case) do m[k] = v end
+      UI:ShowDuelOver(m)
+      local lines = L.textLines(UI.overDetail)
+      ok(#lines <= 4, case.endReason .. ": " .. #lines .. " lines")
+      local last = lines[#lines] or ""
+      ok(#last > 0, "agreement line shown")
+      m.noClock, m.check = nil, nil
+    end
+  end)
+end)
+
 describe("audit: multiplayer", function()
   it("comm-test pings can't fill another player's send queue (whispered, from outside the group, or repeated)", function()
     local net = NS.new({ seed = 21 })
