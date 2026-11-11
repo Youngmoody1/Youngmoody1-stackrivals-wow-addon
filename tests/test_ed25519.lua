@@ -191,10 +191,14 @@ describe("signed codes in the account flow (simulated client)", function()
     ok(Acc.import(sigCase(V2, "sig", "valid")))
     local saved = c.ns.Account.sanitize(c.ns.db.accounts)
     local who = next(saved)
-    eq(saved[who].profile.verified, true); eq(saved[who].profile.kid, "t1")
+    -- never VERIFIED from the file's own say-so: marked for the signature re-check (Account.reverify; the
+    -- full reload is in tests/test_signed_import.lua), and only while the key is still shipped
+    eq(saved[who].profile.verified, nil); eq(saved[who].profile.recheck, true); eq(saved[who].profile.kid, "t1")
+    ok(saved[who].profile.code ~= nil, "the signed code is kept for the re-check")
     c.ns.SnapshotSig.KEYS.t1 = nil
     local again = c.ns.Account.sanitize(c.ns.db.accounts)
     eq(again[who].profile.verified, nil, "key retired: not verified after reload")
+    eq(again[who].profile.recheck, nil, "and no re-check"); eq(again[who].profile.code, nil)
     eq(Acc.isVerified(again[who].profile), false)
   end)
 end)
