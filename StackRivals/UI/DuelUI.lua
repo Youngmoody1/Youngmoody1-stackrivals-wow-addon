@@ -644,7 +644,10 @@ function UI:ShowDuelOver(m)
     self.overDetail:SetText(shown)
     self:SetOverNote(shown ~= full and full or nil)
     self.againBtn:SetLabel("Rematch")
-    if m.outcome == "win" then self.badgePulse:Stop(); self.badgePulse:Play() end
+    if m.outcome == "win" then
+      self.badgePulse:Stop(); self.badgePulse:Play()
+      if self.duelFxFor ~= m.mid then self.duelFxFor = m.mid; self:FxResult("win") end -- once per match
+    end
   end
 end
 

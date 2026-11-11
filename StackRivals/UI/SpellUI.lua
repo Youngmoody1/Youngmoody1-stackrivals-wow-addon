@@ -476,7 +476,10 @@ function UI:OnSpellEvent(ev)
     if who == "me" then
       local cells = (h.spell == "bomb" and sess and sess.spell) and sess.spell.lastBombCells or nil
       self:SpellFlash(h.spell, cells, not h.fromSelf)
-      if h.spell == "garbage" or h.spell == "bomb" then self.thump:Stop(); self.thump:Play() end
+      if h.spell == "garbage" or h.spell == "bomb" then
+        self.thump:Stop(); self.thump:Play()
+        if not h.fromSelf then ns.Sound.play("harddrop") end -- the impact is heard, not only seen
+      end
     end
   elseif k == "castfail" then
     local why = ev.b
@@ -533,7 +536,7 @@ function UI:ShowSpellOver(sess)
     why = "You both topped out on the same tick: the higher score decides."
   end
   self.overDetail:SetText(why .. rec)
-  if r.outcome == "win" then self.badgePulse:Stop(); self.badgePulse:Play() end
+  if r.outcome == "win" then self.badgePulse:Stop(); self.badgePulse:Play(); self:FxResult("win") end
 end
 
 ------------------------------------------------------------------------------------------------

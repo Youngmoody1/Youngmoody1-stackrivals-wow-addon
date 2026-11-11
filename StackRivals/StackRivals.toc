@@ -31,6 +31,7 @@ UI\Theme.lua
 Core\Sound.lua
 UI\Board.lua
 UI\Window.lua
+UI\Fx.lua
 UI\Minimap.lua
 Net\Comm.lua
 Net\BNet.lua

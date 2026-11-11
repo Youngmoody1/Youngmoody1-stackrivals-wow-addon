@@ -535,8 +535,9 @@ function UI:CreateSettings()
   section("WINDOW", R, -50)
   self.toggles = {
     toggle("Sound effects", "sound", L, -66, function(v) ns.Sound.enabled = v end),
-    toggle("Show ghost piece", "ghost", L, -92, function() UI.dirty = true end),
-    toggle("Loot Duel group button", "lootButton", L, -118, function() if ns.LootButton then ns.LootButton:Update() end end),
+    toggle("Show ghost piece", "ghost", L, -90, function() UI.dirty = true end),
+    toggle("Loot Duel group button", "lootButton", L, -114, function() if ns.LootButton then ns.LootButton:Update() end end),
+    toggle("Reduce effects", "reduceEffects", L, -138, function() UI:ClearFx() end),
     toggle("Hide window in combat", "hideInCombat", R, -66),
     toggle("Hide minimap button", "minimapHide", R, -92, function() if ns.Minimap then ns.Minimap:Update() end end),
   }
@@ -892,6 +893,7 @@ function UI:Callout(main, sub, color, points, tier, top)
 end
 
 function UI:OnEvent(ev)
+  self:FxEvent(ev)
   if self.OnSpellEvent and self:OnSpellEvent(ev) then return end
   ns.Sound.forEvent(ev)
   local k = ev.kind
@@ -965,7 +967,11 @@ function UI:Render()
   if left then
     setStr(self.timeLabel, "TIME LEFT")
     local secs = math.ceil(left / 60)
-    if secs <= 5 and secs > 0 and self.timeText._n ~= secs then self.timePulse:Stop(); self.timePulse:Play() end
+    if secs <= 5 and secs > 0 and self.timeText._n ~= secs then
+      self.timePulse:Stop(); self.timePulse:Play()
+      if sess.phase == "playing" then ns.Sound.play("count") end -- 5..1: heard, not only seen beside the board
+    end
+    self:FxDanger(left < 600 and sess.phase == "playing")
     setNum(self.timeText, secs, T.clock)
     local urgent = left < 600
     if self.timeUrgent ~= urgent then
@@ -1206,6 +1212,7 @@ function UI:ClearFx()
   self.field.flash:SetAlpha(0)
   self.rimAnim:Stop()
   self.clearCalloutAt = nil
+  if self.FxClear then self:FxClear() end
   if self.spellFxAnim then self.spellFxAnim:Stop(); self.spellFx:SetAlpha(0) end
   if self.spellToastAnim then self.spellToastAnim:Stop(); self.spellToastBox:SetAlpha(0); self.spellToastUntil = 0 end
 end
@@ -1244,10 +1251,10 @@ function UI:ShowOver(info)
     self.overBadge:SetText("RESULT CODE READY")
   elseif info.newBest then
     self.overBadge:SetText(info.prevBest > 0 and ("NEW BEST  +" .. T.commas(s.score - info.prevBest)) or "NEW BEST")
-    self.badgePulse:Play()
+    self.badgePulse:Play(); self:FxResult("best")
   elseif info.newTodayBest then
     self.overBadge:SetText("BEST TODAY")
-    self.badgePulse:Play()
+    self.badgePulse:Play(); self:FxResult("best")
   else
     self.overBadge:SetText("Best " .. T.commas(ns.App:BestFor(info.mode)))
   end

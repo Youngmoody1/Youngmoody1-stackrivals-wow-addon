@@ -332,6 +332,11 @@ function UI:CreateLootDuel()
     if UI.frame and UI.frame:IsShown() then UI:ShowSheet("loot") end
     if ns.App and ns.App.Print and not d.printed then
       d.printed = true
+      -- the shared moment of the addon gets a sound: the winner's fanfare on the winner's PC, a short one for
+      -- the others (once per Loot Duel; follows the Sound effects setting)
+      local mine = d.winner and ns.Comm.same(d.winner, ns.Comm.me())
+      ns.Sound.play(mine and "record" or "levelup")
+      if mine and UI.frame and UI.frame:IsShown() and UI.over:IsShown() then UI:FxResult("win") end
       local item = itemText(d)
       local line = d.winner and ("Loot Duel for " .. item .. ": " .. short(d.winner) .. " wins (replay-checked). The loot master hands out the item.")
         or (#d.tied > 1 and ("Loot Duel for " .. item .. ": a tie - roll off.")) or ("Loot Duel for " .. item .. ": no checked result - use your normal loot rules.")

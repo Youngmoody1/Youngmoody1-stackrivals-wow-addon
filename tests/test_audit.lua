@@ -160,6 +160,61 @@ describe("audit: feedback", function()
   end)
 end)
 
+describe("audit: effect tiers (UI/Fx.lua)", function()
+  local function playing(c, name) return c.ns.UI.fx[name] and c.ns.UI.fx[name]:IsPlaying() end
+  it("small: a hard drop flashes the four cells the piece landed on", function()
+    local net, c, ns = solo(50)
+    c.env.SlashCmdList.STACKRIVALS("classic"); net.step(185)
+    local s = ns.App.session
+    local a = s.state.active
+    local gy = ns.Engine.ghostY(s.state)
+    key(c, "SPACE"); net.step(1)
+    local fx, lit = ns.UI.fx, 0
+    for _, slot in ipairs(fx.lock) do if slot.g:IsPlaying() then lit = lit + 1 end end
+    eq(lit, 4)
+    ok(gy ~= nil and a ~= nil)
+  end)
+  it("big: QUAD and BACK-TO-BACK get the glow burst; a single doesn't", function()
+    local net, c, ns = solo(51)
+    c.env.SlashCmdList.STACKRIVALS("classic"); net.step(185)
+    ns.UI:OnEvent({ kind = "clear", a = 1, b = { lines = 1, points = 100, combo = 0 } })
+    ok(not playing(c, "burstAnim"), "single: no burst")
+    ns.UI:OnEvent({ kind = "clear", a = 4, b = { lines = 4, points = 800, combo = 0 } })
+    ok(playing(c, "burstAnim"), "quad: burst")
+  end)
+  it("medium: the last 10 seconds of a timed run pulse the rim and tick 5..1; not while paused; stops at the end", function()
+    local net, c, ns = solo(52)
+    c.env.SlashCmdList.STACKRIVALS("blitz"); net.step(185)
+    local s = ns.App.session
+    ok(not ns.UI.fx.dangerOn)
+    s.state.tick = s.mode.limitTicks - 9 * 60 -- 9 s left
+    net.step(2)
+    eq(ns.UI.fx.dangerOn, true)
+    ns.App:Pause("manual"); net.step(2)
+    eq(ns.UI.fx.dangerOn, false, "not while paused")
+    ns.App:Resume(); for _ = 1, 300 do net.step(1); if s.phase == "playing" then break end end
+    c.M.sounds = {}
+    s.state.tick = s.mode.limitTicks - 4 * 60 - 30
+    net.step(60 * 3)
+    ok(count(sounds(c), "count") >= 2, table.concat(sounds(c), ","))
+    s:finish("time"); net.step(2)
+    eq(ns.UI.fx.dangerOn, false, "off at the end")
+  end)
+  it("Reduce effects: texts and sounds stay, flashes / bursts / the pulsing rim don't play", function()
+    local net, c, ns = solo(53)
+    ns.db.settings.reduceEffects = true
+    c.env.SlashCmdList.STACKRIVALS("classic"); net.step(185)
+    key(c, "SPACE"); net.step(1)
+    ns.UI:OnEvent({ kind = "clear", a = 4, b = { lines = 4, points = 800, combo = 0 } })
+    eq(ns.UI.callout:GetText(), "QUAD")
+    ok(not ns.UI.fx.ready or not ns.UI.fx.burstAnim:IsPlaying())
+    ns.UI:FxDanger(true); eq(ns.UI.fx.dangerOn or false, false)
+    -- the setting survives a reload and old saves get the default
+    eq(ns.DB.sanitize({ settings = { reduceEffects = true } }).settings.reduceEffects, true)
+    eq(ns.DB.sanitize({}).settings.reduceEffects, false)
+  end)
+end)
+
 describe("audit: text", function()
   it("names outside Latin (Cyrillic, Hangul, CJK) are shown in WoW's own font, never in the Latin-only display font", function()
     local net, c, ns = solo(40)

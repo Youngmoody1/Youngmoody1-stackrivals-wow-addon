@@ -190,8 +190,10 @@ local function stepOnce(self)
     local a = actions[i]
     local bHoldUsed = s.holdUsed
     local bRot = s.active and s.active.rotation
+    local drop -- where the piece lands (display only: the landing flash)
+    if a == "hardDrop" and s.active then drop = { id = s.active.id, rotation = s.active.rotation, x = s.active.x, y = E.ghostY(s) } end
     if E.applyInput(s, a) then
-      if a == "hardDrop" then self:emit("harddrop")
+      if a == "hardDrop" then self:emit("harddrop", nil, drop)
       elseif a == "rotateCW" or a == "rotateCCW" then
         if not (s.active and bRot ~= nil and s.active.rotation == bRot) then self:emit("rotate") end -- a blocked turn is silent
       elseif a == "hold" and s.holdUsed and not bHoldUsed then self:emit("hold") end

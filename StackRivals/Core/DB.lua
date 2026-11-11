@@ -36,7 +36,7 @@ DB.SPELL_DIFFICULTIES = { "rookie", "challenger", "contender", "elite", "rival" 
 DB.SPELL_RULES = 2 -- vs-Bot win rule of the counted W/L/D (2 = first to top out loses)
 
 local function defaultSettings()
-  return { sound = true, ghost = true, hideInCombat = true, scale = 1.0, minimapHide = false, minimapAngle = 215, lootButton = true }
+  return { sound = true, ghost = true, hideInCombat = true, scale = 1.0, minimapHide = false, minimapAngle = 215, lootButton = true, reduceEffects = false }
 end
 
 local function emptyRecord()
@@ -87,6 +87,7 @@ function DB.sanitize(raw)
   local s, rs = defaultSettings(), (type(raw.settings) == "table") and raw.settings or {}
   s.sound = bool(rs.sound, s.sound)
   s.ghost = bool(rs.ghost, s.ghost)
+  s.reduceEffects = bool(rs.reduceEffects, s.reduceEffects)
   s.hideInCombat = bool(rs.hideInCombat, s.hideInCombat)
   s.scale = num(rs.scale, s.scale, 0.7, 1.4)
   s.minimapHide = bool(rs.minimapHide, s.minimapHide)
