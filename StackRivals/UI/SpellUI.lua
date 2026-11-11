@@ -440,7 +440,7 @@ function UI:SpellFlash(spell, bombCells, fromRival)
   else
     tex:SetAllPoints()
   end
-  self.spellFxAnim:Stop(); self.spellFx:SetAlpha(0.4); self.spellFxAnim:Play()
+  self.spellFxAnim:Stop(); self.spellFx:SetAlpha(0); self.spellFxAnim:Play() -- base alpha stays 0: can't stick if the window hides
 end
 
 function UI:SpellToast(text, color)
@@ -529,7 +529,9 @@ function UI:ShowSpellOver(sess)
   local st = ns.db.spell.stats[sp.difficulty]
   local rec = st and string.format("\nvs %s: %d won, %d lost", DIFF_LABEL[sp.difficulty], st.wins, st.losses) or ""
   local why = REASON[r.reason] or ""
-  if r.reason == "topout" and r.outcome ~= "loss" then why = "You both topped out on the same tick: the higher score decides." end
+  if (r.reason == "topout" and r.outcome ~= "loss") or (r.reason == "decided" and r.outcome ~= "win") then
+    why = "You both topped out on the same tick: the higher score decides."
+  end
   self.overDetail:SetText(why .. rec)
   if r.outcome == "win" then self.badgePulse:Stop(); self.badgePulse:Play() end
 end

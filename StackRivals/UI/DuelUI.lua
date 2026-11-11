@@ -641,7 +641,7 @@ function UI:CreateDuel()
     f.title:SetText((m.rematch and "Rematch from " or "Duel from ") .. short(m.rival))
     f.left = nil
     f:Show()
-    if PlaySound and SOUNDKIT and SOUNDKIT.READY_CHECK then pcall(PlaySound, SOUNDKIT.READY_CHECK) end
+    if ns.Sound.enabled and PlaySound and SOUNDKIT and SOUNDKIT.READY_CHECK then pcall(PlaySound, SOUNDKIT.READY_CHECK) end
   end)
   D.on("score", function() UI:RenderRival(); if UI.over:IsShown() then local m = D.current; if m then UI:ShowDuelOver(m) end end end)
   D.on("changed", function(m)
@@ -661,6 +661,6 @@ function UI:CreateDuel()
   D.on("result", function(m)
     local o = outcomeOf(m)
     ns.App:Print(string.format("Duel vs %s: %s  (%s - %s). %s", short(m.rival), o[1], T.commas(m.myScore or 0), T.commas(m.theirScore or 0), REASON[m.endReason] or ""))
-    if m.outcome == "win" then ns.Sound.play("record") end
+    ns.Sound.play(m.outcome == "win" and "record" or m.outcome == "loss" and "gameover" or "go")
   end)
 end

@@ -150,7 +150,7 @@ function UI:CreateQuickplay()
       if s:IsShown() then s:Hide() end
       UI.qpNote = nil
       if UI.frame and not UI.frame:IsShown() and not (UI.inCombat() and ns.db.settings.hideInCombat) then UI.frame:Show() end
-      if PlaySound and SOUNDKIT and SOUNDKIT.READY_CHECK then pcall(PlaySound, SOUNDKIT.READY_CHECK) end
+      if ns.Sound.enabled and PlaySound and SOUNDKIT and SOUNDKIT.READY_CHECK then pcall(PlaySound, SOUNDKIT.READY_CHECK) end
     end
     UI:RefreshQuickplay()
     UI:RefreshQuickplayBar()

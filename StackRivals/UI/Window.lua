@@ -45,6 +45,7 @@ local function setStr(fs, s)
 end
 
 local function inCombat()
+  if UI.combatNow then return true end
   if InCombatLockdown and InCombatLockdown() then return true end
   if UnitAffectingCombat then
     local v = UnitAffectingCombat("player")
@@ -320,7 +321,7 @@ function UI:CreateOverlays()
   self.pauseReason:SetWidth(172)
   self.resumeBtn = T.button(pause, "Resume", 164, 32, "primary", function() ns.App:Resume() end)
   self.resumeBtn:SetPoint("CENTER", 0, 4)
-  local rs = T.button(pause, "Restart", 164, 28, "frame", function() ns.App:Start(ns.App.session and ns.App.session.mode.key or "classic") end)
+  local rs = T.button(pause, "Restart", 164, 28, "frame", function() UI:PlayAgain() end) -- the same mode; a web challenge restarts as that challenge
   rs:SetPoint("TOP", self.resumeBtn, "BOTTOM", 0, -10)
   self.restartBtn = rs
   local qm = T.button(pause, "Quit to menu", 164, 28, "frame", function()
@@ -683,11 +684,16 @@ function UI:OnKeyDown(f, key)
   end
   local sess = ns.App.session
   if sess and sess.phase == "over" and not ns.App.inMenu and not self:SheetOpen() then
+    if self.overReadyAt then
+      -- grace second: a game key pressed just after the end is swallowed; anything else is WoW's
+      setPropagate(f, DB.actionForKey(ns.db, key) == nil)
+      return
+    end
     -- only the hard-drop key (play again) is ours; everything else goes to WoW
     -- and only while the cursor is on the window: Space must not be stolen from a player who moved on
     if DB.actionForKey(ns.db, key) == "hardDrop" and not self.overReadyAt and not inCombat() and self.frame:IsMouseOver() then
       setPropagate(f, false)
-      if sess.duel then UI:PlayAgain() else ns.App:Start(sess.mode.key) end
+      UI:PlayAgain()
     else
       setPropagate(f, true)
     end
@@ -742,10 +748,11 @@ function UI:OnShow()
   self:RefreshMenu()
   self.dirty = true
   self:RefreshPhase()
-  if PlaySound and SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPEN then pcall(PlaySound, SOUNDKIT.IG_MAINMENU_OPEN) end
+  if ns.Sound.enabled and PlaySound and SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPEN then pcall(PlaySound, SOUNDKIT.IG_MAINMENU_OPEN) end
 end
 
 function UI:OnHide()
+  self:ClearFx()
   self.overListenUntil = 0 -- after closing the window, "play again" is only by click
   if self.settings and self.settings:IsShown() then self.settings:Hide() end
   if self.help then self.help:Hide(); self.records:Hide() end
@@ -829,7 +836,9 @@ function UI:OnUpdate(elapsed)
   if sess then
     if (sess:isActive() or (sess.spell and sess.spell.settling)) and sess:update(elapsed) then self.dirty = true end
     if #sess.events > 0 then
+      ns.Sound.begin()
       for _, ev in ipairs(sess:takeEvents()) do self:OnEvent(ev) end
+      ns.Sound.flush()
     end
   end
   local now = GetTime()
@@ -898,11 +907,18 @@ function UI:OnEvent(ev)
     local tier = quad and "huge" or (ev.a == 1 and "soft" or "big")
     self:Callout(CLEAR_WORD[ev.a] or "CLEAR", sub, quad and C.gold or (ev.a == 1 and C.body or C.paper), c.points, tier,
       c.backToBack and "BACK-TO-BACK" or nil)
+    self.clearCalloutAt = GetTime()
     self.scorePulse:Stop(); self.scorePulse:Play()
     if quad then self.rimAnim:Stop(); self.rimAnim:Play() end
   elseif k == "level" then
-    self.callout2:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
-    self:Callout("LEVEL " .. ev.a, "SPEED UP", C.steel, nil, "soft")
+    if self.clearCalloutAt == GetTime() then
+      -- the clear that reached the level is the bigger news: its callout stays, the level goes on the top line
+      local top = self.calloutTop:GetText()
+      self.calloutTop:SetText(((top and top ~= "") and (top .. "  -  ") or "") .. "LEVEL " .. ev.a)
+    else
+      self.callout2:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
+      self:Callout("LEVEL " .. ev.a, "SPEED UP", C.steel, nil, "soft")
+    end
   elseif k == "harddrop" then
     self.thump:Stop(); self.thump:Play()
   elseif k == "count" or k == "go" then
@@ -926,7 +942,7 @@ function UI:Render()
     setStr(self.bestText, "-")
     Board.renderPreview(self.holdPreview, nil)
     for _, p in ipairs(self.nextPreviews) do Board.renderPreview(p, nil) end
-    for _, c in ipairs(self.field.cells) do c.base:SetColorTexture(C.cell[1], C.cell[2], C.cell[3], 1); c.hi:Hide(); c.lo:Hide(); c.value = 0 end
+    for _, c in ipairs(self.field.cells) do c.base:SetColorTexture(C.cell[1], C.cell[2], C.cell[3], 1); c.hi:Hide(); c.lo:Hide(); c.gl:Hide(); c.gr:Hide(); c.ghost = false; c.value = -1 end
     return
   end
   local s = sess.state
@@ -996,6 +1012,7 @@ function UI:RefreshPhase()
   local sess = App.session
   local phase = sess and sess.phase or "menu"
   if App.inMenu then phase = "menu" end
+  if self.fxSession ~= sess then self.fxSession = sess; self:ClearFx() end -- another run (or none): no leftover effects
   if phase == "menu" and not self.menu:IsShown() then self.menu:Show(); self.menuFade:Play() end
   if phase ~= "menu" then self.menu:Hide() end
   if phase == "paused" and not self.pause:IsShown() then self.pause:Show(); self.pauseFade:Play() end
@@ -1034,7 +1051,7 @@ function UI:RefreshPhase()
     elseif waitRival then self.resumeBtn:Disable(); self.resumeBtn:SetLabel("Waiting for rival...")
     else self.resumeBtn:Enable(); self.resumeBtn:SetLabel("Resume") end
     local duel = sess.duel ~= nil
-    self.restartBtn:SetShown(not duel)
+    self.restartBtn:SetShown(not duel and not sess.loot)
     if not (self.forfeitArmedAt and GetTime() - self.forfeitArmedAt < 3) then
       self.quitBtn:SetLabel(duel and "Forfeit duel" or "Quit to menu")
     end
@@ -1048,12 +1065,16 @@ function UI:RefreshPhase()
   -- normal WoW key again, so a player who walks away can jump).
   local overListen = phase == "over" and quiet and not self.overReadyAt
     and (self.overListenUntil or 0) > GetTime()
-  if sess and sess.duel then overListen = false end -- a duel needs a deliberate click
+  if sess and (sess.duel or sess.loot) then overListen = false end -- a duel needs a deliberate click; a Loot Duel is one run
+  -- The second after a run ends: the keyboard stays ours and game keys are swallowed (OnKeyDown), so a key
+  -- pressed for the game a moment too late doesn't move the character or fire an action bar button.
+  local overGrace = phase == "over" and quiet and self.overReadyAt ~= nil
+  if phase ~= "countdown" and phase ~= "playing" then self.down = {} end -- a key released while chat had focus
   if phase == "over" and self.againHint then
-    self.againHint:SetText((sess and sess.duel) and "" or ("or press " .. T.keyName(ns.db.bindings.hardDrop)))
+    self.againHint:SetText((sess and (sess.duel or sess.loot)) and "" or ("or press " .. T.keyName(ns.db.bindings.hardDrop)))
     self.againHint:SetAlpha(overListen and 1 or 0)
   end
-  if not self.binding then self:SetKeyboard((live or pausedListen or overListen) and self.frame:IsShown()) end
+  if not self.binding then self:SetKeyboard((live or pausedListen or overListen or overGrace) and self.frame:IsShown()) end
   self.dirty = true
 end
 
@@ -1155,16 +1176,27 @@ function UI:RefreshLootCard()
   if inCombat() then lc:Disable() else lc:Enable() end
 end
 
+--- Stop every transient effect (callout, score pop, flashes, spell toast). Called when the run on screen
+--- changes or ends and when the window hides, so nothing from one run plays over the next.
+function UI:ClearFx()
+  self.calloutAnim:Stop(); self.calloutSoft:Stop(); self.calloutBox:SetAlpha(0)
+  self.scorePopAnim:Stop(); self.scorePopBox:SetAlpha(0)
+  self.field.flash:SetAlpha(0)
+  self.rimAnim:Stop()
+  self.clearCalloutAt = nil
+  if self.spellFxAnim then self.spellFxAnim:Stop(); self.spellFx:SetAlpha(0) end
+  if self.spellToastAnim then self.spellToastAnim:Stop(); self.spellToastBox:SetAlpha(0); self.spellToastUntil = 0 end
+end
+
 function UI:ShowOver(info)
   local s = info.state
   -- a callout from the last line clear must not sit behind the result
-  self.calloutAnim:Stop(); self.calloutSoft:Stop(); self.calloutBox:SetAlpha(0)
-  self.scorePopAnim:Stop(); self.scorePopBox:SetAlpha(0)
+  self:ClearFx()
   self.overBadge:SetTextColor(C.gold[1], C.gold[2], C.gold[3])
   self.overTitle:SetTextColor(C.paper[1], C.paper[2], C.paper[3])
   self.againBtn:SetLabel("Play again")
   if info.duel then
-    self.overReadyAt, self.overListenUntil = nil, 0
+    self.overReadyAt, self.overListenUntil = GetTime() + 1.0, 0
     self.badgePulse:Stop()
     self:ShowDuelOver(info.duel)
     self.overFade:Play()
@@ -1200,7 +1232,7 @@ function UI:ShowOver(info)
   local c = s.clears
   local rankTxt = info.rank and ("#" .. info.rank .. " in your top 5  -  ") or ""
   local quads = (c.quad > 0) and string.format("  -  %d %s", c.quad, c.quad == 1 and "quad" or "quads") or ""
-  self.overDetail:SetText(info.loot and string.format("%d lines  -  level %d%s\nEvery PC replays every run. The result opens when all are in.", s.lines, s.level, quads)
+  self.overDetail:SetText(info.loot and string.format("%d lines  -  level %d%s\nThe best runs are replayed on every PC. The result opens when all are in.", s.lines, s.level, quads)
     or info.challenge and string.format("%d lines  -  level %d%s\nCopy it from Account > Sync and paste it on stackrivals.io.", s.lines, s.level, quads)
     or string.format("%d lines  -  level %d%s\n%s%s", s.lines, s.level, quads, rankTxt, info.modeName))
   local g, p = IsInGuild and IsInGuild() or false, IsInGroup and IsInGroup() or false
@@ -1225,7 +1257,8 @@ end
 function UI:PlayAgain()
   local s = ns.App.session
   if s and s.challenge and ns.App.lastChallenge then ns.App:StartChallenge(ns.App.lastChallenge); return end
-  ns.App:Start(ns.App.lastMode or "classic")
+  if s and s.loot then return end -- one run per Loot Duel
+  ns.App:Start((s and not s.duel and not s.mode.duel and s.mode.key) or ns.App.lastMode or "classic")
 end
 
 ------------------------------------------------------------------------------------------------

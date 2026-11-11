@@ -95,6 +95,8 @@ function App:StartLoot(d)
     local data = cur:suspendData() -- keep an unfinished solo run for "Continue last run"
     if data then data.date = cur.date or self:Today(); ns.db.suspended = data end
   end
+  local du = ns.Duel and ns.Duel.current
+  if du and du.state ~= "playing" and du.state ~= "waiting" then ns.Duel.clear() end -- its chat / result panels
   local s = Session.new("loot_" .. d.rs, d.seed, self:Today())
   s.loot = d
   if d.lateBy and d.lateBy > 0 and s.mode.limitTicks then
@@ -168,8 +170,22 @@ end
 function App:ShowMenu()
   if ns.Duel then ns.Duel.clear() end -- forget a finished/cancelled duel
   self.inMenu = true
+  local cur = self.session
+  if cur and not cur.duel and not cur.loot and cur.phase ~= "over" then
+    -- an unfinished solo run goes to "Continue last run" (as a duel start does): the menu has no other way back
+    if cur.spell then ns.SpellBattle.settleAll(cur) end
+    local data = cur:suspendData()
+    if data then data.date = cur.date or self:Today(); ns.db.suspended = data; self.session = nil end
+  end
   if self.session and self.session:isActive() then self.session:pause("manual") end
   if ns.UI.frame then ns.UI:RefreshMenu(); ns.UI:RefreshPhase() end
+end
+
+--- The menu, unless a duel or Loot Duel run is on: that run stays (a sheet opened over it pauses it).
+function App:MenuUnlessRacing()
+  local s = self.session
+  if s and (s.duel or s.loot) and s.phase ~= "over" then return end
+  self:ShowMenu()
 end
 
 function App:Quit()
@@ -235,14 +251,14 @@ function App:OnRunOver(reason)
   if not s or s.recorded then return end
   s.recorded = true
   if s.duel then
-    ns.Sound.play("gameover")
+    ns.Sound.play("go") -- my run is in; victory / defeat sounds when the result is known (UI/DuelUI.lua)
     ns.Duel.onLocalEnd(s.state, s.spell and s.spell.me.log or nil, s.spell and s.spell.landings or nil)
     ns.UI:ShowOver({ state = s.state, reason = reason, mode = s.mode.key, modeName = s.mode.name, duel = s.duel })
     return
   end
   if s.spell then
-    -- Spell Battle vs Bot: the result is final once the bot has played out (see OnSpellResult)
-    ns.Sound.play("gameover")
+    -- Spell Battle vs Bot: the result is final once the bot has played out (see OnSpellResult),
+    -- which plays the one end sound (victory or defeat): never two at once
     ns.UI:ShowOver({ state = s.state, reason = reason, mode = s.mode.key, modeName = s.mode.name, spell = s.spell })
     if s.spell.result then self:OnSpellResult() end
     return
@@ -323,9 +339,9 @@ local function slash(msg)
     App:Start(cmd == "trial" and "blitz" or cmd) -- "blitz" = Time Trial (internal mode id kept)
   elseif cmd == "quickplay" or cmd == "qp" then
     if ns.BUILD and not ns.BUILD.duels then App:Print("Quickplay is switched off in this test build (Spell Battle vs Bot only).")
-    else ns.UI:Create(); ns.UI.frame:Show(); App:ShowMenu(); ns.UI:ShowSheet("quickplay") end
+    else ns.UI:Create(); ns.UI.frame:Show(); App:MenuUnlessRacing(); ns.UI:ShowSheet("quickplay") end
   elseif cmd == "spell" or cmd == "spells" then
-    ns.UI:Create(); ns.UI.frame:Show(); App:ShowMenu(); ns.UI:ShowSheet("spell")
+    ns.UI:Create(); ns.UI.frame:Show(); App:MenuUnlessRacing(); ns.UI:ShowSheet("spell")
   elseif cmd == "pause" then
     App:Pause("manual")
   elseif cmd == "settings" or cmd == "options" or cmd == "config" then
@@ -445,6 +461,7 @@ ev:SetScript("OnEvent", function(_, event, arg1)
       if data then data.date = s.date or App:Today(); ns.db.suspended = data end
     end
   elseif event == "PLAYER_REGEN_DISABLED" then
+    ns.UI.combatNow = true -- the event is the fact: UnitAffectingCombat can be unreadable on modern clients
     -- Fires before combat lockdown starts: pause and hand every key back to WoW now.
     local s = App.session
     if s and s:isActive() then App:Pause("combat") end
@@ -457,6 +474,7 @@ ev:SetScript("OnEvent", function(_, event, arg1)
     end
     if ns.UI.frame then ns.UI:RefreshMenu() end
   elseif event == "PLAYER_REGEN_ENABLED" then
+    ns.UI.combatNow = false
     if App.reopenAfterCombat then
       App.reopenAfterCombat = false
       if ns.UI.frame then ns.UI.frame:Show() end

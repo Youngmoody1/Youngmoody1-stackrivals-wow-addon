@@ -302,7 +302,8 @@ end
   onDone(true | false) is optional. ]]
 function Acc.reverify(onDone)
   onDone = onDone or function() end
-  local r = Acc.rec()
+  local me = Acc.me()
+  local r = me and store()[me] -- read only: never creates a record
   local pr = r and r.profile
   if not (pr and pr.recheck and r.link) then onDone(false); return end
   local code, link = pr.code, r.link

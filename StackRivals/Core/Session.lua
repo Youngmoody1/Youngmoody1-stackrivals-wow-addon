@@ -189,9 +189,11 @@ local function stepOnce(self)
   for i = 1, #actions do
     local a = actions[i]
     local bHoldUsed = s.holdUsed
+    local bRot = s.active and s.active.rotation
     if E.applyInput(s, a) then
       if a == "hardDrop" then self:emit("harddrop")
-      elseif a == "rotateCW" or a == "rotateCCW" then self:emit("rotate")
+      elseif a == "rotateCW" or a == "rotateCCW" then
+        if not (s.active and bRot ~= nil and s.active.rotation == bRot) then self:emit("rotate") end -- a blocked turn is silent
       elseif a == "hold" and s.holdUsed and not bHoldUsed then self:emit("hold") end
     end
     if s.gameOver then break end

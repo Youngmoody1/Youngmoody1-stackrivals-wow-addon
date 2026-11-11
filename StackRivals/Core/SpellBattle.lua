@@ -365,6 +365,9 @@ function SB.restore(sess, data)
   sp.me, sp.opp = sim.sides[1], sim.sides[2]
   sp.pendingMe, sp.pendingOpp = sim.pending[1], sim.pending[2]
   sp.seenOppCasts = #sp.opp.casts
+  -- what landed before the save was already shown: only new hits flash (same key as emitNew)
+  local function seen(side) local h = side.hits[#side.hits]; return h and (h.tick * 100 + #side.hits) or 0 end
+  sp.seenHitsMe, sp.seenHitsOpp = seen(sp.me), seen(sp.opp)
   sess.state = sp.me.game
   if sess.state.gameOver or sess.state.tick ~= data.ticks then return false end
   return true

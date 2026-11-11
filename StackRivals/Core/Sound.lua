@@ -25,6 +25,30 @@ function Sound.play(name)
   if not pcall(PlaySoundFile, file, "SFX") then pcall(PlaySoundFile, file) end
 end
 
+--[[ One frame can bring several events (a hard drop that clears a line on a level-up: four sounds at once; a
+  duel catching up at low FPS: dozens). Between begin() and flush() requests are collected, and flush plays at
+  most ONE impact sound and ONE melodic sound: the most important of each. ]]
+local IMPACT = { harddrop = 3, lock = 2, rotate = 1, hold = 1 }
+local MELODIC = { record = 9, gameover = 8, clear4 = 7, levelup = 6, clear3 = 5, clear2 = 4, combo = 3, clear1 = 2, go = 1, count = 1 }
+local batch
+local playNow = Sound.play
+function Sound.begin() batch = {} end
+function Sound.flush()
+  local b = batch
+  batch = nil
+  if not b then return end
+  if b.melodic then playNow(b.melodic) end
+  -- a clear already says "the piece landed": no lock / drop thud under it
+  if b.impact and not b.clear then playNow(b.impact) end
+end
+function Sound.play(name)
+  if not batch then return playNow(name) end
+  if name:find("^clear") then batch.clear = true end
+  local kind, rank = "melodic", MELODIC[name]
+  if not rank then kind, rank = "impact", IMPACT[name] or 0 end
+  if not batch[kind] or rank > batch[kind .. "Rank"] then batch[kind], batch[kind .. "Rank"] = name, rank end
+end
+
 --- Map session events to sounds.
 function Sound.forEvent(ev)
   local k = ev.kind
