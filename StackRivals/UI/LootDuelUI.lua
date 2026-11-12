@@ -339,12 +339,13 @@ function UI:CreateLootDuel()
       if mine and UI.frame and UI.frame:IsShown() and UI.over:IsShown() then UI:FxResult("win") end
       local item = itemText(d)
       local line = d.winner and ("Loot Duel for " .. item .. ": " .. short(d.winner) .. " wins (replay-checked). The loot master hands out the item.")
-        or (#d.tied > 1 and ("Loot Duel for " .. item .. ": a tie - roll off.")) or ("Loot Duel for " .. item .. ": no checked result - use your normal loot rules.")
+        or (#d.tied > 1 and ("Loot Duel for " .. item .. ": a tie - roll off.")) or (d.unconfirmed and ("Loot Duel for " .. item .. ": UNVERIFIED - " .. short(d.unconfirmed.name) .. "'s run (" .. T.commas(d.unconfirmed.score) .. ") didn't arrive complete, so no winner is confirmed. Run it again or use your normal loot rules."))
+        or ("Loot Duel for " .. item .. ": no checked result - use your normal loot rules.")
       ns.App:Print(line)
     end
     local s2 = ns.App and ns.App.session
     if s2 and s2.loot == d and UI.over:IsShown() then
-      UI.overBadge:SetText(d.winner and ("WINNER: " .. string.upper(short(d.winner))) or (#d.tied > 1 and "TIE: ROLL OFF" or "NO WINNER"))
+      UI.overBadge:SetText(d.winner and ("WINNER: " .. string.upper(short(d.winner))) or (#d.tied > 1 and "TIE: ROLL OFF" or d.unconfirmed and "UNVERIFIED: NO WINNER" or "NO WINNER"))
     end
     UI:RefreshLootBoard()
   end)
@@ -430,8 +431,15 @@ function UI:FillLootFinal(d)
   else
     setIcon(fin.icon, "warn")
     fin.big:SetText("NO WINNER"); fin.big:SetTextColor(AMBER[1], AMBER[2], AMBER[3])
-    fin.line:SetText("No replay-checked result")
-    fin.detail:SetText("Use your normal loot rules for " .. item .. ".")
+    if d.unconfirmed then
+      -- the best checked run is not a confirmed winner: a higher claim couldn't be checked on this PC
+      fin.big:SetText("UNVERIFIED")
+      fin.line:SetText(T.classText(LD.classOf(d.unconfirmed.name), short(d.unconfirmed.name)) .. "'s run (" .. T.commas(d.unconfirmed.score) .. ") couldn't be checked")
+      fin.detail:SetText("Its replay didn't arrive complete. No winner is confirmed: run it again, or use your normal loot rules.")
+    else
+      fin.line:SetText("No replay-checked result")
+      fin.detail:SetText("Use your normal loot rules for " .. item .. ".")
+    end
     fin.glow:SetVertexColor(AMBER[1], AMBER[2], AMBER[3])
   end
   -- a short victory effect, once per Loot Duel
@@ -668,7 +676,10 @@ function UI:AnnounceLoot()
   local function line(what)
     if d.agreement == "disputed" then
       -- my PC and the leader's PC don't show the same result: never announce mine as the result
-      return string.format("[StackRivals] Loot Duel for %s: the PCs don't agree on the result - ask the leader, or use normal loot.", what)
+      return string.format("[StackRivals] Loot Duel for %s: DISPUTED - the PCs don't agree on the result. Ask the leader, or use normal loot.", what)
+    end
+    if d.unconfirmed then
+      return string.format("[StackRivals] Loot Duel for %s: UNVERIFIED - %s's run (%s) couldn't be checked, no winner confirmed. Run it again or use normal loot.", what, short(d.unconfirmed.name), T.commas(d.unconfirmed.score))
     end
     if d.winner then
       local r = d.results[d.winner:lower()] or {}

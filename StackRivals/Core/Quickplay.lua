@@ -86,7 +86,7 @@ function QP.cancel(note)
 end
 
 local function sendQS(channel, target, normal)
-  ns.Comm.send(P().encode("QS", QP.qid, QP.mode, ns.VERSION or "dev"), channel, target, nil, { low = not normal })
+  ns.Comm.send(P().encode("QS", QP.qid, QP.mode, ns.VERSION or "dev"), channel, target, nil, { low = not normal, key = "QS" })
 end
 
 --- Announce: guild + group broadcast, and a whisper to friends whose StackRivals answered (fresh).
