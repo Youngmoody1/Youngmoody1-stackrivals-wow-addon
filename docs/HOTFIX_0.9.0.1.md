@@ -103,3 +103,23 @@ Som i `TEST_PLAN_0.9.1.md` del A: luk WoW, tag backup af `Interface\AddOns\Stack
 ZIP'en. SavedVariables ændres ikke af hotfixet.
 
 ## 7. Build
+
+| Felt | Værdi |
+|---|---|
+| Version | 0.9.0.1 |
+| Kode-commit | `fda4e0e` (branch `hotfix/0.9.0.1`) |
+| Bygget på | `84dbb62` = den offentlige 0.9.0. Kontrolleret: den commit bygger en ZIP med SHA-256 `d1d846fe…4686`, den samme som filen på CurseForge |
+| ZIP | `StackRivals-0.9.0.1.zip`, 86 filer, samme filliste som 0.9.0 |
+| SHA-256 | `4dd7ebafe66e34f1f14772fd711d046b08935b9ab64c419637702fa00a710c17` |
+| Bygget to gange | Lokalt og i CI (run 43262085154): samme SHA-256 |
+| Automatiske tests | CI, Lua 5.1: 849 bestået, 0 fejl (0.9.0's tests + 15 nye) |
+| Ændrede filer i addon-mappen | `Core/Report.lua`, `Core/Duel.lua`, `Core/Quickplay.lua`, `Core/LootDuel.lua`, `UI/LootDuelUI.lua`, `StackRivals.toc` (kun versionsnummeret) |
+
+## 8. GO / NO-GO
+
+**Koden: GO til test.** Rettelserne er små, protokollen er uændret, og alle automatiske tests består.
+
+**Udgivelse: NO-GO, indtil mindst T1–T5, T7 og T10 er prøvet i en rigtig klient med mindst to spillere.**
+Hotfixet er aldrig indlæst i WoW. Den fejl, det retter, er også kun set i simulering. Det mindste, der
+bør ses i en rigtig klient før udgivelse: addon'et indlæses som 0.9.0.1, en normal duel og en normal Loot
+Duel giver samme resultat hos alle, og `/sr commtest` svarer.
