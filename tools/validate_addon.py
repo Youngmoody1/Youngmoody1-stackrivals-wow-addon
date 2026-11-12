@@ -41,7 +41,7 @@ if os.path.isfile(clients_json):
         err(f"TOC: ## Interface {sorted(set(ifaces))} != live clients in tools/clients.json {sorted(set(live))}")
 if len(set(ifaces)) != len(ifaces): err("TOC: duplicate interface numbers")
 version = meta.get("Version", "")
-if not re.fullmatch(r"\d+\.\d+\.\d+", version): err(f"TOC: version '{version}' is not x.y.z")
+if not re.fullmatch(r"\d+\.\d+\.\d+(\.\d+)?", version): err(f"TOC: version '{version}' is not x.y.z or x.y.z.n (hotfix)")
 
 # files listed exist, every lua is listed
 listed = set(files)
@@ -115,7 +115,7 @@ for f in files:
 # changelog version
 cl = os.path.join(os.path.dirname(os.path.abspath(addon)), "CHANGELOG.md")
 if os.path.isfile(cl):
-    first = re.search(r"^## (\d+\.\d+\.\d+)", open(cl, encoding="utf-8").read(), re.M)
+    first = re.search(r"^## (\d+\.\d+\.\d+(?:\.\d+)?)", open(cl, encoding="utf-8").read(), re.M)
     if not first or first.group(1) != version: err(f"CHANGELOG top entry {first and first.group(1)} != TOC version {version}")
 
 if errors:

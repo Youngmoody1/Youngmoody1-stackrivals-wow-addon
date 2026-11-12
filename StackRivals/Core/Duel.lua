@@ -287,7 +287,7 @@ local function onInvite(msg, sender)
   -- otherwise: no popup, no answer (nobody can push a "match" on you)
   if msg.quickplay and not (ns.Quickplay and ns.Quickplay.wants(msg.ruleset, sender)) then
     local cur = Duel.current
-    if not (cur and cur.mid == msg.mid) then return end
+    if not (cur and cur.mid == msg.mid and ns.Comm.same(cur.rival, sender)) then return end -- only that match's own rival
   end
   if answerClosed(msg, sender) then return end -- an invite we already declined, re-sent
   if ns.Comm.trial then
@@ -1234,7 +1234,11 @@ function Duel.update()
   --   * otherwise (silent: they most likely lost their connection right after their run): no result.
   -- A forfeit win is labelled as one (basis "forfeit", never "replay"), and their verdict (VER) can
   -- still make it "disputed".
-  if m.rivalEnd and not haveAllChunks(m) and t - math.max(m.rivalEnd.at, m.myEndAt or 0) > Duel.LOG_WAIT then
+  -- The wait counts from the last chunk that arrived: a long log inside an instance (whispers at 0.8 per second
+  -- there) is still arriving, not withheld. A hard cap by the log's size stops a trickle from stalling forever.
+  local since = math.max(m.rivalEnd and m.rivalEnd.at or 0, m.myEndAt or 0)
+  if m.rivalEnd and not haveAllChunks(m) and t - math.max(since, m.lastChunkIn or 0) > Duel.LOG_WAIT
+    or m.rivalEnd and not haveAllChunks(m) and t - since > Duel.LOG_WAIT + (m.rivalEnd.chunks or 0) * 1.5 then
     m.noLogTalking = t - m.lastHeard < Duel.SILENT_WARN
     if m.my and (m.rivalEnd.score < m.my.score or m.noLogTalking) then return Duel.finish(m, "rival_no_log") end
     return Duel.finish(m, "unchecked")

@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.9.0.1 — security hotfix for 0.9.0 (branch `hotfix/0.9.0.1`, not released, not installed)
+
+Only the multiplayer fixes below, on top of the released 0.9.0 (`84dbb62`). No visual changes, no new
+features, no protocol change: 0.9.0 and 0.9.0.1 play together. Details, risk and the manual test plan:
+`docs/HOTFIX_0.9.0.1.md`. All of it was found and reproduced with simulated clients, not in a real client.
+
+- **Comm-test pings can't fill another player's send queue** (critical). In 0.9.0 every ping (`CTP`), from
+  anyone, also whispered, queued a normal-priority answer. A player repeating pings with a chat macro kept
+  another player's queue full, so that player's duel or Loot Duel result never left their PC: the Loot Duel
+  winner changed, and a duel win became "rival sent no log". Now a ping is answered only over the group
+  channel, from a group member, at most once per 5 s for all senders together, at low priority, under one
+  queue key.
+- **A Loot Duel result that can't be checked is UNVERIFIED, not a win for the next best run.** When a run
+  that claimed a score at least as high as the best checked run didn't arrive complete, no winner is named
+  on that PC; the sheet, the chat line and Announce say whose run is missing.
+- **Announce never posts a result this PC knows is DISPUTED**, and says "Checked by replay on my PC"
+  instead of "Every PC replayed every run".
+- **No forced Quickplay match.** An invite with the Quickplay flag is accepted without a popup only from the
+  rival of that very match (0.9.0: from anyone who knew the match id). Quickplay can't end up "searching"
+  without a start time (a Lua error every frame until `/reload`).
+- **The wait for the rival's replay follows progress.** It counts from the last part that arrived, with a
+  hard cap of 60 s + 1.5 s per part. In 0.9.0 a long, valid replay sent inside an instance took more than
+  the fixed 60 s, and the honest winner was declared forfeited.
+- Quickplay answers to a search use one queue slot per player.
+- Tests: `tests/test_hotfix.lua` (15). Eight of them fail on the 0.9.0 code.
+
 ## 0.9.0 (development) — Ready for the website integration (branch `feature/web-integration`, not released, not installed)
 
 0.8.1 is frozen on `alpha/0.8.1` as the test version. This branch prepares the integration with

@@ -892,6 +892,22 @@ function LD.finish(d)
     r.parts = nil
   end
   d.standings, d.winner, d.tied = LD.standings(d.participants, d.results)
+  --[[ A run that CLAIMED a score at least as high as the best checked run, but whose input log never arrived
+    complete on this PC, could have won. Then the best checked run is not a confirmed winner, and this PC
+    names none (d.unconfirmed says whose run is missing). Before 0.9.0.1 the next best run simply won: a
+    player whose messages were lost (or blocked by someone else) lost the item to a lower score. ]]
+  d.unconfirmed = nil
+  local best = (d.winner and d.results[key(d.winner)]) or (d.tied[1] and d.results[key(d.tied[1])])
+  if best then
+    for _, p in ipairs(d.participants) do
+      local r = d.results[key(p.name)]
+      if r.status == "missing" and r.why == "log_incomplete" and (r.score or 0) >= (best.score or 0)
+        and (not d.unconfirmed or r.score > d.unconfirmed.score) then
+        d.unconfirmed = { name = p.name, score = r.score }
+      end
+    end
+    if d.unconfirmed then d.winner, d.tied = nil, {} end
+  end
   if d.role == "leader" then
     d.ldrMsg = P().encode("LDR", d.lid, d.winner and P().hexName(d.winner) or "-", #d.tied > 1 and 1 or 0)
     d.ldrSends, d.ldrAt = 1, now()
