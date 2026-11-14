@@ -40,6 +40,11 @@ Session.MODES.chal_b120 = { key = "chal_b120", name = "Web Challenge 2:00", shor
 Session.MODES.chal_r180 = { key = "chal_r180", name = "Web Challenge 3:00", short = "SR1 challenge", limitTicks = 10800, countdownTicks = 240, challenge = "r180" }
 Session.MODES.chal_daily120 = { key = "chal_daily120", name = "Daily Challenge (code)", short = "SR1 daily", limitTicks = 7200, countdownTicks = 180, challenge = "daily120" }
 
+-- Race My Best (Core/Ghost.lua): the same rules as the mode it races, on the seed of your best run, with
+-- that run replayed beside you. Never a record (you know the pieces); started only by App:StartGhost.
+Session.MODES.ghost_classic = { key = "ghost_classic", name = "Race My Best", baseName = "Classic", short = "Your best run beside you", ghost = true, base = "classic" }
+Session.MODES.ghost_blitz = { key = "ghost_blitz", name = "Race My Best", baseName = "Time Trial", short = "Your best run beside you", limitTicks = 7200, ghost = true, base = "blitz" }
+
 -- Loot Duel (Core/LootDuel.lua): everyone in the race plays the same seed, no spells; never a record.
 Session.MODES.loot_l060 = { key = "loot_l060", name = "Loot Duel 1:00", short = "Raid loot race", limitTicks = 3600, countdownTicks = 180, loot = true }
 Session.MODES.loot_l120 = { key = "loot_l120", name = "Loot Duel 2:00", short = "Raid loot race", limitTicks = 7200, countdownTicks = 180, loot = true }
@@ -96,7 +101,7 @@ function Session:suspendData()
   if self.phase == "over" or self.state.gameOver then return nil end
   if self.state.tick == 0 and #self.state.inputLog == 0 then return nil end
   if self.spell then return ns.SpellBattle.suspendData(self) end
-  return { mode = self.mode.key, log = E.serializeLog(self.state), playSeconds = self.playSeconds }
+  return { mode = self.mode.key, log = E.serializeLog(self.state), playSeconds = self.playSeconds, ghostId = self.ghost and self.ghost.id or nil }
 end
 
 function Session:emit(kind, a, b)

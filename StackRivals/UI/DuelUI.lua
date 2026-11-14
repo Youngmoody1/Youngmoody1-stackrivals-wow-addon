@@ -532,9 +532,11 @@ function UI:RefreshDuel(phase)
   -- NEXT: in Spell Battle vs Bot, SetSpellLayout owns it (2 pieces above the bot's panel). Resizing
   -- it here showed the 5th NEXT piece on top of the bot's mini board: a coloured box (red for an
   -- I piece) over the rival panel, seen in a real client.
+  if self.RefreshGhost then self:RefreshGhost() end
+  local side = showRival or (self.GhostPanelShown and self:GhostPanelShown()) or false -- a rival or Race My Best panel
   if self.spellLayoutOn ~= "bot" then
-    self.nextPanel:SetHeight(self.field:GetHeight() - (showRival and 82 or 0))
-    self.nextPreviews[5]:SetShown(not showRival)
+    self.nextPanel:SetHeight(self.field:GetHeight() - (side and 82 or 0))
+    self.nextPreviews[5]:SetShown(not side)
   end
   self:RenderRival()
   if self.RefreshChat then self:RefreshChat() end
@@ -652,6 +654,7 @@ function UI:ShowDuelOver(m)
 end
 
 
+local soloPlayAgain = UI.PlayAgain -- UI/Window.lua: challenges, Loot Duel, Race My Best, the normal modes
 function UI:PlayAgain()
   local s = ns.App.session
   local m = s and s.duel
@@ -664,8 +667,7 @@ function UI:PlayAgain()
     end
     return
   end
-  if s and s.challenge and ns.App.lastChallenge then ns.App:StartChallenge(ns.App.lastChallenge); return end
-  ns.App:Start(ns.App.lastMode or "classic")
+  return soloPlayAgain(self)
 end
 
 ------------------------------------------------------------------------------------------------

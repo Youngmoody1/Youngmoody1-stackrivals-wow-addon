@@ -4,6 +4,11 @@
 
 0.9.0 Alpha is frozen on `alpha/0.9.0` (`84dbb62`). 0.9.1 is 0.9.0 plus the following.
 
+- **Race My Best (Ghost Mode), prototype** (branch `feature/ghost-mode`, `docs/RACE_MY_BEST.md`): race the
+  pieces of your best Classic / Time Trial run with that run replayed beside you (panel under NEXT, AHEAD /
+  BEHIND, a big moment once when you pass its final score). Local only; never changes the normal records;
+  a won race is the next ghost. Uses the input log already saved with every best: no engine or protocol
+  change. `/sr best [trial]`, `/sr best panel`.
 - **Quality audit** (branch `audit/0.9.1-quality`, full list in `docs/AUDIT_0.9.1.md`):
   - multiplayer: comm-test pings can't fill another player's send queue any more (this changed duel and
     Loot Duel results; also present in 0.9.0), no forced Quickplay match, the log wait follows progress,

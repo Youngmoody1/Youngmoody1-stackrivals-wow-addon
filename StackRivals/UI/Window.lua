@@ -984,15 +984,19 @@ function UI:Render()
     setNum(self.timeText, math.floor(s.tick / 60), T.clock)
     if self.timeUrgent ~= false then self.timeUrgent = false; self.timeText:SetTextColor(C.label[1], C.label[2], C.label[3]) end
   end
-  if sess.duel then
+  if sess.mode.ghost and self.RenderGhost then
+    self:RenderGhost(sess) -- Race My Best: ahead / behind your best (UI/GhostUI.lua)
+  elseif sess.duel then
     -- duel: the lead over the rival instead of a personal best
     local lead = s.score - (sess.duel.rival_.score or 0)
     setStr(self.bestLabel, "LEAD")
+    if self.bestLabel._c then self.bestLabel._c = nil; self.bestLabel:SetTextColor(C.label[1], C.label[2], C.label[3]) end
     setStr(self.bestText, (lead > 0 and "+" or (lead < 0 and "-" or "")) .. T.commas(math.abs(lead)))
     local c = lead >= 0 and C.green or C.redLight
     if self.bestText._c ~= c then self.bestText._c = c; self.bestText:SetTextColor(c[1], c[2], c[3]) end
   else
     setStr(self.bestLabel, "BEST")
+    if self.bestLabel._c then self.bestLabel._c = nil; self.bestLabel:SetTextColor(C.label[1], C.label[2], C.label[3]) end
     if self.bestText._c ~= C.gold then self.bestText._c = C.gold; self.bestText:SetTextColor(C.gold[1], C.gold[2], C.gold[3]) end
     local best = ns.App:BestFor(sess.mode.key)
     if best > 0 then setNum(self.bestText, best, T.commas) else setStr(self.bestText, "-") end
@@ -1245,7 +1249,9 @@ function UI:ShowOver(info)
   self.overTitle:SetText(info.reason == "time" and "TIME!" or "GAME OVER")
   self.overScore:SetText(T.commas(s.score))
   self.badgePulse:Stop()
-  if info.loot then
+  if info.ghost and self.ShowGhostOver then
+    self:ShowGhostOver(info)
+  elseif info.loot then
     self.overBadge:SetText("WAITING FOR THE OTHERS...")
   elseif info.challenge then
     self.overBadge:SetText("RESULT CODE READY")
@@ -1261,9 +1267,9 @@ function UI:ShowOver(info)
   local c = s.clears
   local rankTxt = info.rank and ("#" .. info.rank .. " in your top 5  -  ") or ""
   local quads = (c.quad > 0) and string.format("  -  %d %s", c.quad, c.quad == 1 and "quad" or "quads") or ""
-  self.overDetail:SetText(info.loot and string.format("%d lines  -  level %d%s\nThe best runs are replayed on every PC. The result opens when all are in.", s.lines, s.level, quads)
+  if not info.ghost then self.overDetail:SetText(info.loot and string.format("%d lines  -  level %d%s\nThe best runs are replayed on every PC. The result opens when all are in.", s.lines, s.level, quads)
     or info.challenge and string.format("%d lines  -  level %d%s\nCopy it from Account > Sync and paste it on stackrivals.io.", s.lines, s.level, quads)
-    or string.format("%d lines  -  level %d%s\n%s%s", s.lines, s.level, quads, rankTxt, info.modeName))
+    or string.format("%d lines  -  level %d%s\n%s%s", s.lines, s.level, quads, rankTxt, info.modeName)) end
   local g, p = IsInGuild and IsInGuild() or false, IsInGroup and IsInGroup() or false
   self.shareGuild:SetShown(g); self.shareGroup:SetShown(p); self.shareLabel:SetShown(g or p)
   -- centre whatever is visible: SHARE [Guild] [Group]
@@ -1287,6 +1293,7 @@ function UI:PlayAgain()
   local s = ns.App.session
   if s and s.challenge and ns.App.lastChallenge then ns.App:StartChallenge(ns.App.lastChallenge); return end
   if s and s.loot then return end -- one run per Loot Duel
+  if s and s.mode.ghost then ns.App:StartGhost(s.mode.base); return end -- race your best again (a won race is the new ghost)
   ns.App:Start((s and not s.duel and not s.mode.duel and s.mode.key) or ns.App.lastMode or "classic")
 end
 

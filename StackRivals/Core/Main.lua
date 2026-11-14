@@ -64,7 +64,7 @@ end
 function App:Start(mode)
   if ns.UI.inCombat() then self:Print("Can't start a run in combat."); return end
   local md = ns.Session.MODES[mode]
-  if md and (md.duel or md.challenge or md.loot) then return end -- duels, web challenges and loot duels have their own start
+  if md and (md.duel or md.challenge or md.loot or md.ghost) then return end -- duels, web challenges, loot duels and Race My Best have their own start
   local d = ns.Duel and ns.Duel.current
   if d and (d.state == "playing" or d.state == "waiting") then self:Print("Finish or leave your duel first (/sr leave)."); return end
   if ns.LootDuel and ns.LootDuel.busy() then self:Print("You're in a Loot Duel: finish it (or pass) first."); return end
@@ -84,6 +84,42 @@ function App:Start(mode)
   ns.db.suspended = nil
   if not ns.UI.frame:IsShown() then ns.UI.frame:Show() end
   ns.UI:RefreshPhase()
+end
+
+--- Race My Best (Core/Ghost.lua): the pieces of your best `base` run (classic | blitz), that run beside you.
+--- Returns false + why (Ghost.WHY) when there is no ghost that replays exactly.
+function App:StartGhost(base)
+  local G = ns.Ghost
+  local gmode = G.MODES[base]
+  if not gmode then return false, "mode" end
+  if ns.UI.inCombat() then self:Print("Can't start a run in combat."); return false, "combat" end
+  local d0 = ns.Duel and ns.Duel.current
+  if d0 and (d0.state == "playing" or d0.state == "waiting") then self:Print("Finish or leave your duel first (/sr leave)."); return false, "busy" end
+  if ns.LootDuel and ns.LootDuel.busy() then self:Print("You're in a Loot Duel: finish it (or pass) first."); return false, "busy" end
+  local e, why = G.source(ns.db, base)
+  local d
+  if e then d, why = G.validate(e) end
+  if not d then self:Print(G.WHY[why] or "There's no run to race yet."); ns.UI:RefreshMenu(); return false, why end
+  if ns.Duel then ns.Duel.clear() end
+  if self.session and self.session.spell then ns.SpellBattle.settleAll(self.session) end
+  ns.UI:Create()
+  self.session = Session.new(gmode, d.seed, self:Today())
+  G.attach(self.session, e, d)
+  self.lastMode = base -- (App:Start can't start a ghost mode: "play again" after a duel = the normal mode)
+  self.inMenu = false
+  ns.db.suspended = nil
+  if not ns.UI.frame:IsShown() then ns.UI.frame:Show() end
+  ns.UI:RefreshPhase()
+  return true
+end
+
+--- After /reload: give a restored Race My Best run its ghost again (only the same ghost; otherwise the run
+--- goes on without one and says so).
+function App:ReattachGhost(sess, ghostId)
+  local G = ns.Ghost
+  local e = G.source(ns.db, sess.mode.base)
+  local d = e and e.id == ghostId and G.validate(e)
+  if d then G.attach(sess, e, d) else sess.ghost = { lost = true, base = sess.mode.base } end
 end
 
 --- A Loot Duel race starts (Core/LootDuel.lua): my run on the shared seed, like a duel start.
@@ -151,6 +187,7 @@ function App:ContinueSuspended()
     end
   else
     sess = Session.restore(su.mode, su.log, su.playSeconds, su.date)
+    if sess and sess.mode.ghost then self:ReattachGhost(sess, su.ghostId) end
   end
   ns.db.suspended = nil
   if not sess then self:Print("That saved run could not be restored."); ns.UI:RefreshMenu(); return end
@@ -161,7 +198,7 @@ function App:ContinueSuspended()
     local okC, code = pcall(ns.Codes.challenge, sess.mode.challenge, sess.seed)
     self.lastChallenge = okC and code or nil
   else
-    self.lastMode = su.mode
+    self.lastMode = sess.mode.base or su.mode
   end
   self.inMenu = false
   ns.UI:RefreshPhase()
@@ -271,6 +308,14 @@ function App:OnRunOver(reason)
     ns.UI:ShowOver({ state = s.state, reason = reason, mode = mode, modeName = s.mode.name, loot = s.loot })
     return
   end
+  if s.mode.ghost then
+    -- Race My Best: never a record; a win becomes the next ghost
+    local gr = ns.Ghost.finish(ns.db, s) or { me = s.state.score, best = 0, lost = true }
+    ns.Sound.play(gr.beat and "record" or "gameover")
+    ns.UI:ShowOver({ state = s.state, reason = reason, mode = mode, modeName = s.mode.name, ghost = gr })
+    ns.UI:RefreshMenu()
+    return
+  end
   if s.mode.challenge then
     -- a web challenge: never a local record; kept for export as an SR1 result code
     if ns.Sync then ns.Sync.saveChallengeRun(s) end
@@ -279,6 +324,7 @@ function App:OnRunOver(reason)
     return
   end
   local res = DB.recordRun(ns.db, mode, s.state, s.playSeconds, s.date or self:Today(), E.serializeLog(s.state), self:Today())
+  if res.newBest and ns.Ghost then ns.Ghost.onNewRecord(ns.db, mode) end
   if res.newBest then ns.Sound.play("record") else ns.Sound.play("gameover") end
   if mode == "daily" and res.newTodayBest and ns.Sync then ns.Sync.saveDailyRun(s) end
   ns.UI:ShowOver({
@@ -342,6 +388,16 @@ local function slash(msg)
     else ns.UI:Create(); ns.UI.frame:Show(); App:MenuUnlessRacing(); ns.UI:ShowSheet("quickplay") end
   elseif cmd == "spell" or cmd == "spells" then
     ns.UI:Create(); ns.UI.frame:Show(); App:MenuUnlessRacing(); ns.UI:ShowSheet("spell")
+  elseif cmd == "best" or cmd == "ghost" then
+    -- /sr best [classic|trial]: Race My Best; /sr best panel: show / hide the live panel
+    if arg == "panel" then
+      ns.db.settings.raceBestPanel = not ns.db.settings.raceBestPanel
+      App:Print("Race My Best panel " .. (ns.db.settings.raceBestPanel and "shown." or "hidden."))
+      if ns.UI.frame then ns.UI:RefreshPhase() end
+    else
+      ns.UI:Create(); ns.UI.frame:Show()
+      App:StartGhost((arg == "trial" or arg == "blitz") and "blitz" or "classic")
+    end
   elseif cmd == "pause" then
     App:Pause("manual")
   elseif cmd == "settings" or cmd == "options" or cmd == "config" then
@@ -399,7 +455,7 @@ local function slash(msg)
     App:Print("version " .. ns.VERSION .. ", engine v" .. E.ENGINE_VERSION .. ", interface " .. tostring(select(4, GetBuildInfo())) .. flavour
       .. (ns.Client and (", " .. ns.Client.label()) or ""))
   else
-    App:Print("commands: /sr (open), /sr classic | trial | daily, /sr spell, /sr quickplay, /sr duel [Name] [3], /sr leave, /sr pause, /sr settings, /sr loot, /sr lootbutton [reset], /sr minimap, /sr scale 0.8, /sr reset, /sr sound, /sr stats, /sr version, /sr report, /sr commtest")
+    App:Print("commands: /sr (open), /sr classic | trial | daily, /sr best [trial] (Race My Best), /sr best panel, /sr spell, /sr quickplay, /sr duel [Name] [3], /sr leave, /sr pause, /sr settings, /sr loot, /sr lootbutton [reset], /sr minimap, /sr scale 0.8, /sr reset, /sr sound, /sr stats, /sr version, /sr report, /sr commtest")
   end
 end
 

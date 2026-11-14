@@ -21,6 +21,7 @@ Engine\Bot.lua
 Core\Session.lua
 Core\SpellBattle.lua
 Core\DB.lua
+Core\Ghost.lua
 Net\Protocol.lua
 Net\Codes.lua
 Net\AccountCodes.lua
@@ -55,4 +56,5 @@ UI\CollectionUI.lua
 UI\LootDuelUI.lua
 UI\LootButton.lua
 UI\SpellUI.lua
+UI\GhostUI.lua
 Core\Main.lua

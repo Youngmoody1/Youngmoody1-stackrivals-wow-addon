@@ -36,7 +36,7 @@ DB.SPELL_DIFFICULTIES = { "rookie", "challenger", "contender", "elite", "rival" 
 DB.SPELL_RULES = 2 -- vs-Bot win rule of the counted W/L/D (2 = first to top out loses)
 
 local function defaultSettings()
-  return { sound = true, ghost = true, hideInCombat = true, scale = 1.0, minimapHide = false, minimapAngle = 215, lootButton = true, reduceEffects = false }
+  return { sound = true, ghost = true, hideInCombat = true, scale = 1.0, minimapHide = false, minimapAngle = 215, lootButton = true, reduceEffects = false, raceBestPanel = true }
 end
 
 local function emptyRecord()
@@ -88,6 +88,7 @@ function DB.sanitize(raw)
   s.sound = bool(rs.sound, s.sound)
   s.ghost = bool(rs.ghost, s.ghost)
   s.reduceEffects = bool(rs.reduceEffects, s.reduceEffects)
+  s.raceBestPanel = bool(rs.raceBestPanel, s.raceBestPanel) -- Race My Best: the live panel beside the board
   s.hideInCombat = bool(rs.hideInCombat, s.hideInCombat)
   s.scale = num(rs.scale, s.scale, 0.7, 1.4)
   s.minimapHide = bool(rs.minimapHide, s.minimapHide)
@@ -292,7 +293,10 @@ function DB.sanitize(raw)
     end
   elseif type(su) == "table" and ns.Session and ns.Session.MODES[su.mode] and str(su.log, DB.MAX_LOG) then
     db.suspended = { mode = su.mode, log = su.log, playSeconds = num(su.playSeconds, 0, 0, 1e9), date = str(su.date, 16) }
+    if type(su.ghostId) == "string" and su.ghostId:match("^%x%x%x%x%x%x%x%x$") then db.suspended.ghostId = su.ghostId end
   end
+  -- Race My Best: a won ghost race is the next ghost (Core/Ghost.lua; bounded, validated again before use)
+  db.ghosts = ns.Ghost and ns.Ghost.sanitize(raw.ghosts) or {}
   return db
 end
 

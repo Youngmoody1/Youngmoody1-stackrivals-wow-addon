@@ -146,6 +146,34 @@ local function lootRace(net, list, k, frames, pace)
   end
 end
 
+-- Race My Best: a real Time Trial best (with its replay) and a Classic best from an older version (no replay).
+local function raceBest(M, ns)
+  local DB, today = ns.DB, ns.App:Today()
+  DB.recordRun(ns.db, "classic", { score = 41250, lines = 64, level = 7, clears = { quad = 2 } }, 600, today, nil, today)
+  ns.App:Start("blitz")
+  local s = ns.App.session
+  local NSm = assert(loadfile(testdir .. "/netsim.lua"))(root, testdir)
+  local bot = NSm.autoplay({ ns = ns }, "slow") -- the tests' placement bot: a believable best to race
+  for _ = 1, 7600 do
+    if s.phase == "over" then break end
+    bot(); M.frames_step(1)
+  end
+  M.frames_step(70)
+  ns.App:ShowMenu(); M.frames_step(1)
+  return ns.db.records.blitz
+end
+--- A race at `secs` into the run, my score set to `mine` (a still picture of the race UI).
+local function raceAt(M, ns, secs, mine)
+  ns.App:StartGhost("blitz"); M.frames_step(241)
+  local s = ns.App.session
+  fillBoard(s.state)
+  ns.App.session:press("hold"); M.frames_step(2); ns.App.session:release("hold")
+  M.frames_step(secs * 60)
+  s.state.score, s.state.lines, s.state.level = mine, 14, 2
+  ns.UI.dirty = true; M.frames_step(1)
+  return s
+end
+
 S.list = {
   { "1-menu", "Mode menu", function()
     local M, ns = boot(); seedRecords(ns); SlashCmdList.STACKRIVALS(""); M.frames_step(1); return M, ns
@@ -693,6 +721,36 @@ S.list = {
   end, { minText = 1 } },
   { "8-records", "Records", function()
     local M, ns = boot(); seedRecords(ns); SlashCmdList.STACKRIVALS(""); ns.UI:ShowSheet("records"); M.frames_step(1); return M, ns
+  end },
+  { "30-race-menu", "Race My Best: the button on the Time Trial card (Classic: best from an older version, greyed)", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS(""); raceBest(M, ns); ns.UI:RefreshMenu(); M.frames_step(1); return M, ns
+  end },
+  { "30b-race-behind", "Race My Best: behind your best (panel under NEXT, BEHIND in the stats)", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS(""); raceBest(M, ns)
+    local s = raceAt(M, ns, 40, 0); s.state.score = math.max(0, s.ghost.runner.s.score - 1450); ns.UI.dirty = true; M.frames_step(1); return M, ns
+  end },
+  { "30c-race-ahead", "Race My Best: ahead of your best", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS(""); raceBest(M, ns)
+    local s = raceAt(M, ns, 40, 0); s.state.score = s.ghost.runner.s.score + 2300; ns.UI.dirty = true; M.frames_step(1); return M, ns
+  end },
+  { "30d-race-new-best", "Race My Best: past your best's final score - the big moment (once per race)", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS(""); local r = raceBest(M, ns)
+    local s = raceAt(M, ns, 25, 0); s.state.score = r.best + 40; ns.UI.dirty = true; M.frames_step(3); return M, ns
+  end },
+  { "30e-race-won", "Race My Best: result - beat your best (the run is the next ghost)", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS(""); local r = raceBest(M, ns)
+    local s = raceAt(M, ns, 20, 0); s.ghost.beaten = true; s.state.score = r.best + 1880; s.state.lines = 96
+    s:finish("time"); M.frames_step(70); return M, ns
+  end },
+  { "30f-race-lost", "Race My Best: result - your best stays the one to beat", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS(""); local r = raceBest(M, ns)
+    local s = raceAt(M, ns, 20, 0); s.state.score = math.max(0, r.best - 620); s.state.lines = 88
+    s:finish("time"); M.frames_step(70); return M, ns
+  end },
+  { "30g-race-panel-hidden", "Race My Best: panel hidden (the race goes on; + brings it back)", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS(""); raceBest(M, ns)
+    ns.db.settings.raceBestPanel = false
+    raceAt(M, ns, 40, 6400); ns.UI:RefreshPhase(); M.frames_step(1); return M, ns
   end },
 }
 
