@@ -1417,7 +1417,7 @@ function UI:CreateRecords()
   self.records = s
   local note = T.text(s, SZ.small, C.label)
   note:SetPoint("TOPLEFT", 24, -38)
-  note:SetText("Stored on this PC only. Local records are not verified.")
+  note:SetText("Stored on this PC only, not verified. Race best: Race My Best only.")
   s.cards = {}
   local cw = math.floor((self.frame:GetWidth() - 2 * 24 - 2 - 2 * 10) / 3)
   for i, key in ipairs(Session.MODE_ORDER) do
@@ -1440,6 +1440,7 @@ function UI:CreateRecords()
     card.stats = {}
     local names = { "Runs", "Lines", "Quads", "Best level", "Played" }
     if key == "daily" then names[#names + 1] = "Today" end
+    if key ~= "daily" then names[#names + 1] = "Race best" end -- Race My Best: not an official record
     for n, label in ipairs(names) do
       local y = -202 - (n - 1) * 16
       local l = T.text(card, SZ.label, C.label); l:SetPoint("TOPLEFT", 10, y); l:SetText(label)
@@ -1465,6 +1466,10 @@ function UI:CreateRecords()
       if card.key == "daily" then
         local d = db.records.dailyToday
         vals[6] = (d.date == ns.App:Today() and d.tries > 0) and (T.commas(d.best) .. " \195\151" .. d.tries) or "-"
+      end
+      if card.key ~= "daily" then
+        local rr = db.raceRecords and db.raceRecords[card.key]
+        vals[6] = (rr and rr.best > 0) and T.commas(rr.best) or "-"
       end
       for n, v in ipairs(vals) do card.stats[n]:SetText(v) end
     end

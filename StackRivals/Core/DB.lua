@@ -297,6 +297,7 @@ function DB.sanitize(raw)
   end
   -- Race My Best: a won ghost race is the next ghost (Core/Ghost.lua; bounded, validated again before use)
   db.ghosts = ns.Ghost and ns.Ghost.sanitize(raw.ghosts) or {}
+  db.raceRecords = ns.Ghost and ns.Ghost.sanitizeRecords(raw.raceRecords) or {} -- Race Best, apart from the official records
   return db
 end
 
@@ -405,6 +406,7 @@ end
 function DB.resetRecords(db)
   db.rules = (ns.Engine and ns.Engine.ENGINE_VERSION) or 1
   db.records = { classic = emptyRecord(), blitz = emptyRecord(), daily = emptyRecord(), dailyToday = { date = nil, best = 0, tries = 0 } }
+  db.ghosts, db.raceRecords = {}, {} -- Race My Best starts over with the records
 end
 
 ns.DB = DB

@@ -740,12 +740,23 @@ S.list = {
   { "30e-race-won", "Race My Best: result - beat your best (the run is the next ghost)", function()
     local M, ns = boot(); SlashCmdList.STACKRIVALS(""); local r = raceBest(M, ns)
     local s = raceAt(M, ns, 20, 0); s.ghost.beaten = true; s.state.score = r.best + 1880; s.state.lines = 96
-    s:finish("time"); M.frames_step(70); return M, ns
+    s.state.tick = s.mode.limitTicks; s:finish("time"); M.frames_step(70); return M, ns -- a real time-out: 0:00 (it read 1:39)
   end },
   { "30f-race-lost", "Race My Best: result - your best stays the one to beat", function()
     local M, ns = boot(); SlashCmdList.STACKRIVALS(""); local r = raceBest(M, ns)
     local s = raceAt(M, ns, 20, 0); s.state.score = math.max(0, r.best - 620); s.state.lines = 88
-    s:finish("time"); M.frames_step(70); return M, ns
+    s.state.tick = s.mode.limitTicks; s:finish("time"); M.frames_step(70); return M, ns
+  end },
+  { "30h-race-ghost-finished", "Race My Best: the ghost has ended (topped out) while you still play - its final score, in gold", function()
+    local M, ns = boot(); SlashCmdList.STACKRIVALS(""); local r = raceBest(M, ns)
+    local s = raceAt(M, ns, 10, 0)
+    local g = s.ghost; g.runner.s.gameOver = true; g.runner.s.score = r.best -- (picture only: the ghost's run has ended)
+    s.state.score = math.max(0, r.best - 900); ns.UI.dirty = true; M.frames_step(1); return M, ns
+  end },
+  { "30i-race-records", "Records: Official Best and a separate Race best row (Race My Best only)", function()
+    local M, ns = boot(); seedRecords(ns)
+    ns.db.raceRecords = { blitz = { best = 19870, races = 4, wins = 1, date = ns.App:Today() }, classic = { best = 0, races = 0, wins = 0 } }
+    SlashCmdList.STACKRIVALS(""); ns.UI:ShowSheet("records"); M.frames_step(1); return M, ns
   end },
   { "30g-race-panel-hidden", "Race My Best: panel hidden (the race goes on; + brings it back)", function()
     local M, ns = boot(); SlashCmdList.STACKRIVALS(""); raceBest(M, ns)

@@ -3,6 +3,7 @@
 local root, testdir = ...
 local H = dofile(testdir .. "/harness.lua")
 local NS = assert(loadfile(testdir .. "/netsim.lua"))(root, testdir)
+local L = dofile(testdir .. "/layout.lua")
 local it, eq, ok, describe = H.it, H.eq, H.ok, H.describe
 
 local function client(seed, saved)
@@ -110,7 +111,7 @@ describe("Race My Best: the race", function()
     eq(ns.UI.ghostPanel.score:GetText(), ns.T.commas(s.ghost.runner.s.score))
     playOut(net, c, "weak")
     eq(r.best, before.best); eq(r.games, before.games); eq(r.bestLog, before.log)
-    ok(ns.UI.overBadge:GetText():find("^YOUR BEST"), ns.UI.overBadge:GetText())
+    ok(ns.UI.overBadge:GetText():find("^OFFICIAL BEST"), ns.UI.overBadge:GetText())
     eq(ns.db.ghosts.blitz, nil)
   end)
   it("beating it: the big moment once, mid-run; the result; the win is the next ghost; records untouched", function()
@@ -121,7 +122,11 @@ describe("Race My Best: the race", function()
     c.M.sounds = {}
     local fired = 0
     local callout = ns.UI.Callout
-    ns.UI.Callout = function(self, main, ...) if main == "NEW BEST" then fired = fired + 1 end return callout(self, main, ...) end
+    local words
+    ns.UI.Callout = function(self, main, sub, c, p, tier, top)
+      if main == "RACE BEST" then fired = fired + 1; words = { top = top, sub = sub } end
+      return callout(self, main, sub, c, p, tier, top)
+    end
     local bot = NS.autoplay(c, "fast")
     local burst
     for _ = 1, 60 * 130 do
@@ -133,10 +138,12 @@ describe("Race My Best: the race", function()
     net.step(70)
     ns.UI.Callout = callout
     eq(fired, 1, "once"); eq(burst, true, "the gold burst")
+    eq(words.top, "NEW"); eq(words.sub, "PAST YOUR GHOST") -- "NEW RACE BEST": never called a personal record
     ok(has(sounds(c), "record"), "the result fanfare")
     local s = ns.App.session
     ok(s.state.score > best)
-    ok(ns.UI.overBadge:GetText():find("^BEAT YOUR BEST  %+"), ns.UI.overBadge:GetText())
+    ok(ns.UI.overBadge:GetText():find("^NEW RACE BEST  %+"), ns.UI.overBadge:GetText())
+    ok(ns.UI.overDetail:GetText():find("Official best stays " .. ns.T.commas(best), 1, true), ns.UI.overDetail:GetText())
     eq(r.best, best, "the normal record is not changed")
     local g = ns.db.ghosts.blitz
     eq(g.score, s.state.score)
@@ -157,7 +164,7 @@ describe("Race My Best: the race", function()
       bot(); net.step(1)
       if ns.App.session.ghost.beaten and seen == nil then seen = { text = ns.UI.callout:GetText(), burst = ns.UI.fx.burstAnim:IsPlaying() } end
     end
-    ok(seen, "beaten"); eq(seen.text, "NEW BEST"); eq(seen.burst, false)
+    ok(seen, "beaten"); eq(seen.text, "RACE BEST"); eq(seen.burst, false)
   end)
   it("the panel can be hidden and shown again; the race goes on; the stats panel then shows the best's score", function()
     local net, c, ns = client(7)
@@ -166,7 +173,7 @@ describe("Race My Best: the race", function()
     ns.UI.ghostPanel.hide:Click(); net.step(2)
     eq(ns.db.settings.raceBestPanel, false)
     ok(not ns.UI.ghostPanel:IsShown()); ok(ns.UI.ghostShow:IsShown()); ok(ns.UI.nextPreviews[5]:IsShown())
-    eq(ns.UI.bestLabel:GetText(), "YOUR BEST"); eq(ns.UI.bestText:GetText(), ns.T.commas(r.best))
+    eq(ns.UI.bestLabel:GetText(), "OFFICIAL BEST"); eq(ns.UI.bestText:GetText(), ns.T.commas(r.best))
     net.step(60)
     ok(ns.App.session.ghost.runner.s.tick == ns.App.session.state.tick, "the ghost still runs")
     c.env.SlashCmdList.STACKRIVALS("best panel"); net.step(2)
@@ -183,6 +190,97 @@ describe("Race My Best: the race", function()
     local sent = ns.Comm.stats.sent
     ns.App:StartGhost("blitz"); net.step(185 + 600)
     eq(ns.Comm.stats.sent, sent); eq(#ns.Comm.queue, 0)
+  end)
+end)
+
+describe("Race My Best: polish (Official Best vs Race Best, layout)", function()
+  it("Official Best and Race Best are kept apart: a race updates Race Best (races, wins), never the records", function()
+    local net, c, ns = client(20)
+    local r = blitzBest(net, c, "weak")
+    local official = r.best
+    ns.App:StartGhost("blitz"); net.step(185)
+    eq(ns.UI.ghostPanel.name:GetText(), "OFFICIAL BEST", "the ghost is the official record")
+    playOut(net, c, "weak")                           -- race 1: lost
+    local rr = ns.db.raceRecords.blitz
+    eq(rr.races, 1); eq(rr.wins, 0); ok(rr.best > 0 and rr.best <= official)
+    ns.UI:PlayAgain(); net.step(185); playOut(net, c, "fast") -- race 2: won
+    rr = ns.db.raceRecords.blitz
+    eq(rr.races, 2); eq(rr.wins, 1); eq(rr.best, ns.App.session.state.score)
+    eq(ns.db.records.blitz.best, official, "official best unchanged")
+    ns.UI:PlayAgain(); net.step(185)
+    eq(ns.UI.ghostPanel.name:GetText(), "RACE BEST", "now racing the won race")
+    -- Records: a separate Race best row; the menu tooltip names both
+    ns.App:Pause("manual"); ns.UI:ShowSheet("records"); net.step(1)
+    local card = ns.UI.records.cards[2]
+    eq(card.key, "blitz"); eq(card.stats[6]:GetText(), ns.T.commas(rr.best)); eq(card.best:GetText(), ns.T.commas(official))
+    ns.UI:HideSheets(); ns.App:Quit(); net.step(2); ns.UI:RefreshMenu()
+    local tip = ns.UI.modeButtons.blitz.race.tip
+    ok(tip:find("Official Best " .. ns.T.commas(official), 1, true) and tip:find("Race Best " .. ns.T.commas(rr.best), 1, true), tip)
+    -- resetting the records starts Race My Best over too
+    ns.DB.resetRecords(ns.db)
+    eq(next(ns.db.ghosts), nil); eq(next(ns.db.raceRecords), nil)
+  end)
+  it("the ghost ends while you still play: its final score stays readable and marked final; you're compared with it", function()
+    local net, c, ns = client(21)
+    local r = blitzBest(net, c, "weak")               -- hard drops only: this best tops out before 2:00
+    local d = ns.Engine.deserializeLog(r.bestLog)
+    ok(d.ticks < 7200, "the best ended early (topped out at tick " .. d.ticks .. ")")
+    ns.App:StartGhost("blitz"); net.step(185)
+    local s = ns.App.session
+    s.state.tick = d.ticks + 120; net.step(1)          -- two seconds after the ghost's end
+    local gp = ns.UI.ghostPanel
+    eq(s.ghost.runner.done, true)
+    eq(gp.score:GetText(), ns.T.commas(r.best)); eq(gp.state:GetText(), "final score")
+    eq(gp.state:IsTruncated(), false); eq(gp.name:IsTruncated(), false)
+    eq(ns.UI.bestText:GetText(), "-" .. ns.T.commas(r.best - s.state.score), "compared with the final score")
+  end)
+  it("a Time Trial race that ends on time shows TIME! with 0:00 left (the preview's 1:39 was made-up test data)", function()
+    local net, c, ns = client(22)
+    blitzBest(net, c, "weak")
+    ns.App:StartGhost("blitz"); net.step(185)
+    local s = ns.App.session
+    s.state.tick = s.mode.limitTicks - 30             -- jump to the last half second (the clock is the subject)
+    for _ = 1, 120 do if s.phase ~= "playing" then break end; net.step(1) end
+    net.step(70)
+    eq(s.endReason, "time")
+    eq(ns.UI.overTitle:GetText(), "TIME!"); eq(ns.UI.timeText:GetText(), "0:00")
+  end)
+  it("UI scale and small screens: the window is scaled as one piece, so the panel stays inside it and on screen", function()
+    for _, case in ipairs({ { 1024, 768, 0.7 }, { 1024, 768, 1.4 }, { 1366, 768, 1.0 }, { 2560, 1440, 1.4 } }) do
+      local net, c, ns = client(23)
+      c.env.UIParent:SetSize(case[1], case[2])
+      ns.db.settings.scale = case[3]
+      blitzBest(net, c, "weak")
+      ns.UI:ApplyScale()
+      ns.App:StartGhost("blitz"); net.step(185)
+      local F, gp = ns.UI.frame, ns.UI.ghostPanel
+      local sc = F:GetScale()
+      ok(F:GetHeight() * sc <= case[2] and F:GetWidth() * sc <= case[1], "window fits the screen " .. case[1] .. "x" .. case[2])
+      ok(gp:IsShown())
+      -- the panel is laid out inside the window (window units), so one scale moves it all together
+      local cur = gp; while cur and cur ~= F do cur = cur._parent end
+      eq(cur, F, "the panel belongs to the window")
+      local R = L.new(F)
+      local pr = R.rect(gp)
+      ok(pr.l >= 0 and pr.r <= F._w and pr.b >= 0 and pr.t <= F._h, "panel inside the window")
+      -- every text in the panel fits its width at its font (the long cases too)
+      for _, t in ipairs({ { gp.name, "OFFICIAL BEST" }, { gp.state, "LV 20 - 999 lines" }, { gp.state, "1234 lines" }, { gp.state, "ghost changed" }, { gp.state, "final score" }, { gp.score, "1,234,567" } }) do
+        local fs, txt = t[1], t[2]
+        local w = L.textWidth(txt, fs._font[2], fs._font[1])
+        local room = fs._w and fs._w > 0 and fs._w or (pr.r - R.rect(fs).l - 6)
+        ok(w <= room, string.format("%q fits (%.0f <= %.0f)", txt, w, room))
+      end
+      -- the label row keeps clear of the hide button (at least 4 units apart)
+      local nl = R.rect(gp.name).l + L.textWidth("OFFICIAL BEST", gp.name._font[2], gp.name._font[1])
+      ok(nl + 4 <= R.rect(gp.hide).l, string.format("OFFICIAL BEST ends at %.0f, the - starts at %.0f", nl, R.rect(gp.hide).l))
+    end
+  end)
+  it("old saves: no Race Best yet loads; garbage in it is dropped", function()
+    local DBm = (select(3, client(24))).DB
+    eq(next(DBm.sanitize({}).raceRecords), nil)
+    local db = DBm.sanitize({ raceRecords = { blitz = { best = "x", races = -4 }, daily = { best = 5 }, classic = { best = 700, races = 3, wins = 1, date = "2026-11-14" } } })
+    eq(db.raceRecords.blitz.best, 0); eq(db.raceRecords.blitz.races, 0); eq(db.raceRecords.daily, nil)
+    eq(db.raceRecords.classic.best, 700); eq(db.raceRecords.classic.wins, 1)
   end)
 end)
 
@@ -216,7 +314,7 @@ describe("Race My Best: /reload, saved data, records", function()
     c2.env.SlashCmdList.STACKRIVALS(""); c2.ns.UI.continueBtn:Click(); net2.step(200)
     local s = c2.ns.App.session
     eq(s.mode.key, "ghost_blitz"); eq(s.ghost.lost, true)
-    eq(c2.ns.UI.ghostPanel.state:GetText(), "no ghost (changed)")
+    eq(c2.ns.UI.ghostPanel.state:GetText(), "ghost changed")
     s:finish("time"); net2.step(70)
     eq(c2.ns.UI.overBadge:GetText(), "NO GHOST")
   end)

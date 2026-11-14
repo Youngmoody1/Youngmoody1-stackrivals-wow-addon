@@ -122,7 +122,14 @@ function G.finish(db, sess)
   if g.lost or not g.entry then return { me = sess.state.score, best = 0, lost = true } end
   local final = g.entry.score
   local me = sess.state.score
-  local res = { me = me, best = final, beat = me > final, tie = me == final, lost = g.runner == nil }
+  local res = { me = me, best = final, beat = me > final, tie = me == final, lost = g.runner == nil, from = g.entry.from }
+  -- Race Best: kept apart from the official records (you know the pieces in a race)
+  db.raceRecords = db.raceRecords or {}
+  local rr = db.raceRecords[g.base] or { best = 0, races = 0, wins = 0 }
+  rr.races, rr.wins = rr.races + 1, rr.wins + (res.beat and 1 or 0)
+  if me > rr.best then rr.best, rr.date = me, sess.date end
+  db.raceRecords[g.base] = rr
+  res.official = db.records[g.base] and db.records[g.base].best or 0
   if res.beat then
     local log = E().serializeLog(sess.state)
     if #log <= G.MAX_LOG then
@@ -152,6 +159,21 @@ function G.sanitize(raw)
       local function n(x) return (type(x) == "number" and x >= 0 and x <= 1e9) and math.floor(x) or 0 end
       out[base] = { log = g.log, score = math.floor(g.score), lines = n(g.lines), level = n(g.level),
         date = (type(g.date) == "string" and #g.date <= 16) and g.date or nil }
+    end
+  end
+  return out
+end
+
+--- Race Best per mode (SavedVariables): { best, date, races, wins }; anything else dropped.
+function G.sanitizeRecords(raw)
+  local out = {}
+  if type(raw) ~= "table" then return out end
+  local function n(x, hi) return (type(x) == "number" and x >= 0 and x <= hi) and math.floor(x) or 0 end
+  for base in pairs(G.MODES) do
+    local r = raw[base]
+    if type(r) == "table" then
+      out[base] = { best = n(r.best, 1e12), races = n(r.races, 1e7), wins = n(r.wins, 1e7),
+        date = (type(r.date) == "string" and #r.date <= 16) and r.date or nil }
     end
   end
   return out

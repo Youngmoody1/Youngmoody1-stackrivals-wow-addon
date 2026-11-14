@@ -8,7 +8,9 @@
   pieces of your best Classic / Time Trial run with that run replayed beside you (panel under NEXT, AHEAD /
   BEHIND, a big moment once when you pass its final score). Local only; never changes the normal records;
   a won race is the next ghost. Uses the input log already saved with every best: no engine or protocol
-  change. `/sr best [trial]`, `/sr best panel`.
+  change. `/sr best [trial]`, `/sr best panel`. Polish: Official Best and Race Best are named apart (panel,
+  result, tooltip, a "Race best" row in Records); "NEW RACE BEST" instead of "NEW BEST / PERSONAL RECORD";
+  a finished ghost shows its final score in gold; tighter panel text; previews end on time (0:00).
 - **Quality audit** (branch `audit/0.9.1-quality`, full list in `docs/AUDIT_0.9.1.md`):
   - multiplayer: comm-test pings can't fill another player's send queue any more (this changed duel and
     Loot Duel results; also present in 0.9.0), no forced Quickplay match, the log wait follows progress,

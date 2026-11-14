@@ -6,7 +6,9 @@
       score now, how far it is (level, lines, or its final score once it ended) and a tug-of-war bar;
       the stats panel says AHEAD / BEHIND / LEVEL with the difference, in green / red;
     * the moments: passing your best's pace (a pulse), beating its final score (the big effect, once:
-      a gold burst and "NEW BEST"), and the result ("BEAT YOUR BEST +N" or how far off);
+      a gold burst and "NEW RACE BEST"), and the result ("NEW RACE BEST +N" or how far off);
+    * Official Best (Classic / Time Trial records) and Race Best (Race My Best only) are named apart
+      everywhere: a race never changes the official records;
     * the panel can be hidden (its "-" button, or /sr best panel): the race still runs, the stats panel
       then shows your best's final score only.
   Effects go through UI/Fx.lua, so "Reduce effects" is respected; nothing here runs Lua per frame when the
@@ -31,30 +33,30 @@ function UI:CreateGhost()
   local gp = T.panel(self.frame, C.steel)
   gp:SetSize(108, 72)
   gp:SetPoint("BOTTOMLEFT", self.field, "BOTTOMRIGHT", 12, 0)
-  gp.name = T.label(gp, "YOUR BEST"); gp.name:SetPoint("TOPLEFT", 10, -9); gp.name:SetJustifyH("LEFT")
+  gp.name = T.label(gp, "OFFICIAL BEST"); gp.name:SetPoint("TOPLEFT", 10, -9); gp.name:SetJustifyH("LEFT")
   gp.name:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
   local scoreBox = CreateFrame("Frame", nil, gp)
   scoreBox:SetSize(88, 22); scoreBox:SetPoint("TOPLEFT", 8, -22)
   gp.score = T.display(scoreBox, SZ.title, C.steel); gp.score:SetPoint("LEFT", 2, 0); gp.score:SetJustifyH("LEFT")
   gp.pulse = T.pulseAnim(scoreBox, 1.15, 0.25, "LEFT")
   gp.state = T.text(gp, SZ.label, C.label); gp.state:SetPoint("TOPLEFT", 10, -48); gp.state:SetJustifyH("LEFT")
-  gp.state:SetWidth(90); gp.state:SetWordWrap(false)
+  gp.state:SetWidth(94); gp.state:SetWordWrap(false)
   local track = T.tex(gp, "ARTWORK", C.line, 1); track:SetPoint("BOTTOMLEFT", 10, 6); track:SetSize(88, 3)
   gp.bar = T.tex(gp, "OVERLAY", C.red, 1); gp.bar:SetPoint("BOTTOMLEFT", track, "BOTTOMLEFT"); gp.bar:SetSize(44, 3)
-  gp.hide = T.button(gp, "-", 16, 14, "frame", function()
+  gp.hide = T.button(gp, "-", 12, 14, "frame", function() -- narrow: "OFFICIAL BEST" needs the row
     ns.db.settings.raceBestPanel = false
     UI:RefreshPhase()
   end)
-  gp.hide:SetPoint("TOPRIGHT", gp, "TOPRIGHT", -4, -4)
-  gp.hide.tip = "Hide this panel (the race goes on). Show it again with the + next to YOUR BEST."
+  gp.hide:SetPoint("TOPRIGHT", gp, "TOPRIGHT", -3, -4)
+  gp.hide.tip = "Hide this panel (the race goes on). Show it again with the + in the score panel."
   gp:Hide()
   self.ghostPanel = gp
-  -- "+" beside the stats panel's label: the panel back
+  -- "+" in the stats panel's corner: the panel back
   local show = T.button(self.stats, "+", 16, 14, "frame", function()
     ns.db.settings.raceBestPanel = true
     UI:RefreshPhase()
   end)
-  show:SetPoint("TOPRIGHT", self.stats, "TOPRIGHT", -6, -58)
+  show:SetPoint("TOPRIGHT", self.stats, "TOPRIGHT", -6, -8) -- by SCORE: the row below holds OFFICIAL BEST / RACE BEST
   show.tip = "Show the Race My Best panel"
   show:Hide()
   self.ghostShow = show
@@ -69,9 +71,16 @@ function UI:RefreshGhost()
   self.ghostShow:SetShown(racing and not panelWanted())
 end
 
-local function lineOf(gs, done, final, runnerDone)
-  if done then return runnerDone and (gs.gameOver and "topped out" or "finished") or "its final score" end
-  return "LV " .. gs.level .. "  -  " .. gs.lines .. " lines"
+--- "OFFICIAL BEST" (the ghost is your Classic / Time Trial record) or "RACE BEST" (a race you won).
+local function kindOf(entry) return (entry and entry.from == "race") and "RACE BEST" or "OFFICIAL BEST" end
+UI.raceKindOf = kindOf
+
+--- The panel's small line: how far the ghost is, or, once it has ended, that the big number is final.
+local function lineOf(gs, done)
+  if done then return "final score" end
+  -- fits the 94-wide line at any level; a 4-digit line count (long Classic runs) drops the level
+  if gs.lines >= 1000 then return gs.lines .. " lines" end
+  return "LV " .. gs.level .. " - " .. gs.lines .. " lines"
 end
 
 --- Every frame of a race (from UI:Render). Cheap: the ghost advances as many ticks as the run did.
@@ -79,10 +88,10 @@ function UI:RenderGhost(sess)
   local g = sess.ghost
   local my = sess.state.score
   if not g or g.lost or not g.runner then
-    self:SetStatLabel("BEST", C.gold)
+    self:SetStatLabel("NO GHOST", C.label)
     self:SetStatText("-")
     if self.ghostPanel:IsShown() then
-      self.ghostPanel.score:SetText("-"); self.ghostPanel.state:SetText("no ghost (changed)")
+      self.ghostPanel.score:SetText("-"); self.ghostPanel.state:SetText("ghost changed")
     end
     return
   end
@@ -93,12 +102,13 @@ function UI:RenderGhost(sess)
   -- the big moment, once per race: past your best's FINAL score (it can't come back)
   if my > final and not g.beaten and sess.phase == "playing" then
     g.beaten = true
-    self:Callout("NEW BEST", "PERSONAL RECORD", C.gold, nil, "huge")
+    -- a Race Best, never an official record: the words say so (top line + main + sub)
+    self:Callout("RACE BEST", "PAST YOUR GHOST", C.gold, nil, "huge", "NEW")
     self:FxBurst(C.gold, "callout")
     ns.Sound.play("levelup")
   end
   if not panelWanted() then
-    self:SetStatLabel("YOUR BEST", C.gold)
+    self:SetStatLabel(kindOf(g.entry), C.gold)
     self:SetStatText(T.commas(final))
     self:SetStatColor(C.gold)
     return
@@ -116,10 +126,16 @@ function UI:RenderGhost(sess)
   if cmp < 0 then g.wasBehind = true elseif ahead then g.wasBehind = false end
   -- the panel
   local gp = self.ghostPanel
+  local kind = kindOf(g.entry)
+  if gp.kKind ~= kind then gp.kKind = kind; gp.name:SetText(kind) end
   local shown = done and final or gs.score
   if gp.kScore ~= shown then gp.kScore = shown; gp.score:SetText(T.commas(shown)) end
-  local st = lineOf(gs, done, final, g.runner.done)
-  if gp.kState ~= st then gp.kState = st; gp.state:SetText(st) end
+  local st = lineOf(gs, done)
+  if gp.kState ~= st then
+    gp.kState = st; gp.state:SetText(st)
+    local lc = done and C.gold or C.label -- the ghost has ended: its number is final (gold)
+    gp.state:SetTextColor(lc[1], lc[2], lc[3])
+  end
   local sc = (cmp < 0) and C.redLight or C.steel
   if gp.kC ~= sc then gp.kC = sc; gp.score:SetTextColor(sc[1], sc[2], sc[3]) end
   local total = my + shown
@@ -148,16 +164,17 @@ function UI:ShowGhostOver(info)
     self.overBadge:SetText("NO GHOST")
     detail = "Your best changed while this run was saved, so it had no ghost."
   elseif gr.beat then
-    self.overBadge:SetText("BEAT YOUR BEST  +" .. T.commas(gr.me - gr.best))
+    self.overBadge:SetText("NEW RACE BEST  +" .. T.commas(gr.me - gr.best))
     self.badgePulse:Play(); self:FxResult("best")
-    detail = gr.saved and "Your next race is against this run." or "Too long to keep as the next one to race."
+    detail = (gr.saved and "Your next ghost. " or "")
+      .. ((gr.official or 0) > 0 and ("Official best stays " .. T.commas(gr.official) .. ".") or "Official best unchanged.")
   elseif gr.tie then
-    self.overBadge:SetText("TIED YOUR BEST")
-    detail = "Same score as your best."
+    self.overBadge:SetText("TIED YOUR " .. kindOf(gr))
+    detail = "Same score as your ghost."
   else
-    self.overBadge:SetText("YOUR BEST " .. T.commas(gr.best) .. "  (-" .. T.commas(gr.best - gr.me) .. ")")
+    self.overBadge:SetText(kindOf(gr) .. " " .. T.commas(gr.best) .. "  (-" .. T.commas(gr.best - gr.me) .. ")")
     self.overBadge:SetTextColor(C.steel[1], C.steel[2], C.steel[3])
-    detail = "Your best stays the one to beat."
+    detail = "Your ghost stays the one to beat."
   end
   self.overDetail:SetText(string.format("%d lines  -  level %d\n%s", s.lines, s.level, detail))
 end
@@ -196,8 +213,11 @@ function UI:RefreshMenu(...)
       b.fs:SetTextColor(lc[1], lc[2], lc[3])
       if e and not UI.inCombat() then
         b:Enable()
-        b.tip = "Race My Best: the same pieces as your best run (" .. T.commas(e.score) .. "), replayed beside you. "
-          .. "Local only: never changes your records, no XP or Shards."
+        local rr = ns.db.raceRecords and ns.db.raceRecords[base]
+        b.tip = "Race My Best: the same pieces as your " .. (e.from == "race" and "Race Best" or "Official Best") .. " run ("
+          .. T.commas(e.score) .. "), replayed beside you.\nOfficial Best " .. T.commas(rec.best)
+          .. ((rr and rr.best > 0) and ("  -  Race Best " .. T.commas(rr.best) .. " (" .. T.plural(rr.races, "race", "races") .. ")") or "")
+          .. "\nA race never changes your official records. Local only: no XP or Shards."
       else
         b:Disable()
         b.tip = e and "Not in combat." or (ns.Ghost.WHY[why] or "No run to race yet.")
