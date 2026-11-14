@@ -54,7 +54,7 @@ rekord, er det en ændring på én linje.
 
 ## Tests
 
-`tests/test_ghost.lua`, 15 tests (simulerede klienter, ikke en rigtig WoW-klient):
+`tests/test_ghost.lua`, 15 tests (simulerede klienter, ikke en rigtig WoW-klient). CI på Lua 5.1: 922 bestået, 0 fejl (`50e906d`).
 
 | Krav | Test |
 |---|---|
@@ -69,7 +69,7 @@ rekord, er det en ændring på én linje.
 | SavedVariables (8, 10) | Gamle filer indlæses; affald og for store logs droppes |
 | Classic | Et endeløst løb, der toppede ud, vises som "topped out" |
 | Lokal | Ingen beskeder sendt |
-| Ydelse | Note: fuld kontrol ca. 12 ms én gang; ghosten ca. 2 µs pr. frame (Lua 5.3-shim) |
+| Ydelse | CI (Lua 5.1): fuld kontrol 18,5 ms én gang pr. ghost; ghosten 3,2 µs pr. frame |
 
 Layout-testene kører også de 7 nye skærmbilleder igennem for overlap.
 
