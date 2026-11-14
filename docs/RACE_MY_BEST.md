@@ -88,8 +88,8 @@ WoW** (G9 nedenfor).
 
 ## Tests
 
-`tests/test_ghost.lua`, 20 tests (simulerede klienter, ikke en rigtig WoW-klient). CI på Lua 5.1: se
-nederst.
+`tests/test_ghost.lua`, 20 tests (simulerede klienter, ikke en rigtig WoW-klient). CI på Lua 5.1: 931 bestået,
+0 fejl (`180ea7e`).
 
 | Krav | Test |
 |---|---|
@@ -110,7 +110,7 @@ nederst.
 | TIME LEFT (4) | Et ghost-løb til tiden: TIME! og 0:00 |
 | Skala / skærme (5, 6) | Fire skærm- og skalakombinationer; tekster passer; luft til knappen |
 | Gamle filer | Ingen Race Best indlæses fint; affald i den droppes |
-| Ydelse | CI (Lua 5.1): fuld kontrol 18,5 ms én gang pr. ghost; ghosten 3,2 µs pr. frame |
+| Ydelse | CI (Lua 5.1): fuld kontrol 16,0 ms én gang pr. ghost; ghosten 2,7 µs pr. frame |
 
 Layout-testene kører også de 9 skærmbilleder igennem for overlap og tekst inden for knapper.
 
