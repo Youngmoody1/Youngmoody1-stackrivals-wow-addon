@@ -81,6 +81,19 @@ Hver fase har en port: den næste begynder først, når portens krav er opfyldt.
 * 0.9.1 med produktionsnøglen, testet i rigtig klient (`TEST_PLAN_0.9.1.md`), udgivet efter GO.
 * **Port:** en normal duel og en normal Loot Duel med samme resultat på to rigtige PC'er.
 
+### Rækkefølge (aftalt 14. nov. 2026)
+
+1. Multiplayer-hotfixet (fase 0).
+2. **Race My Best (Ghost Mode)** og **Fun Race**. Ghost Mode er lavet som prototype på
+   `feature/ghost-mode` (`docs/RACE_MY_BEST.md`).
+3. Loot Duel 2.0.
+4. Guild Tournaments.
+
+**Fun Race** er en Loot Duel uden item: fem spillere i en dungeon venter på næste boss, én åbner
+StackRivals og vælger Fun Race, og alle kæmper om den højeste score uden en loot-beslutning. Det er den
+nemmeste måde at få nye spillere til at prøve addon'et. Det kræver en lille, versioneret protokoludvidelse
+(item-feltet er obligatorisk i dag), så ældre versioner afviser pænt i stedet for at fejle.
+
 ### Fase 1 (1.0): Loot Duel 2.0 + solo-værdi
 
 Lav netværksrisiko. Ingen nye beskedtyper, undtagen det valgfrie "Fun race".
@@ -90,7 +103,7 @@ Lav netværksrisiko. Ingen nye beskedtyper, undtagen det valgfrie "Fun race".
 | Loot Duel 2.0 | "Godkend resultat" for lederen før Announce; kvalitetskant på item; loot-log der overlever `/reload` | Godkend kun mulig ved et kontrolleret resultat; DISPUTED / UNVERIFIED kan ikke godkendes; loglængde begrænset; gamle SavedVariables indlæses | 2–5 spillere: samme vinder, lederen godkender, log efter `/reload` |
 | Match History | Dueller + Loot Duels, med status (agreed / disputed / unverified) | Status vises rigtigt i alle afgørelsestyper; maks. antal | Efter en duel og en Loot Duel |
 | Ghost Mode | Spil mod dit eget bedste løb (samme seed); foran/bagud undervejs | Ghosten afspilles bit for bit som originalen; gamle `bestLog` uden seed giver ingen ghost og ingen fejl | Solo |
-| (valgfrit) Fun race | Loot Duel uden item (Dungeon Break) | Ældre versioner afviser pænt; aldrig i combat | 2+ spillere |
+| Fun Race (prioriteret) | Loot Duel uden item (Dungeon Break) | Ældre versioner afviser pænt; aldrig i combat; samme vinder på alle PC'er | 2–5 spillere |
 
 **Port:** fase 1 testet med 2–5 rigtige spillere, ingen Lua-fejl, release efter GO.
 
