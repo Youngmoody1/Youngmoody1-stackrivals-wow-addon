@@ -77,6 +77,28 @@ Et punkt tæller kun, når **en anden klient svarer**. Planen står i `TEST_PLAN
 | M5–M8 | Quick Duel, Guild Duels, match-chat, Battle.net | 2 | IKKE TESTET | |
 | M9 | Raid, 10–20 spillere | 10–20 | IKKE TESTET | Først fra 9. december |
 
+## Hotfix 0.9.0.1 (testplan: `HOTFIX_0.9.0.1.md` afsnit 5)
+
+Installeret i `_forever_` den 14. nov. 2026 (commit `fda4e0e`, ZIP SHA-256 `4dd7ebaf…0c17`; de 86 installerede
+filer er læst tilbage og er identiske med ZIP'en). Backup: `StackRivals-backups\StackRivals-0.9.0-installed-forever-before-0.9.0.1_2026-11-14.zip`.
+Resultaterne er ejerens egne meldinger fra den rigtige klient. `/sr report` er ikke modtaget endnu, så
+klientens build-nummer mangler.
+
+| # | Test | Spillere | Resultat | Noter |
+|---|---|---|---|---|
+| T1 | `/sr version` | 1 | **BESTÅET** 14. nov. 2026 | Viser `0.9.0.1` |
+| T11 | Lua-fejl med `/console scriptErrors 1` | 1 | **Ingen fejl** ved start og et solospil | Skal fortsat holdes øje med under multiplayer-testene |
+| – | Solo: åbn, Classic, spil, afslut | 1 | **BESTÅET** 14. nov. 2026 | Meldt som "det virker". Ingen detaljer |
+| T2 | `/sr commtest` to gange | 2–5 | IKKE TESTET | |
+| T3 | Normal Loot Duel | 2–5 | IKKE TESTET | |
+| T4 | Loot Duel med ping-makro mod den bedste spiller | 2–5 | IKKE TESTET | Selve rettelsen |
+| T5 | Normal duel | 2 | IKKE TESTET | |
+| T6 | Duel i en instance med soft drop holdt nede | 2 | IKKE TESTET | |
+| T7 | Quickplay | 2 | IKKE TESTET | |
+| T8 | Invitation uden Quickplay-søgning | 2 | IKKE TESTET | |
+| T9 | Den bedste spiller logger ud efter sit løb | 3+ | IKKE TESTET | |
+| T10 | 0.9.0 og 0.9.0.1 i samme gruppe | 2 | IKKE TESTET | |
+
 ## Problemer
 
 | # | Fundet | Beskrivelse | Status |
